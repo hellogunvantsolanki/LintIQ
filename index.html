@@ -1,396 +1,370 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>LintIQ - Bug-Hunting Arcade</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LintIQ — AI Bug-Hunting & Code Review Arcade</title>
+
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Monaco Editor Assets -->
-  <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+  
+  <!-- Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Monaco Editor Loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #editor-container {
+      height: 480px;
+      border: 1px solid #30363d;
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-6 font-sans">
-  <div class="max-w-6xl mx-auto space-y-5">
-    
-    <!-- Top Bar: Header & Arcade HUD -->
-    <header class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700 pb-4 gap-4">
-      <div>
-        <h1 class="text-3xl font-extrabold tracking-tight text-emerald-400">LintIQ</h1>
-        <p class="text-xs text-slate-400">AI Code Review & Bug-Hunting Arcade</p>
+<body class="flex flex-col min-h-screen">
+
+  <!-- Header & Arcade Status Bar -->
+  <header class="border-b border-zinc-800 bg-zinc-950/60 backdrop-blur px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+        <h1 class="text-lg font-bold text-white tracking-wide">Lint<span class="text-emerald-400">IQ</span></h1>
       </div>
-
-      <!-- Arcade Stats Dashboard -->
-      <div class="flex items-center gap-3 font-mono text-sm">
-        <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
-          <span class="text-slate-400 text-xs">TIME</span>
-          <span id="timerDisplay" class="text-amber-400 font-bold">00:00</span>
-        </div>
-
-        <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
-          <span class="text-slate-400 text-xs">SCORE</span>
-          <span id="scoreDisplay" class="text-emerald-400 font-bold">0</span>
-        </div>
-
-        <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
-          <span class="text-slate-400 text-xs">STREAK</span>
-          <span id="streakDisplay" class="text-orange-400 font-bold">0🔥</span>
-        </div>
-
-        <button id="genBtn" onclick="fetchProblem(false)" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-4 py-1.5 rounded-lg font-sans font-medium text-sm shadow transition">
-          Next Challenge
-        </button>
-      </div>
-    </header>
-
-    <!-- Loading State -->
-    <div id="loader" class="text-center text-emerald-400 py-12 animate-pulse font-mono">
-      Fetching challenge from database cache...
+      <span class="text-xs uppercase tracking-wider bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-mono">Arcade MVP</span>
     </div>
 
-    <!-- Error Banner -->
-    <div id="errorBanner" class="hidden p-4 rounded-xl border border-rose-500/50 bg-rose-950/40 text-rose-300 font-mono text-sm"></div>
-
-    <!-- Game Arena -->
-    <main id="gameArea" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-      <!-- Left Column: Problem Details -->
-      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
-        <div class="flex justify-between items-center">
-          <h2 id="probTitle" class="text-xl font-bold text-white"></h2>
-          <span id="probDiff" class="text-xs uppercase px-2 py-1 bg-amber-500/20 text-amber-300 rounded border border-amber-500/40 font-mono font-bold"></span>
-        </div>
-        <p id="probDesc" class="text-sm text-slate-300 leading-relaxed"></p>
-        
-        <!-- Hint Display Box -->
-        <div id="hintBox" class="hidden p-3.5 rounded-lg bg-amber-950/30 border border-amber-500/40 text-amber-200 text-xs font-mono space-y-1">
-          <div class="flex items-center gap-1.5 text-amber-400 font-bold uppercase tracking-wider">
-            <span>💡</span> Hint (-25 pts)
-          </div>
-          <p id="hintText" class="leading-relaxed"></p>
-        </div>
-
-        <div>
-          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Test Cases</h3>
-          <div id="testCasesList" class="space-y-2 text-xs font-mono"></div>
-        </div>
+    <!-- Center Stats: Streak, Score, Timer -->
+    <div class="flex items-center gap-6 font-mono text-sm">
+      <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md">
+        <span class="text-amber-400">⚡ Streak:</span>
+        <span id="streak-count" class="text-white font-bold">0</span>
       </div>
+      <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md">
+        <span class="text-emerald-400">★ Score:</span>
+        <span id="score-count" class="text-white font-bold">0</span>
+      </div>
+      <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md">
+        <span class="text-sky-400">⏱ Time:</span>
+        <span id="timer-display" class="text-white font-bold">00:00</span>
+      </div>
+    </div>
 
-      <!-- Right Column: Monaco Editor & Actions -->
-      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col space-y-3">
-        <div class="flex justify-between items-center">
-          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Patch the Flaw</label>
-          <div class="flex items-center gap-3">
-            <button id="hintBtn" onclick="requestHint()" disabled class="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40 font-mono transition flex items-center gap-1 cursor-not-allowed">
-              <span>💡</span> Request Hint (-25 pts)
-            </button>
-            <span class="text-xs text-slate-500 font-mono">Python 3.x</span>
-          </div>
-        </div>
-        
-        <!-- Monaco Mount & Start Overlay Container -->
-        <div class="relative w-full h-[430px] rounded-lg overflow-hidden border border-slate-700">
-          <div id="monacoEditorContainer" class="w-full h-full"></div>
+    <!-- Right Action & Supabase Auth Section -->
+    <div class="flex items-center gap-3">
+      <button id="btn-hint" onclick="requestHint()" class="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
+        <span>💡 AI Hint</span>
+      </button>
 
-          <!-- Pre-solve Overlay -->
-          <div id="editorLockOverlay" class="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center space-y-3 z-10 transition-all">
-            <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xl font-bold">
-              ▶
-            </div>
-            <div>
-              <h3 class="text-base font-bold text-white">Ready to inspect and fix?</h3>
-              <p class="text-xs text-slate-400">Review problem details on the left first. The clock starts when you begin.</p>
-            </div>
-            <button id="startSolvingBtn" onclick="beginSolving()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-2.5 rounded-lg font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/20 transition transform active:scale-95">
-              Start Solving
-            </button>
-          </div>
-        </div>
-
-        <button id="submitBtn" onclick="submitPatch()" disabled class="w-full bg-slate-700 text-slate-400 py-2.5 rounded-lg font-semibold tracking-wide transition cursor-not-allowed">
-          Run Patch Against Test Suite
+      <!-- Supabase Auth Container -->
+      <div id="auth-section" class="flex items-center gap-2 border-l border-zinc-800 pl-3">
+        <!-- Logged Out Button -->
+        <button id="btn-login" onclick="loginWithGithub()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-xs text-white font-medium rounded-lg border border-zinc-700 flex items-center gap-2 transition">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          Sign in
         </button>
 
-        <!-- Evaluation Results Box -->
-        <div id="resultBox" class="hidden p-3 rounded-lg text-sm font-mono border"></div>
+        <!-- Logged In User State -->
+        <div id="user-profile" class="hidden flex items-center gap-2">
+          <span id="user-display-name" class="text-xs text-zinc-300 font-mono bg-zinc-900 border border-zinc-800 px-2 py-1 rounded"></span>
+          <button onclick="logout()" class="text-xs text-zinc-400 hover:text-red-400 transition" title="Log out">Sign out</button>
+        </div>
       </div>
-    </main>
-  </div>
+    </div>
+  </header>
+
+  <!-- Main Arcade Canvas -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- Left Panel: Problem Context & Tests -->
+    <div class="lg:col-span-5 flex flex-col gap-4">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 flex-1 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <span id="problem-difficulty" class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">Loading...</span>
+            <span id="problem-id" class="text-xs font-mono text-zinc-400">#0</span>
+          </div>
+          <h2 id="problem-title" class="text-xl font-bold text-white mb-2">Connecting to challenge bank...</h2>
+          <p id="problem-desc" class="text-sm text-zinc-400 leading-relaxed"></p>
+        </div>
+
+        <!-- Hint Card -->
+        <div id="hint-box" class="hidden mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs text-amber-200/90 leading-relaxed">
+          <strong class="font-bold text-amber-300">Hint: </strong><span id="hint-text"></span>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 pt-4 border-t border-zinc-800 flex gap-2">
+          <button onclick="loadNewProblem()" class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 rounded-lg transition">
+            Skip Challenge
+          </button>
+        </div>
+      </div>
+
+      <!-- Execution Console / Verdict -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 font-mono text-xs">
+        <div class="text-zinc-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between">
+          <span>Execution Output</span>
+          <span id="status-tag" class="text-zinc-400">Idle</span>
+        </div>
+        <pre id="console-output" class="text-zinc-400 whitespace-pre-wrap max-h-36 overflow-y-auto">Submit your patch to run test assertions against the sandbox runner.</pre>
+      </div>
+    </div>
+
+    <!-- Right Panel: Monaco Code Editor -->
+    <div class="lg:col-span-7 flex flex-col gap-4">
+      <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col h-full">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-mono text-zinc-400">solution.py (Editable Patch)</span>
+          <span class="text-xs text-zinc-400 font-mono">Python 3.11</span>
+        </div>
+
+        <!-- Monaco Mount Point -->
+        <div id="editor-container" class="flex-1"></div>
+
+        <div class="mt-4 flex items-center justify-end gap-3">
+          <button id="btn-submit" onclick="submitPatch()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wider uppercase rounded-lg transition shadow-lg shadow-emerald-950">
+            Submit Patch
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
 
   <script>
-const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-  ? "http://127.0.0.1:8000"
-  : "https://lintiq.onrender.com";
-    let currentTestCases = [];
-    let currentDifficulty = "Easy";
-    let currentProblemId = null;
-    let editor = null;
+    // --- 1. CONFIGURATION ---
+    const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+      ? "http://127.0.0.1:8000"
+      : "https://lintiq.onrender.com";
 
-    // Arcade State
-    let timerInterval = null;
-    let secondsElapsed = 0;
-    let isSolving = false;
-    let hintUsed = false;
-    let score = parseInt(localStorage.getItem("lintiq_score") || "0");
+    // Supabase Authentication Configuration
+    const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Game & Session State
+    let monacoEditor = null;
+    let currentProblem = null;
     let streak = parseInt(localStorage.getItem("lintiq_streak") || "0");
-    let solvedIds = JSON.parse(localStorage.getItem("lintiq_solved") || "[]");
+    let score = parseInt(localStorage.getItem("lintiq_score") || "0");
+    let timerSeconds = 0;
+    let timerInterval = null;
 
-    function updateHud() {
-      document.getElementById("scoreDisplay").innerText = score;
-      document.getElementById("streakDisplay").innerText = `${streak}🔥`;
+    // --- 2. AUTHENTICATION LOGIC ---
+    async function loginWithGithub() {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) alert("Authentication error: " + error.message);
     }
 
-    function resetTimerDisplay() {
-      clearInterval(timerInterval);
-      secondsElapsed = 0;
-      document.getElementById("timerDisplay").innerText = "00:00";
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      window.location.reload();
     }
 
-    function beginSolving() {
-      if (isSolving) return;
-      isSolving = true;
+    async function initAuth() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      updateAuthUI(session?.user);
 
-      // Unlock editor
-      document.getElementById("editorLockOverlay").classList.add("hidden");
-      if (editor) {
-        editor.updateOptions({ readOnly: false });
-        editor.focus();
+      supabaseClient.auth.onAuthStateChange((_event, session) => {
+        updateAuthUI(session?.user);
+      });
+    }
+
+    function updateAuthUI(user) {
+      const loginBtn = document.getElementById("btn-login");
+      const userProfile = document.getElementById("user-profile");
+      const userDisplayName = document.getElementById("user-display-name");
+
+      if (user) {
+        loginBtn.classList.add("hidden");
+        userProfile.classList.remove("hidden");
+        userDisplayName.textContent = user.user_metadata?.user_name || user.email.split("@")[0];
+      } else {
+        loginBtn.classList.remove("hidden");
+        userProfile.classList.add("hidden");
       }
+    }
 
-      // Enable submit button
-      const submitBtn = document.getElementById("submitBtn");
-      submitBtn.disabled = false;
-      submitBtn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-semibold tracking-wide transition cursor-pointer";
+    // --- 3. ARCADE METRICS & TIMER ---
+    function updateMetrics() {
+      document.getElementById("streak-count").textContent = streak;
+      document.getElementById("score-count").textContent = score;
+      localStorage.setItem("lintiq_streak", streak);
+      localStorage.setItem("lintiq_score", score);
+    }
 
-      // Enable hint button
-      const hintBtn = document.getElementById("hintBtn");
-      hintBtn.disabled = false;
-      hintBtn.className = "text-xs text-amber-400 hover:text-amber-300 font-mono transition flex items-center gap-1 cursor-pointer";
-
-      // Start clock
-      const display = document.getElementById("timerDisplay");
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerSeconds = 0;
+      updateTimerDisplay();
       timerInterval = setInterval(() => {
-        secondsElapsed++;
-        const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
-        const secs = String(secondsElapsed % 60).padStart(2, '0');
-        display.innerText = `${mins}:${secs}`;
+        timerSeconds++;
+        updateTimerDisplay();
       }, 1000);
     }
 
-    function stopTimer() {
-      clearInterval(timerInterval);
+    function updateTimerDisplay() {
+      const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+      const secs = String(timerSeconds % 60).padStart(2, '0');
+      document.getElementById("timer-display").textContent = `${mins}:${secs}`;
     }
 
-    // Monaco AMD Loader
-    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
-
-    require(['vs/editor/editor.main'], function () {
-      editor = monaco.editor.create(document.getElementById('monacoEditorContainer'), {
-        value: '# Loading problem...',
-        language: 'python',
-        theme: 'vs-dark',
-        automaticLayout: true,
-        fontSize: 14,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        lineNumbers: 'on',
-        tabSize: 4,
-        insertSpaces: true,
-        readOnly: true
-      });
-
-      updateHud();
-      fetchProblem(false);
-    });
-
-    async function fetchProblem(forceNew = false) {
-      stopTimer();
-      resetTimerDisplay();
-      isSolving = false;
-      hintUsed = false;
-
-      const loader = document.getElementById("loader");
-      const gameArea = document.getElementById("gameArea");
-      const btn = document.getElementById("genBtn");
-      const errorBanner = document.getElementById("errorBanner");
-      const resultBox = document.getElementById("resultBox");
-      const overlay = document.getElementById("editorLockOverlay");
-      const submitBtn = document.getElementById("submitBtn");
-      const hintBtn = document.getElementById("hintBtn");
-      const hintBox = document.getElementById("hintBox");
-
-      // Reset UI elements
-      resultBox.classList.add("hidden");
-      errorBanner.classList.add("hidden");
-      hintBox.classList.add("hidden");
-      overlay.classList.remove("hidden");
-      
-      submitBtn.disabled = true;
-      submitBtn.className = "w-full bg-slate-700 text-slate-400 py-2.5 rounded-lg font-semibold tracking-wide transition cursor-not-allowed";
-
-      hintBtn.disabled = true;
-      hintBtn.className = "text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40 font-mono transition flex items-center gap-1 cursor-not-allowed";
-
-      loader.classList.remove("hidden");
-      loader.innerText = forceNew ? "Synthesizing new challenge..." : "Fetching challenge from database cache...";
-      gameArea.classList.add("hidden");
-      btn.disabled = true;
-
-      const excludeParam = solvedIds.join(",");
-      const endpoint = forceNew 
-        ? `${API}/generate-problem` 
-        : `${API}/get-problem?exclude_ids=${excludeParam}`;
-
+    // --- 4. PROBLEM LIFECYCLE ---
+    async function loadNewProblem() {
       try {
-        const res = await fetch(endpoint, { method: forceNew ? "POST" : "GET" });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(errData.detail || `Server returned HTTP ${res.status}`);
-        }
-        const data = await res.json();
+        document.getElementById("problem-title").textContent = "Fetching next bug hunt...";
+        document.getElementById("hint-box").classList.add("hidden");
+        document.getElementById("console-output").textContent = "Awaiting patch submission...";
+        document.getElementById("status-tag").textContent = "Idle";
+        document.getElementById("status-tag").className = "text-zinc-400";
 
-        currentProblemId = data.id;
-        currentDifficulty = data.difficulty || "Easy";
-        document.getElementById("probTitle").innerText = data.title;
-        document.getElementById("probDiff").innerText = currentDifficulty;
-        document.getElementById("probDesc").innerText = data.description;
+        const res = await fetch(`${API}/get-problem`);
+        if (!res.ok) throw new Error("Could not fetch problem from backend.");
         
-        if (editor) {
-          editor.setValue(data.buggy_code);
-          editor.updateOptions({ readOnly: true });
+        currentProblem = await res.json();
+
+        document.getElementById("problem-id").textContent = `#${currentProblem.id || 'cache'}`;
+        document.getElementById("problem-title").textContent = currentProblem.title;
+        document.getElementById("problem-desc").textContent = currentProblem.description;
+        
+        const diffBadge = document.getElementById("problem-difficulty");
+        diffBadge.textContent = currentProblem.difficulty;
+        if (currentProblem.difficulty.toLowerCase() === "easy") {
+          diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        } else if (currentProblem.difficulty.toLowerCase() === "medium") {
+          diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20";
+        } else {
+          diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20";
         }
 
-        currentTestCases = data.test_cases;
+        if (monacoEditor) {
+          monacoEditor.setValue(currentProblem.buggy_code);
+        }
 
-        const tcContainer = document.getElementById("testCasesList");
-        tcContainer.innerHTML = data.test_cases.map((tc, idx) => {
-          const safeIn = (tc.input_data || "").replace(/\n/g, " ");
-          const safeOut = (tc.expected_output || "").replace(/\n/g, " ");
-          return `
-            <div class="bg-slate-900 p-2.5 rounded border border-slate-700">
-              <span class="text-slate-400 font-bold">Case ${idx + 1}</span>
-              <div class="text-slate-300">In: <code class="text-emerald-400">${safeIn || "<i>(empty)</i>"}</code></div>
-              <div class="text-slate-300">Out: <code class="text-sky-400">${safeOut}</code></div>
-            </div>
-          `;
-        }).join("");
-
-        loader.classList.add("hidden");
-        gameArea.classList.remove("hidden");
+        startTimer();
       } catch (err) {
-        loader.classList.add("hidden");
-        errorBanner.innerText = `Error: ${err.message}`;
-        errorBanner.classList.remove("hidden");
-      } finally {
-        btn.disabled = false;
+        document.getElementById("problem-title").textContent = "Failed to load challenge";
+        document.getElementById("problem-desc").textContent = "Make sure your backend is live and CORS is configured.";
+        console.error(err);
       }
     }
 
-async function requestHint() {
-      if (!isSolving || hintUsed) return;
-      const hintBtn = document.getElementById("hintBtn");
-      const hintBox = document.getElementById("hintBox");
-      const hintText = document.getElementById("hintText");
+    // --- 5. PATCH SUBMISSION & JUDGE ---
+    async function submitPatch() {
+      if (!currentProblem || !monacoEditor) return;
 
-      hintBtn.disabled = true;
-      hintBtn.innerText = "Consulting AI...";
+      const userCode = monacoEditor.getValue();
+      const consoleEl = document.getElementById("console-output");
+      const statusTag = document.getElementById("status-tag");
+      const submitBtn = document.getElementById("btn-submit");
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Judging...";
+      statusTag.textContent = "Running...";
+      statusTag.className = "text-amber-400";
+
+      try {
+        const res = await fetch(`${API}/submit-patch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            problem_id: currentProblem.id,
+            user_code: userCode,
+            test_cases: currentProblem.test_cases
+          })
+        });
+
+        const result = await res.json();
+
+        if (result.passed) {
+          clearInterval(timerInterval);
+          statusTag.textContent = "Passed";
+          statusTag.className = "text-emerald-400";
+          consoleEl.textContent = `✔ All assertions cleared in ${timerSeconds}s!\n${result.message || ''}`;
+          
+          // Score calculation: +100 base, streak bonus, time bonus
+          const timeBonus = Math.max(0, 60 - timerSeconds);
+          streak += 1;
+          score += 100 + (streak * 10) + timeBonus;
+          updateMetrics();
+
+          setTimeout(() => {
+            alert(`Bug fixed! +${100 + (streak * 10) + timeBonus} Points`);
+            loadNewProblem();
+          }, 600);
+        } else {
+          statusTag.textContent = "Failed";
+          statusTag.className = "text-rose-400";
+          consoleEl.textContent = `✖ Patch Failed:\n${result.message || 'Logic or assertion error.'}`;
+          streak = 0;
+          updateMetrics();
+        }
+      } catch (err) {
+        statusTag.textContent = "Error";
+        statusTag.className = "text-rose-400";
+        consoleEl.textContent = "Failed to communicate with test runner.";
+        console.error(err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit Patch";
+      }
+    }
+
+    // --- 6. AI HINT ENGINE ---
+    async function requestHint() {
+      if (!currentProblem || !monacoEditor) return;
+      const hintBox = document.getElementById("hint-box");
+      const hintText = document.getElementById("hint-text");
+
+      hintBox.classList.remove("hidden");
+      hintText.textContent = "Synthesizing contextual hint...";
 
       try {
         const res = await fetch(`${API}/get-hint`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: document.getElementById("probTitle").innerText,
-            description: document.getElementById("probDesc").innerText,
-            code: editor ? editor.getValue() : ""
+            problem_id: currentProblem.id,
+            user_code: monacoEditor.getValue()
           })
         });
-
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || `Server error HTTP ${res.status}`);
-        }
-
-        hintText.innerText = data.hint;
-        hintBox.classList.remove("hidden");
-        hintUsed = true;
-        hintBtn.innerText = "Hint Used (-25 pts)";
-        hintBtn.className = "text-xs text-amber-500/60 font-mono flex items-center gap-1 cursor-not-allowed";
-      } catch (err) {
-        alert("Hint error: " + err.message);
-        hintBtn.disabled = false;
-        hintBtn.className = "text-xs text-amber-400 hover:text-amber-300 font-mono transition flex items-center gap-1 cursor-pointer";
-        hintBtn.innerText = "💡 Request Hint (-25 pts)";
+        hintText.textContent = data.hint || "Inspect how the loop handles edge bounds.";
+      } catch (e) {
+        hintText.textContent = "Examine variable boundaries and off-by-one offsets.";
       }
     }
 
-    function calculateScore(difficulty, solveSeconds, usedHint) {
-      const basePoints = { "Easy": 100, "Medium": 200, "Hard": 300 }[difficulty] || 100;
-      const speedBonus = Math.max(0, 50 - Math.floor(solveSeconds / 2));
-      const hintPenalty = usedHint ? 25 : 0;
-      return Math.max(20, (basePoints + speedBonus) - hintPenalty);
-    }
+    // --- 7. MONACO INITIALIZATION ---
+    require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
+    require(["vs/editor/editor.main"], function () {
+      monacoEditor = monaco.editor.create(document.getElementById("editor-container"), {
+        value: "# Loading challenge code...",
+        language: "python",
+        theme: "vs-dark",
+        fontSize: 14,
+        minimap: { enabled: false },
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        padding: { top: 12, bottom: 12 }
+      });
 
-    async function submitPatch() {
-      if (!isSolving) return;
-
-      const btn = document.getElementById("submitBtn");
-      const resultBox = document.getElementById("resultBox");
-      const code = editor ? editor.getValue() : "";
-
-      btn.disabled = true;
-      btn.innerText = "Evaluating...";
-      resultBox.classList.add("hidden");
-
-      try {
-        const res = await fetch(`${API}/submit-patch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: code, test_cases: currentTestCases })
-        });
-        const data = await res.json();
-
-        resultBox.classList.remove("hidden");
-        if (data.passed) {
-          stopTimer();
-          isSolving = false;
-          if (editor) editor.updateOptions({ readOnly: true });
-
-          const earned = calculateScore(currentDifficulty, secondsElapsed, hintUsed);
-          score += earned;
-          streak += 1;
-
-          localStorage.setItem("lintiq_score", score);
-          localStorage.setItem("lintiq_streak", streak);
-          if (currentProblemId && !solvedIds.includes(currentProblemId)) {
-            solvedIds.push(currentProblemId);
-            localStorage.setItem("lintiq_solved", JSON.stringify(solvedIds));
-          }
-          updateHud();
-
-          const hintNote = hintUsed ? " (25 pt hint deducted)" : "";
-          resultBox.className = "p-3 rounded-lg text-sm font-mono border bg-emerald-950/60 border-emerald-500 text-emerald-300";
-          resultBox.innerText = `PASSED (+${earned} pts in ${secondsElapsed}s${hintNote}): ${data.message} Loading next challenge in 2s...`;
-
-          setTimeout(() => {
-            fetchProblem(false);
-          }, 2000);
-        } else {
-          streak = 0;
-          localStorage.setItem("lintiq_streak", streak);
-          updateHud();
-
-          resultBox.className = "p-3 rounded-lg text-sm font-mono border bg-rose-950/60 border-rose-500 text-rose-300";
-          resultBox.innerText = `FAILED (Streak reset): ${data.message}`;
-        }
-      } catch (err) {
-        resultBox.classList.remove("hidden");
-        resultBox.className = "p-3 rounded-lg text-sm font-mono border bg-rose-950/60 border-rose-500 text-rose-300";
-        resultBox.innerText = `Network error: ${err.message}`;
-      } finally {
-        if (isSolving) {
-          btn.disabled = false;
-          btn.innerText = "Run Patch Against Test Suite";
-        }
-      }
-    }
+      // Initialize App Lifecycle
+      initAuth();
+      updateMetrics();
+      loadNewProblem();
+    });
   </script>
 </body>
 </html>
