@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LintIQ - Bug-Hunting Arcade</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Monaco Editor Assets -->
+  <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6 font-sans">
+  <div class="max-w-6xl mx-auto space-y-5">
+    
+    <!-- Top Bar: Header & Arcade HUD -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700 pb-4 gap-4">
+      <div>
+        <h1 class="text-3xl font-extrabold tracking-tight text-emerald-400">LintIQ</h1>
+        <p class="text-xs text-slate-400">AI Code Review & Bug-Hunting Arcade</p>
+      </div>
+
+      <!-- Arcade Stats Dashboard -->
+      <div class="flex items-center gap-3 font-mono text-sm">
+        <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
+          <span class="text-slate-400 text-xs">TIME</span>
+          <span id="timerDisplay" class="text-amber-400 font-bold">00:00</span>
+        </div>
+
+        <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
+          <span class="text-slate-400 text-xs">SCORE</span>
+          <span id="scoreDisplay" class="text-emerald-400 font-bold">0</span>
+        </div>
+
+        <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2">
+          <span class="text-slate-400 text-xs">STREAK</span>
+          <span id="streakDisplay" class="text-orange-400 font-bold">0🔥</span>
+        </div>
+
+        <button id="genBtn" onclick="fetchProblem(false)" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-4 py-1.5 rounded-lg font-sans font-medium text-sm shadow transition">
+          Next Challenge
+        </button>
+      </div>
+    </header>
+
+    <!-- Loading State -->
+    <div id="loader" class="text-center text-emerald-400 py-12 animate-pulse font-mono">
+      Fetching challenge from database cache...
+    </div>
+
+    <!-- Error Banner -->
+    <div id="errorBanner" class="hidden p-4 rounded-xl border border-rose-500/50 bg-rose-950/40 text-rose-300 font-mono text-sm"></div>
+
+    <!-- Game Arena -->
+    <main id="gameArea" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+      <!-- Left Column: Problem Details -->
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 id="probTitle" class="text-xl font-bold text-white"></h2>
+          <span id="probDiff" class="text-xs uppercase px-2 py-1 bg-amber-500/20 text-amber-300 rounded border border-amber-500/40 font-mono font-bold"></span>
+        </div>
+        <p id="probDesc" class="text-sm text-slate-300 leading-relaxed"></p>
+        
+        <!-- Hint Display Box -->
+        <div id="hintBox" class="hidden p-3.5 rounded-lg bg-amber-950/30 border border-amber-500/40 text-amber-200 text-xs font-mono space-y-1">
+          <div class="flex items-center gap-1.5 text-amber-400 font-bold uppercase tracking-wider">
+            <span>💡</span> Hint (-25 pts)
+          </div>
+          <p id="hintText" class="leading-relaxed"></p>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Test Cases</h3>
+          <div id="testCasesList" class="space-y-2 text-xs font-mono"></div>
+        </div>
+      </div>
+
+      <!-- Right Column: Monaco Editor & Actions -->
+      <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Patch the Flaw</label>
+          <div class="flex items-center gap-3">
+            <button id="hintBtn" onclick="requestHint()" disabled class="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40 font-mono transition flex items-center gap-1 cursor-not-allowed">
+              <span>💡</span> Request Hint (-25 pts)
+            </button>
+            <span class="text-xs text-slate-500 font-mono">Python 3.x</span>
+          </div>
+        </div>
+        
+        <!-- Monaco Mount & Start Overlay Container -->
+        <div class="relative w-full h-[430px] rounded-lg overflow-hidden border border-slate-700">
+          <div id="monacoEditorContainer" class="w-full h-full"></div>
+
+          <!-- Pre-solve Overlay -->
+          <div id="editorLockOverlay" class="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center space-y-3 z-10 transition-all">
+            <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xl font-bold">
+              ▶
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white">Ready to inspect and fix?</h3>
+              <p class="text-xs text-slate-400">Review problem details on the left first. The clock starts when you begin.</p>
+            </div>
+            <button id="startSolvingBtn" onclick="beginSolving()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-2.5 rounded-lg font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/20 transition transform active:scale-95">
+              Start Solving
+            </button>
+          </div>
+        </div>
+
+        <button id="submitBtn" onclick="submitPatch()" disabled class="w-full bg-slate-700 text-slate-400 py-2.5 rounded-lg font-semibold tracking-wide transition cursor-not-allowed">
+          Run Patch Against Test Suite
+        </button>
+
+        <!-- Evaluation Results Box -->
+        <div id="resultBox" class="hidden p-3 rounded-lg text-sm font-mono border"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+  ? "http://127.0.0.1:8000"
+  : "https://lintiq-backend.onrender.com"; // We will paste your actual Render backend URL here
+    let currentTestCases = [];
+    let currentDifficulty = "Easy";
+    let currentProblemId = null;
+    let editor = null;
+
+    // Arcade State
+    let timerInterval = null;
+    let secondsElapsed = 0;
+    let isSolving = false;
+    let hintUsed = false;
+    let score = parseInt(localStorage.getItem("lintiq_score") || "0");
+    let streak = parseInt(localStorage.getItem("lintiq_streak") || "0");
+    let solvedIds = JSON.parse(localStorage.getItem("lintiq_solved") || "[]");
+
+    function updateHud() {
+      document.getElementById("scoreDisplay").innerText = score;
+      document.getElementById("streakDisplay").innerText = `${streak}🔥`;
+    }
+
+    function resetTimerDisplay() {
+      clearInterval(timerInterval);
+      secondsElapsed = 0;
+      document.getElementById("timerDisplay").innerText = "00:00";
+    }
+
+    function beginSolving() {
+      if (isSolving) return;
+      isSolving = true;
+
+      // Unlock editor
+      document.getElementById("editorLockOverlay").classList.add("hidden");
+      if (editor) {
+        editor.updateOptions({ readOnly: false });
+        editor.focus();
+      }
+
+      // Enable submit button
+      const submitBtn = document.getElementById("submitBtn");
+      submitBtn.disabled = false;
+      submitBtn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-semibold tracking-wide transition cursor-pointer";
+
+      // Enable hint button
+      const hintBtn = document.getElementById("hintBtn");
+      hintBtn.disabled = false;
+      hintBtn.className = "text-xs text-amber-400 hover:text-amber-300 font-mono transition flex items-center gap-1 cursor-pointer";
+
+      // Start clock
+      const display = document.getElementById("timerDisplay");
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+        const secs = String(secondsElapsed % 60).padStart(2, '0');
+        display.innerText = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    // Monaco AMD Loader
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+
+    require(['vs/editor/editor.main'], function () {
+      editor = monaco.editor.create(document.getElementById('monacoEditorContainer'), {
+        value: '# Loading problem...',
+        language: 'python',
+        theme: 'vs-dark',
+        automaticLayout: true,
+        fontSize: 14,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        lineNumbers: 'on',
+        tabSize: 4,
+        insertSpaces: true,
+        readOnly: true
+      });
+
+      updateHud();
+      fetchProblem(false);
+    });
+
+    async function fetchProblem(forceNew = false) {
+      stopTimer();
+      resetTimerDisplay();
+      isSolving = false;
+      hintUsed = false;
+
+      const loader = document.getElementById("loader");
+      const gameArea = document.getElementById("gameArea");
+      const btn = document.getElementById("genBtn");
+      const errorBanner = document.getElementById("errorBanner");
+      const resultBox = document.getElementById("resultBox");
+      const overlay = document.getElementById("editorLockOverlay");
+      const submitBtn = document.getElementById("submitBtn");
+      const hintBtn = document.getElementById("hintBtn");
+      const hintBox = document.getElementById("hintBox");
+
+      // Reset UI elements
+      resultBox.classList.add("hidden");
+      errorBanner.classList.add("hidden");
+      hintBox.classList.add("hidden");
+      overlay.classList.remove("hidden");
+      
+      submitBtn.disabled = true;
+      submitBtn.className = "w-full bg-slate-700 text-slate-400 py-2.5 rounded-lg font-semibold tracking-wide transition cursor-not-allowed";
+
+      hintBtn.disabled = true;
+      hintBtn.className = "text-xs text-amber-400 hover:text-amber-300 disabled:opacity-40 font-mono transition flex items-center gap-1 cursor-not-allowed";
+
+      loader.classList.remove("hidden");
+      loader.innerText = forceNew ? "Synthesizing new challenge..." : "Fetching challenge from database cache...";
+      gameArea.classList.add("hidden");
+      btn.disabled = true;
+
+      const excludeParam = solvedIds.join(",");
+      const endpoint = forceNew 
+        ? `${API}/generate-problem` 
+        : `${API}/get-problem?exclude_ids=${excludeParam}`;
+
+      try {
+        const res = await fetch(endpoint, { method: forceNew ? "POST" : "GET" });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(errData.detail || `Server returned HTTP ${res.status}`);
+        }
+        const data = await res.json();
+
+        currentProblemId = data.id;
+        currentDifficulty = data.difficulty || "Easy";
+        document.getElementById("probTitle").innerText = data.title;
+        document.getElementById("probDiff").innerText = currentDifficulty;
+        document.getElementById("probDesc").innerText = data.description;
+        
+        if (editor) {
+          editor.setValue(data.buggy_code);
+          editor.updateOptions({ readOnly: true });
+        }
+
+        currentTestCases = data.test_cases;
+
+        const tcContainer = document.getElementById("testCasesList");
+        tcContainer.innerHTML = data.test_cases.map((tc, idx) => {
+          const safeIn = (tc.input_data || "").replace(/\n/g, " ");
+          const safeOut = (tc.expected_output || "").replace(/\n/g, " ");
+          return `
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-700">
+              <span class="text-slate-400 font-bold">Case ${idx + 1}</span>
+              <div class="text-slate-300">In: <code class="text-emerald-400">${safeIn || "<i>(empty)</i>"}</code></div>
+              <div class="text-slate-300">Out: <code class="text-sky-400">${safeOut}</code></div>
+            </div>
+          `;
+        }).join("");
+
+        loader.classList.add("hidden");
+        gameArea.classList.remove("hidden");
+      } catch (err) {
+        loader.classList.add("hidden");
+        errorBanner.innerText = `Error: ${err.message}`;
+        errorBanner.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+async function requestHint() {
+      if (!isSolving || hintUsed) return;
+      const hintBtn = document.getElementById("hintBtn");
+      const hintBox = document.getElementById("hintBox");
+      const hintText = document.getElementById("hintText");
+
+      hintBtn.disabled = true;
+      hintBtn.innerText = "Consulting AI...";
+
+      try {
+        const res = await fetch(`${API}/get-hint`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: document.getElementById("probTitle").innerText,
+            description: document.getElementById("probDesc").innerText,
+            code: editor ? editor.getValue() : ""
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server error HTTP ${res.status}`);
+        }
+
+        hintText.innerText = data.hint;
+        hintBox.classList.remove("hidden");
+        hintUsed = true;
+        hintBtn.innerText = "Hint Used (-25 pts)";
+        hintBtn.className = "text-xs text-amber-500/60 font-mono flex items-center gap-1 cursor-not-allowed";
+      } catch (err) {
+        alert("Hint error: " + err.message);
+        hintBtn.disabled = false;
+        hintBtn.className = "text-xs text-amber-400 hover:text-amber-300 font-mono transition flex items-center gap-1 cursor-pointer";
+        hintBtn.innerText = "💡 Request Hint (-25 pts)";
+      }
+    }
+
+    function calculateScore(difficulty, solveSeconds, usedHint) {
+      const basePoints = { "Easy": 100, "Medium": 200, "Hard": 300 }[difficulty] || 100;
+      const speedBonus = Math.max(0, 50 - Math.floor(solveSeconds / 2));
+      const hintPenalty = usedHint ? 25 : 0;
+      return Math.max(20, (basePoints + speedBonus) - hintPenalty);
+    }
+
+    async function submitPatch() {
+      if (!isSolving) return;
+
+      const btn = document.getElementById("submitBtn");
+      const resultBox = document.getElementById("resultBox");
+      const code = editor ? editor.getValue() : "";
+
+      btn.disabled = true;
+      btn.innerText = "Evaluating...";
+      resultBox.classList.add("hidden");
+
+      try {
+        const res = await fetch(`${API}/submit-patch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: code, test_cases: currentTestCases })
+        });
+        const data = await res.json();
+
+        resultBox.classList.remove("hidden");
+        if (data.passed) {
+          stopTimer();
+          isSolving = false;
+          if (editor) editor.updateOptions({ readOnly: true });
+
+          const earned = calculateScore(currentDifficulty, secondsElapsed, hintUsed);
+          score += earned;
+          streak += 1;
+
+          localStorage.setItem("lintiq_score", score);
+          localStorage.setItem("lintiq_streak", streak);
+          if (currentProblemId && !solvedIds.includes(currentProblemId)) {
+            solvedIds.push(currentProblemId);
+            localStorage.setItem("lintiq_solved", JSON.stringify(solvedIds));
+          }
+          updateHud();
+
+          const hintNote = hintUsed ? " (25 pt hint deducted)" : "";
+          resultBox.className = "p-3 rounded-lg text-sm font-mono border bg-emerald-950/60 border-emerald-500 text-emerald-300";
+          resultBox.innerText = `PASSED (+${earned} pts in ${secondsElapsed}s${hintNote}): ${data.message} Loading next challenge in 2s...`;
+
+          setTimeout(() => {
+            fetchProblem(false);
+          }, 2000);
+        } else {
+          streak = 0;
+          localStorage.setItem("lintiq_streak", streak);
+          updateHud();
+
+          resultBox.className = "p-3 rounded-lg text-sm font-mono border bg-rose-950/60 border-rose-500 text-rose-300";
+          resultBox.innerText = `FAILED (Streak reset): ${data.message}`;
+        }
+      } catch (err) {
+        resultBox.classList.remove("hidden");
+        resultBox.className = "p-3 rounded-lg text-sm font-mono border bg-rose-950/60 border-rose-500 text-rose-300";
+        resultBox.innerText = `Network error: ${err.message}`;
+      } finally {
+        if (isSolving) {
+          btn.disabled = false;
+          btn.innerText = "Run Patch Against Test Suite";
+        }
+      }
+    }
+  </script>
+</body>
+</html>
