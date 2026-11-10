@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from fastapi.responses import FileResponse
 
 load_dotenv()
 
@@ -27,6 +28,7 @@ app.add_middleware(
 DB_PATH = "problems.db"
 
 def init_db():
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -44,6 +46,9 @@ def init_db():
     conn.close()
 
 init_db()
+@app.get("/")
+def read_root():
+    return FileResponse("index.html")
 
 class TestCase(BaseModel):
     input_data: str = Field(default="", description="Stdin string")
