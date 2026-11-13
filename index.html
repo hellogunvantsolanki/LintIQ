@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,73 +7,106 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
+
   <!-- Supabase JS Client CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Monaco Editor Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 
-  <style>
-    body {
-      background-color: #0d1117;
-      color: #c9d1d9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    #editor-container {
-      height: 480px;
-      border: 1px solid #30363d;
-      border-radius: 0.5rem;
-      overflow: hidden;
-    }
-  </style>
+  <!-- External Stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="flex flex-col min-h-screen">
+<body class="bg-[#0d1117] text-zinc-100 flex flex-col min-h-screen antialiased">
 
   <!-- Header & Arcade Status Bar -->
-  <header class="border-b border-zinc-800 bg-zinc-950/60 backdrop-blur px-6 py-3 flex items-center justify-between sticky top-0 z-40">
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-2">
-        <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-        <h1 class="text-lg font-bold text-white tracking-wide">Lint<span class="text-emerald-400">IQ</span></h1>
+  <header class="border-b border-zinc-800 bg-[#090d13] sticky top-0 z-40">
+    <div class="px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+          <h1 class="text-lg font-bold text-white tracking-wide">Lint<span class="text-emerald-400">IQ</span></h1>
+        </div>
+        <span class="text-xs uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded font-mono">Arcade v1.4</span>
       </div>
-      <span class="text-xs uppercase tracking-wider bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-mono">Arcade MVP</span>
-    </div>
 
-    <!-- Center Stats: Streak, Score, Timer -->
-    <div class="flex items-center gap-6 font-mono text-sm">
-      <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md">
-        <span class="text-amber-400">⚡ Streak:</span>
-        <span id="streak-count" class="text-white font-bold">0</span>
+      <!-- Center Stats: Streak, Score, Timer -->
+      <div class="flex items-center gap-3 font-mono text-sm flex-wrap">
+        <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
+          <span class="text-amber-400">⚡ Streak:</span>
+          <span id="streak-count" class="text-white font-bold">0</span>
+        </div>
+        <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
+          <span class="text-emerald-400">★ Score:</span>
+          <span id="score-count" class="text-white font-bold">0</span>
+        </div>
+        <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
+          <span class="text-sky-400">⏱ Time:</span>
+          <span id="timer-display" class="text-white font-bold">00:00</span>
+          <span id="timer-status" class="text-[10px] uppercase tracking-wider text-zinc-400 ml-1">(Ready)</span>
+        </div>
       </div>
-      <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md">
-        <span class="text-emerald-400">★ Score:</span>
-        <span id="score-count" class="text-white font-bold">0</span>
-      </div>
-      <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md">
-        <span class="text-sky-400">⏱ Time:</span>
-        <span id="timer-display" class="text-white font-bold">00:00</span>
-      </div>
-    </div>
 
-    <!-- Right Action & Supabase Auth Section -->
-    <div class="flex items-center gap-3">
-      <button id="btn-hint" onclick="requestHint()" class="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
-        <span>💡 AI Hint</span>
-      </button>
-
-      <!-- Supabase Auth Section -->
-      <div id="auth-section" class="flex items-center gap-2 border-l border-zinc-800 pl-3">
-        <!-- Logged Out Button -->
-        <button id="btn-login" onclick="openAuthModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-medium rounded-lg transition shadow-sm">
-          Sign In / Register
+      <!-- Right Action & Auth Section -->
+      <div class="flex items-center gap-3">
+        <button onclick="openLeaderboardModal()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition">
+          <span>🏆 Leaderboard</span>
         </button>
 
-        <!-- Logged In User State -->
-        <div id="user-profile" class="hidden flex items-center gap-2">
-          <span id="user-display-name" class="text-xs text-zinc-300 font-mono bg-zinc-900 border border-zinc-800 px-2 py-1 rounded"></span>
-          <button onclick="logout()" class="text-xs text-zinc-400 hover:text-red-400 transition" title="Log out">Sign out</button>
+        <button id="btn-hint" onclick="requestHint()" class="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
+          <span>💡 AI Hint</span>
+        </button>
+
+        <div id="auth-section" class="flex items-center gap-2 border-l border-zinc-800 pl-3">
+          <button id="btn-login" onclick="openAuthModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-medium rounded-lg transition shadow-sm">
+            Sign In / Register
+          </button>
+
+          <div id="user-profile" class="hidden flex items-center gap-2">
+            <span id="user-display-name" class="text-xs text-zinc-200 font-mono bg-[#161b22] border border-zinc-700 px-2.5 py-1 rounded max-w-[160px] truncate" title=""></span>
+            <button onclick="logout()" class="text-xs text-zinc-400 hover:text-rose-400 transition" title="Log out">Sign out</button>
+          </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Sub-Header: Domain Category Filter Pills & Difficulty Selector -->
+    <div class="px-6 py-2.5 bg-[#11161f] border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
+      <div id="category-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <button onclick="selectCategory('All')" data-cat="All" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-emerald-600 text-white shadow-sm whitespace-nowrap">
+          All Tracks <span id="total-count-badge" class="ml-1 text-[10px] opacity-90"></span>
+        </button>
+        <button onclick="selectCategory('Algorithms')" data-cat="Algorithms" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Algorithms
+        </button>
+        <button onclick="selectCategory('Data Structures')" data-cat="Data Structures" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Data Structures
+        </button>
+        <button onclick="selectCategory('Off-by-One')" data-cat="Off-by-One" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Off-by-One
+        </button>
+        <button onclick="selectCategory('Edge Cases')" data-cat="Edge Cases" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Edge Cases
+        </button>
+        <button onclick="selectCategory('Type Coercion')" data-cat="Type Coercion" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Type Coercion
+        </button>
+        <button onclick="selectCategory('Memory & State')" data-cat="Memory & State" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Memory & State
+        </button>
+        <button onclick="selectCategory('Concurrency')" data-cat="Concurrency" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
+          Concurrency
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label for="difficulty-select" class="text-[11px] font-mono text-zinc-400 uppercase">Difficulty:</label>
+        <select id="difficulty-select" onchange="selectDifficulty(this.value)" class="bg-[#161b22] border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2.5 py-1 font-mono focus:outline-none focus:border-emerald-500">
+          <option value="All">All Levels</option>
+          <option value="Easy">Easy</option>
+          <option value="Medium">Medium</option>
+          <option value="Hard">Hard</option>
+        </select>
       </div>
     </div>
   </header>
@@ -81,54 +114,87 @@
   <!-- Main Arcade Canvas -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
     
-    <!-- Left Panel: Problem Context & Tests -->
+    <!-- Left Panel: Problem Context, Category Tags & Tests -->
     <div class="lg:col-span-5 flex flex-col gap-4">
-      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 flex-1 flex flex-col justify-between">
+      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-5 flex-1 flex flex-col justify-between shadow-lg">
         <div>
-          <div class="flex items-center justify-between mb-3">
-            <span id="problem-difficulty" class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">Loading...</span>
-            <span id="problem-id" class="text-xs font-mono text-zinc-400">#0</span>
+          <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <span id="problem-difficulty" class="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-300">Loading...</span>
+              <span id="problem-category" class="text-xs font-mono px-2.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">Track</span>
+            </div>
+            <span id="problem-id" class="text-xs font-mono text-zinc-400 font-semibold">#0</span>
           </div>
+
           <h2 id="problem-title" class="text-xl font-bold text-white mb-2">Connecting to challenge bank...</h2>
-          <p id="problem-desc" class="text-sm text-zinc-400 leading-relaxed"></p>
+
+          <!-- Granular Problem Tags -->
+          <div id="problem-tags" class="flex flex-wrap gap-1.5 mb-4"></div>
+
+          <p id="problem-desc" class="text-sm text-zinc-300 leading-relaxed"></p>
         </div>
 
-        <!-- Hint Card -->
-        <div id="hint-box" class="hidden mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs text-amber-200/90 leading-relaxed">
-          <strong class="font-bold text-amber-300">Hint: </strong><span id="hint-text"></span>
-        </div>
+        <div>
+          <!-- Hint Card -->
+          <div id="hint-box" class="hidden mt-4 p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg text-xs text-amber-200 leading-relaxed">
+            <strong class="font-bold text-amber-300">Hint: </strong><span id="hint-text"></span>
+          </div>
 
-        <!-- Actions -->
-        <div class="mt-6 pt-4 border-t border-zinc-800 flex gap-2">
-          <button onclick="loadNewProblem()" class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 rounded-lg transition">
-            Skip Challenge
-          </button>
+          <!-- Test Case Counter & Skip Action -->
+          <div class="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between gap-3">
+            <span id="test-case-count" class="text-xs font-mono text-zinc-300">🧪 0 Test Assertions</span>
+            <button onclick="loadNewProblem()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition whitespace-nowrap">
+              Next Challenge →
+            </button>
+            <div class="flex items-center gap-2">
+  <button
+    id="ai-generate-btn"
+    onclick="generateAIChallenge()"
+    class="px-3 py-1.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition cursor-pointer"
+  >
+    ✨ Generate AI Bug
+  </button>
+  <!-- Keep your existing Next Challenge button right here -->
+</div>
+          </div>
         </div>
       </div>
 
       <!-- Execution Console / Verdict -->
-      <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 font-mono text-xs">
+      <div class="bg-[#090d13] border border-zinc-800 rounded-xl p-4 font-mono text-xs shadow-lg">
         <div class="text-zinc-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between">
-          <span>Execution Output</span>
+          <span>Sandbox Execution Output</span>
           <span id="status-tag" class="text-zinc-400">Idle</span>
         </div>
-        <pre id="console-output" class="text-zinc-400 whitespace-pre-wrap max-h-36 overflow-y-auto">Submit your patch to run test assertions against the sandbox runner.</pre>
+        <pre id="console-output" class="text-zinc-300 whitespace-pre-wrap max-h-36 overflow-y-auto">Click inside the code editor to start timing and solve the bug.</pre>
       </div>
     </div>
 
     <!-- Right Panel: Monaco Code Editor -->
     <div class="lg:col-span-7 flex flex-col gap-4">
-      <div class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col h-full">
-        <div class="flex items-center justify-between mb-3">
-          <span class="text-xs font-mono text-zinc-400">solution.py (Editable Patch)</span>
-          <span class="text-xs text-zinc-400 font-mono">Python 3.11</span>
+      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-4 flex flex-col h-full shadow-lg">
+        <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono text-white font-semibold">solution.py</span>
+            <span class="text-[11px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded">Editable Patch</span>
+          </div>
+
+          <!-- Language Track Indicator -->
+          <div class="flex items-center gap-1.5 text-xs font-mono">
+            <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">Python 3.11</span>
+            <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="JavaScript Node.js track coming soon">JS (Soon)</span>
+            <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="Go track coming soon">Go (Soon)</span>
+          </div>
         </div>
 
         <!-- Monaco Mount Point -->
-        <div id="editor-container" class="flex-1"></div>
+        <div id="editor-container" class="w-full h-[420px] rounded-lg border border-zinc-700 overflow-hidden"></div>
 
-        <div class="mt-4 flex items-center justify-end gap-3">
-          <button id="btn-submit" onclick="submitPatch()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wider uppercase rounded-lg transition shadow-lg shadow-emerald-950">
+        <div class="mt-4 flex items-center justify-between gap-3">
+          <button onclick="resetStarterCode()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200 transition">
+            ↺ Reset Starter Code
+          </button>
+          <button id="btn-submit" onclick="submitPatch()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wider uppercase rounded-lg transition shadow-lg shadow-emerald-950/60">
             Submit Patch
           </button>
         </div>
@@ -136,22 +202,56 @@
     </div>
   </main>
 
-  <!-- Auth Modal (GitHub, Google, Email Magic Link) -->
+  <!-- 🏆 Global Leaderboard Modal -->
+  <div id="leaderboard-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-lg rounded-xl p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🏆</span>
+          <h3 class="text-lg font-bold text-white tracking-wide">Global Cloud Leaderboard</h3>
+        </div>
+        <button onclick="closeLeaderboardModal()" class="text-zinc-400 hover:text-zinc-200 text-sm px-2 py-1 rounded">✕</button>
+      </div>
+
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead>
+            <tr class="text-zinc-400 border-b border-zinc-800 pb-2">
+              <th class="py-2 px-3">#</th>
+              <th class="py-2 px-3">Engineer</th>
+              <th class="py-2 px-3 text-right">Score</th>
+              <th class="py-2 px-3 text-center">Streak</th>
+              <th class="py-2 px-3 text-right">Solves</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-rows" class="divide-y divide-zinc-800/60">
+            <tr>
+              <td colspan="5" class="py-6 text-center text-zinc-400">Loading top bug hunters...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-5 pt-3 border-t border-zinc-800 flex justify-between items-center text-[11px] text-zinc-400">
+        <span id="leaderboard-sync-status">☁️ Permanent Cloud Leaderboard</span>
+        <button onclick="fetchLeaderboard()" class="text-emerald-400 hover:underline font-mono">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
   <div id="auth-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
+    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
       <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-200 text-sm">✕</button>
       <h3 class="text-lg font-bold text-white mb-1">Enter the Bug Arcade</h3>
-      <p class="text-xs text-zinc-400 mb-5">Sign in to save streaks, claim score points, and track your stats.</p>
+      <p class="text-xs text-zinc-400 mb-5">Sign in to save streaks, claim score points, and climb the cloud leaderboard.</p>
 
-      <!-- OAuth Providers -->
       <div class="space-y-2 mb-4">
-        <!-- GitHub Button -->
         <button onclick="loginWithOAuth('github')" class="w-full py-2 px-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-white rounded-lg flex items-center justify-center gap-2 transition">
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
           Continue with GitHub
         </button>
 
-        <!-- Google Button -->
         <button onclick="loginWithOAuth('google')" class="w-full py-2 px-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-white rounded-lg flex items-center justify-center gap-2 transition">
           <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5.1 3.7-8.8z"/><path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8 0-1.3.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.3 0 12s.7 3.3 1.9 5.7l3.7-2.9z"/><path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"/></svg>
           Continue with Google
@@ -164,11 +264,10 @@
         <div class="flex-1 border-t border-zinc-800"></div>
       </div>
 
-      <!-- Magic Link Form -->
       <form onsubmit="handleEmailAuth(event)" class="space-y-3">
         <div>
           <label class="block text-[11px] font-mono text-zinc-400 mb-1">Email address</label>
-          <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500" />
+          <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full px-3 py-2 bg-[#090d13] border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500" />
         </div>
         <button type="submit" id="btn-email-submit" class="w-full py-2 bg-zinc-100 hover:bg-white text-zinc-900 text-xs font-semibold rounded-lg transition">
           Send Magic Sign-In Link
@@ -178,277 +277,7 @@
     </div>
   </div>
 
-  <script>
-    // --- 1. CONFIGURATION ---
-    const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-      ? "http://127.0.0.1:8000"
-      : "https://lintiq.onrender.com";
-
-    // Supabase Authentication Configuration
-    const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // Game & Session State
-    let monacoEditor = null;
-    let currentProblem = null;
-    let streak = parseInt(localStorage.getItem("lintiq_streak") || "0");
-    let score = parseInt(localStorage.getItem("lintiq_score") || "0");
-    let timerSeconds = 0;
-    let timerInterval = null;
-
-    // --- 2. AUTHENTICATION LOGIC ---
-    function openAuthModal() {
-      document.getElementById("auth-modal").classList.remove("hidden");
-      document.getElementById("auth-msg").textContent = "";
-    }
-
-    function closeAuthModal() {
-      document.getElementById("auth-modal").classList.add("hidden");
-    }
-
-    async function loginWithOAuth(provider) {
-      const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider: provider,
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) alert(`${provider} error: ` + error.message);
-    }
-
-    async function handleEmailAuth(event) {
-      event.preventDefault();
-      const email = document.getElementById("auth-email").value.trim();
-      const msgEl = document.getElementById("auth-msg");
-      const btn = document.getElementById("btn-email-submit");
-
-      btn.disabled = true;
-      btn.textContent = "Sending link...";
-      msgEl.className = "text-[11px] text-center text-zinc-400";
-      msgEl.textContent = "";
-
-      const { error } = await supabaseClient.auth.signInWithOtp({
-        email: email,
-        options: {
-          emailRedirectTo: window.location.origin
-        }
-      });
-
-      btn.disabled = false;
-      btn.textContent = "Send Magic Sign-In Link";
-
-      if (error) {
-        msgEl.className = "text-[11px] text-center text-rose-400";
-        msgEl.textContent = error.message;
-      } else {
-        msgEl.className = "text-[11px] text-center text-emerald-400";
-        msgEl.textContent = "Check your email inbox for your magic link!";
-      }
-    }
-
-    async function logout() {
-      await supabaseClient.auth.signOut();
-      window.location.reload();
-    }
-
-    async function initAuth() {
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      updateAuthUI(session?.user);
-
-      supabaseClient.auth.onAuthStateChange((_event, session) => {
-        updateAuthUI(session?.user);
-      });
-    }
-
-    function updateAuthUI(user) {
-      const loginBtn = document.getElementById("btn-login");
-      const userProfile = document.getElementById("user-profile");
-      const userDisplayName = document.getElementById("user-display-name");
-
-      if (user) {
-        closeAuthModal();
-        loginBtn.classList.add("hidden");
-        userProfile.classList.remove("hidden");
-
-        const name = user.user_metadata?.full_name 
-                  || user.user_metadata?.user_name 
-                  || user.email.split("@")[0];
-        userDisplayName.textContent = name;
-      } else {
-        loginBtn.classList.remove("hidden");
-        userProfile.classList.add("hidden");
-      }
-    }
-
-    // --- 3. ARCADE METRICS & TIMER ---
-    function updateMetrics() {
-      document.getElementById("streak-count").textContent = streak;
-      document.getElementById("score-count").textContent = score;
-      localStorage.setItem("lintiq_streak", streak);
-      localStorage.setItem("lintiq_score", score);
-    }
-
-    function startTimer() {
-      clearInterval(timerInterval);
-      timerSeconds = 0;
-      updateTimerDisplay();
-      timerInterval = setInterval(() => {
-        timerSeconds++;
-        updateTimerDisplay();
-      }, 1000);
-    }
-
-    function updateTimerDisplay() {
-      const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
-      const secs = String(timerSeconds % 60).padStart(2, '0');
-      document.getElementById("timer-display").textContent = `${mins}:${secs}`;
-    }
-
-    // --- 4. PROBLEM LIFECYCLE ---
-    async function loadNewProblem() {
-      try {
-        document.getElementById("problem-title").textContent = "Fetching next bug hunt...";
-        document.getElementById("hint-box").classList.add("hidden");
-        document.getElementById("console-output").textContent = "Awaiting patch submission...";
-        document.getElementById("status-tag").textContent = "Idle";
-        document.getElementById("status-tag").className = "text-zinc-400";
-
-        const res = await fetch(`${API}/get-problem`);
-        if (!res.ok) throw new Error("Could not fetch problem from backend.");
-        
-        currentProblem = await res.json();
-
-        document.getElementById("problem-id").textContent = `#${currentProblem.id || 'cache'}`;
-        document.getElementById("problem-title").textContent = currentProblem.title;
-        document.getElementById("problem-desc").textContent = currentProblem.description;
-        
-        const diffBadge = document.getElementById("problem-difficulty");
-        diffBadge.textContent = currentProblem.difficulty;
-        if (currentProblem.difficulty.toLowerCase() === "easy") {
-          diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-        } else if (currentProblem.difficulty.toLowerCase() === "medium") {
-          diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20";
-        } else {
-          diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20";
-        }
-
-        if (monacoEditor) {
-          monacoEditor.setValue(currentProblem.buggy_code);
-        }
-
-        startTimer();
-      } catch (err) {
-        document.getElementById("problem-title").textContent = "Failed to load challenge";
-        document.getElementById("problem-desc").textContent = "Make sure your backend is live and CORS is configured.";
-        console.error(err);
-      }
-    }
-
-    // --- 5. PATCH SUBMISSION & JUDGE ---
-    async function submitPatch() {
-      if (!currentProblem || !monacoEditor) return;
-
-      const userCode = monacoEditor.getValue();
-      const consoleEl = document.getElementById("console-output");
-      const statusTag = document.getElementById("status-tag");
-      const submitBtn = document.getElementById("btn-submit");
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Judging...";
-      statusTag.textContent = "Running...";
-      statusTag.className = "text-amber-400";
-
-      try {
-        const res = await fetch(`${API}/submit-patch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            problem_id: currentProblem.id,
-            user_code: userCode,
-            test_cases: currentProblem.test_cases
-          })
-        });
-
-        const result = await res.json();
-
-        if (result.passed) {
-          clearInterval(timerInterval);
-          statusTag.textContent = "Passed";
-          statusTag.className = "text-emerald-400";
-          consoleEl.textContent = `✔ All assertions cleared in ${timerSeconds}s!\n${result.message || ''}`;
-          
-          const timeBonus = Math.max(0, 60 - timerSeconds);
-          streak += 1;
-          score += 100 + (streak * 10) + timeBonus;
-          updateMetrics();
-
-          setTimeout(() => {
-            alert(`Bug fixed! +${100 + (streak * 10) + timeBonus} Points`);
-            loadNewProblem();
-          }, 600);
-        } else {
-          statusTag.textContent = "Failed";
-          statusTag.className = "text-rose-400";
-          consoleEl.textContent = `✖ Patch Failed:\n${result.message || 'Logic or assertion error.'}`;
-          streak = 0;
-          updateMetrics();
-        }
-      } catch (err) {
-        statusTag.textContent = "Error";
-        statusTag.className = "text-rose-400";
-        consoleEl.textContent = "Failed to communicate with test runner.";
-        console.error(err);
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Submit Patch";
-      }
-    }
-
-    // --- 6. AI HINT ENGINE ---
-    async function requestHint() {
-      if (!currentProblem || !monacoEditor) return;
-      const hintBox = document.getElementById("hint-box");
-      const hintText = document.getElementById("hint-text");
-
-      hintBox.classList.remove("hidden");
-      hintText.textContent = "Synthesizing contextual hint...";
-
-      try {
-        const res = await fetch(`${API}/get-hint`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            problem_id: currentProblem.id,
-            user_code: monacoEditor.getValue()
-          })
-        });
-        const data = await res.json();
-        hintText.textContent = data.hint || "Inspect how the loop handles edge bounds.";
-      } catch (e) {
-        hintText.textContent = "Examine variable boundaries and off-by-one offsets.";
-      }
-    }
-
-    // --- 7. MONACO INITIALIZATION ---
-    require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
-    require(["vs/editor/editor.main"], function () {
-      monacoEditor = monaco.editor.create(document.getElementById("editor-container"), {
-        value: "# Loading challenge code...",
-        language: "python",
-        theme: "vs-dark",
-        fontSize: 14,
-        minimap: { enabled: false },
-        automaticLayout: true,
-        scrollBeyondLastLine: false,
-        padding: { top: 12, bottom: 12 }
-      });
-
-      // Initialize App Lifecycle
-      initAuth();
-      updateMetrics();
-      loadNewProblem();
-    });
-  </script>
+  <!-- External JavaScript Module -->
+  <script src="app.js"></script>
 </body>
 </html>

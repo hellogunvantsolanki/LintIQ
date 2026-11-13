@@ -1,284 +1,158 @@
-import os
-import sys
-import sqlite3
-import subprocess
-import tempfile
-import json
-from typing import List
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from typing import Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
-from fastapi.responses import FileResponse
 
-load_dotenv()
+from schemas import SubmitPatchRequest, HintRequest
+from database import (
+    init_db,
+    fetch_categories_summary,
+    fetch_random_problem,
+    fetch_problem_test_cases,
+    fetch_problem_hint,
+    fetch_user_profile,
+    record_user_solve,
+    reset_user_streak,
+    fetch_top_leaderboard,
+)
+from runner import evaluate_patch
+from ai_generator import generate_ai_bug_challenge
 
-app = FastAPI(title="LintIQ Engine")
+app = FastAPI(title="LintIQ API", version="1.4.0")
 
+# Enable Cross-Origin Resource Sharing for local & production frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "https://lint-iq.vercel.app",
+        "https://lint-iq.vercel.app/",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-DB_PATH = "problems.db"
-
-def init_db():
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS problems (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            difficulty TEXT,
-            description TEXT,
-            buggy_code TEXT,
-            canonical_patch TEXT,
-            test_cases TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
+# Initialize and auto-migrate database on startup
 init_db()
+
+# Queue and cache for AI-generated challenges
+_pending_ai_problem: Optional[Dict[str, Any]] = None
+_ai_problems_cache: Dict[int, Dict[str, Any]] = {}
+
+
 @app.get("/")
-def read_root():
-    return FileResponse("index.html")
+def root():
+    return {"status": "ok", "service": "LintIQ Engine", "version": "1.4.0"}
 
-class TestCase(BaseModel):
-    input_data: str = Field(default="", description="Stdin string")
-    expected_output: str = Field(description="Expected stdout string")
 
-class ProblemPayload(BaseModel):
-    title: str = Field(description="Title of challenge")
-    difficulty: str = Field(description="Easy, Medium, Hard")
-    description: str = Field(description="Problem statement and task")
-    buggy_code: str = Field(description="Flawed code")
-    canonical_patch: str = Field(description="Fixed code")
-    test_cases: List[TestCase] = Field(description="Validation test cases")
+@app.get("/categories")
+def get_categories():
+    return fetch_categories_summary()
 
-class SubmitPatchRequest(BaseModel):
-    code: str
-    test_cases: List[TestCase]
-
-class HintRequest(BaseModel):
-    title: str
-    description: str
-    code: str
-
-def execute_code_sandboxed(code: str, test_cases: List[TestCase], timeout_sec: int = 2):
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tf:
-        tf.write(code)
-        path = tf.name
-    try:
-        for idx, tc in enumerate(test_cases):
-            proc = subprocess.run(
-                [sys.executable, path],
-                input=tc.input_data or "",
-                text=True,
-                capture_output=True,
-                timeout=timeout_sec
-            )
-            if proc.returncode != 0:
-                return False, f"Runtime error on test case {idx + 1}: {proc.stderr.strip()}"
-            if proc.stdout.strip() != tc.expected_output.strip():
-                return False, f"Failed test case {idx + 1}. Expected: {tc.expected_output.strip()} | Got: {proc.stdout.strip()}"
-        return True, "All test cases passed."
-    except subprocess.TimeoutExpired:
-        return False, f"Execution timed out ({timeout_sec}s gate)."
-    except Exception as e:
-        return False, str(e)
-    finally:
-        if os.path.exists(path):
-            os.remove(path)
-
-def generate_single_problem():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY environment variable is not set.")
-
-    client = genai.Client(
-        api_key=api_key,
-        http_options=types.HttpOptions(api_version="v1beta")
-    )
-
-    prompt = (
-        "Create a standalone Python programming challenge with exactly one subtle logical bug. "
-        "The code must read input from sys.stdin using input() or sys.stdin.read() and print output to stdout. "
-        "Ensure standard Python 3 syntax. "
-        "Provide: title, difficulty (Easy, Medium, or Hard), description, buggy_code, canonical_patch, and 3 standard input/output test cases."
-    )
-
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-    response = None
-    last_error = None
-
-    for m in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=m,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ProblemPayload,
-                    temperature=0.5
-                )
-            )
-            if response and response.text:
-                break
-        except Exception as e:
-            last_error = e
-            continue
-
-    if not response or not response.text:
-        raise HTTPException(status_code=500, detail=f"LLM Generation failed: {last_error}")
-
-    try:
-        problem_data = json.loads(response.text)
-        problem = ProblemPayload(**problem_data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Schema parsing error: {e}")
-
-    # Dual-gate validation
-    patch_ok, patch_err = execute_code_sandboxed(problem.canonical_patch, problem.test_cases)
-    if not patch_ok:
-        raise HTTPException(status_code=500, detail=f"Generated canonical patch failed validation: {patch_err}")
-
-    bug_ok, _ = execute_code_sandboxed(problem.buggy_code, problem.test_cases)
-    if bug_ok:
-        raise HTTPException(status_code=500, detail="Flawed code passed all tests; not a valid bug.")
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO problems (title, difficulty, description, buggy_code, canonical_patch, test_cases)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        problem.title,
-        problem.difficulty,
-        problem.description,
-        problem.buggy_code,
-        problem.canonical_patch,
-        json.dumps([tc.model_dump() for tc in problem.test_cases])
-    ))
-    conn.commit()
-    conn.close()
-
-    return problem
-
-def background_generate_and_cache():
-    try:
-        generate_single_problem()
-    except Exception:
-        pass
 
 @app.get("/get-problem")
-def get_problem(background_tasks: BackgroundTasks, exclude_ids: str = Query(default="")):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+def get_problem(
+    category: Optional[str] = Query(None, description="Filter by problem domain category"),
+    difficulty: Optional[str] = Query(None, description="Filter by Easy, Medium, or Hard"),
+    exclude_id: Optional[int] = Query(None, description="Exclude current problem ID to avoid immediate repeats"),
+):
+    global _pending_ai_problem
+    if _pending_ai_problem is not None:
+        problem = _pending_ai_problem
+        _pending_ai_problem = None
+        return problem
 
-    excluded = [int(i.strip()) for i in exclude_ids.split(",") if i.strip().isdigit()]
+    problem = fetch_random_problem(
+        category=category,
+        difficulty=difficulty,
+        exclude_id=exclude_id,
+    )
+    if not problem:
+        raise HTTPException(
+            status_code=404,
+            detail="No challenges match the selected category and difficulty filter.",
+        )
+    return problem
 
-    if excluded:
-        placeholders = ",".join("?" for _ in excluded)
-        query = f"""
-            SELECT id, title, difficulty, description, buggy_code, canonical_patch, test_cases 
-            FROM problems 
-            WHERE id NOT IN ({placeholders}) 
-            ORDER BY RANDOM() LIMIT 1
-        """
-        cursor.execute(query, excluded)
-    else:
-        cursor.execute("""
-            SELECT id, title, difficulty, description, buggy_code, canonical_patch, test_cases 
-            FROM problems 
-            ORDER BY RANDOM() LIMIT 1
-        """)
 
-    row = cursor.fetchone()
+@app.post("/generate-ai-problem")
+def create_ai_problem(
+    category: Optional[str] = None,
+    difficulty: Optional[str] = None,
+):
+    global _pending_ai_problem
+    try:
+        problem = generate_ai_bug_challenge(category=category, difficulty=difficulty)
+        _pending_ai_problem = problem
+        if problem and "id" in problem:
+            _ai_problems_cache[int(problem["id"])] = problem
+        return problem
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    # Loop back through problems if everything was completed
-    if not row:
-        cursor.execute("""
-            SELECT id, title, difficulty, description, buggy_code, canonical_patch, test_cases 
-            FROM problems 
-            ORDER BY RANDOM() LIMIT 1
-        """)
-        row = cursor.fetchone()
-
-    cursor.execute("SELECT COUNT(*) FROM problems")
-    total_count = cursor.fetchone()[0]
-    conn.close()
-
-    if total_count < 15:
-        background_tasks.add_task(background_generate_and_cache)
-
-    if not row:
-        return generate_single_problem()
-
-    return {
-        "id": row[0],
-        "title": row[1],
-        "difficulty": row[2],
-        "description": row[3],
-        "buggy_code": row[4],
-        "canonical_patch": row[5],
-        "test_cases": json.loads(row[6])
-    }
-
-@app.post("/generate-problem")
-def generate_problem_endpoint():
-    return generate_single_problem()
 
 @app.post("/submit-patch")
-def submit_patch(request: SubmitPatchRequest):
-    passed, message = execute_code_sandboxed(request.code, request.test_cases)
-    return {"passed": passed, "message": message}
+def submit_patch(payload: SubmitPatchRequest):
+    test_cases = payload.test_cases
+    if not test_cases and payload.problem_id:
+        test_cases = fetch_problem_test_cases(payload.problem_id)
+        if not test_cases and payload.problem_id in _ai_problems_cache:
+            test_cases = _ai_problems_cache[payload.problem_id].get("test_cases", [])
+
+    result = evaluate_patch(
+        user_code=payload.user_code,
+        test_cases=test_cases or [],
+        language=getattr(payload, "language", "python") or "python",
+    )
+
+    if result["passed"]:
+        if payload.user_id:
+            profile = record_user_solve(
+                user_id=payload.user_id,
+                username=payload.username,
+                time_seconds=payload.time_seconds or 0,
+                access_token=payload.access_token,
+            )
+            if profile:
+                result["profile"] = profile
+    else:
+        if payload.user_id:
+            reset_user_streak(
+                user_id=payload.user_id,
+                username=payload.username,
+                access_token=payload.access_token,
+            )
+
+    return result
+
 
 @app.post("/get-hint")
-def get_hint(req: HintRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
+def get_hint(payload: HintRequest):
+    if payload.problem_id:
+        hint = fetch_problem_hint(payload.problem_id)
+        if not hint and payload.problem_id in _ai_problems_cache:
+            hint = _ai_problems_cache[payload.problem_id].get("hint")
+        if hint:
+            return {"hint": hint}
 
-    client = genai.Client(
-        api_key=api_key,
-        http_options=types.HttpOptions(api_version="v1beta")
-    )
+    return {"hint": "Examine variable boundaries, data types, and how loops handle edge conditions."}
 
-    hint_prompt = (
-        "You are an arcade code mentor for LintIQ. Provide exactly ONE subtle, concise sentence nudging the developer "
-        "toward the logical flaw. DO NOT reveal the answer, DO NOT give direct code snippets, and DO NOT mention line numbers.\n\n"
-        f"Problem: {req.title}\n"
-        f"Description: {req.description}\n"
-        f"Current Code:\n```python\n{req.code}\n```"
-    )
 
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
-    last_err = None
+@app.get("/profile/{user_id}")
+def get_user_profile(user_id: str):
+    profile = fetch_user_profile(user_id=user_id)
+    if not profile:
+        return {
+            "id": user_id,
+            "score": 0,
+            "streak": 0,
+            "solves": 0,
+            "tier": "free",
+        }
+    return profile
 
-    for m in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=m,
-                contents=hint_prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.3,
-                    max_output_tokens=70
-                )
-            )
-            if response and response.text:
-                return {"hint": response.text.strip()}
-        except Exception as e:
-            last_err = e
-            continue
 
-    # Graceful fallback clue if AI quota is exhausted so the player isn't blocked
-    return {
-        "hint": "Check how the output data type and edge cases are handled before printing to stdout."
-    }
+@app.get("/leaderboard")
+def get_leaderboard():
+    return fetch_top_leaderboard(limit=10)
