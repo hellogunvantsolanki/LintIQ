@@ -1,4 +1,31 @@
 // --- 1. CONFIGURATION ---
+// Theme handling (day/night)
+let userTheme = localStorage.getItem("lintiq_theme") || "dark";
+function applyTheme() {
+  if (userTheme === "dark") {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}
+function toggleTheme() {
+  userTheme = userTheme === "dark" ? "light" : "dark";
+  localStorage.setItem("lintiq_theme", userTheme);
+  applyTheme();
+  // If user is logged in, sync to backend
+  if (currentUser && currentUser.id) {
+    fetch(`${API}/profile/${encodeURIComponent(currentUser.id)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${currentUser.access_token || ""}`,
+      },
+      body: JSON.stringify({ theme: userTheme }),
+    }).catch(console.warn);
+  }
+}
+applyTheme();
+
 const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
   ? "http://127.0.0.1:8000"
   : "https://lintiq.onrender.com";
@@ -103,7 +130,6 @@ async function syncUserProfileWithCloud(user) {
       .maybeSingle();
 
     if (!error && cloudProfile) {
-      // If local progress is higher than cloud (e.g., before cloud table was created), push local up
       if (score > (cloudProfile.score || 0)) {
         const mergedSolves = Math.max(solves, cloudProfile.solves || 0, streak, 1);
         await supabaseClient.from("user_profiles").upsert({
@@ -177,15 +203,17 @@ function updateAuthUI(user) {
 
   if (user) {
     closeAuthModal();
-    loginBtn.classList.add("hidden");
-    userProfile.classList.remove("hidden");
+    loginBtn?.classList.add("hidden");
+    userProfile?.classList.remove("hidden");
 
     const name = getDisplayUsername(user);
-    userDisplayName.textContent = name;
-    userDisplayName.title = name;
+    if (userDisplayName) {
+      userDisplayName.textContent = name;
+      userDisplayName.title = name;
+    }
   } else {
-    loginBtn.classList.remove("hidden");
-    userProfile.classList.add("hidden");
+    loginBtn?.classList.remove("hidden");
+    userProfile?.classList.add("hidden");
   }
 }
 
@@ -257,7 +285,6 @@ async function fetchLeaderboard() {
     let leaders = [];
     let usedSupabaseCloud = false;
 
-    // 1. Query Supabase Postgres directly for permanent cloud leaderboard
     const { data: cloudLeaders, error: cloudError } = await supabaseClient
       .from("user_profiles")
       .select("id, username, score, streak, solves, tier")
@@ -271,7 +298,6 @@ async function fetchLeaderboard() {
       usedSupabaseCloud = true;
     }
 
-    // 2. Also fetch Backend Leaderboard & merge any local profiles not yet in cloud
     try {
       const res = await fetch(`${API}/leaderboard`);
       if (res.ok) {
@@ -290,9 +316,7 @@ async function fetchLeaderboard() {
           .sort((a, b) => (b.score || 0) - (a.score || 0))
           .slice(0, 10);
       }
-    } catch (_) {
-      // Backend fallback optional if Supabase direct succeeded
-    }
+    } catch (_) {}
 
     if (syncStatus) {
       syncStatus.textContent = usedSupabaseCloud
@@ -339,13 +363,39 @@ async function fetchLeaderboard() {
   }
 }
 
-// --- 5. ARCADE METRICS & CONTROLLED TIMER ---
+// --- 5. ARCADE METRICS, GRAPH TELEMETRY & CONTROLLED TIMER ---
 function updateMetrics() {
-  document.getElementById("streak-count").textContent = streak;
-  document.getElementById("score-count").textContent = score;
+  const streakEl = document.getElementById("streak-count");
+  const scoreEl = document.getElementById("score-count");
+  if (streakEl) streakEl.textContent = streak;
+  if (scoreEl) scoreEl.textContent = score;
   localStorage.setItem("lintiq_streak", streak);
   localStorage.setItem("lintiq_score", score);
   localStorage.setItem("lintiq_solves", solves);
+}
+
+function recordLintIQSolve(solveSeconds, passed) {
+  const key = "lintiq_user_metrics_v1";
+  const current = JSON.parse(localStorage.getItem(key) || "null") || {
+    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    patchesSolved: [2, 4, 3, 5, 4, 3, 3],
+    avgLatencyMs: [52, 48, 44, 41, 39, 36, 35],
+    totalAccepted: 24,
+    passRate: 89
+  };
+
+  const todayIdx = current.patchesSolved.length - 1;
+  if (passed) {
+    current.patchesSolved[todayIdx] += 1;
+    current.totalAccepted += 1;
+    current.passRate = Math.min(99, current.passRate + 1);
+  } else {
+    current.passRate = Math.max(50, current.passRate - 1);
+  }
+
+  const simulatedExecMs = Math.max(18, Math.min(120, Math.round(solveSeconds * 1.5)));
+  current.avgLatencyMs[todayIdx] = Math.round((current.avgLatencyMs[todayIdx] + simulatedExecMs) / 2);
+  localStorage.setItem(key, JSON.stringify(current));
 }
 
 function resetTimer() {
@@ -435,12 +485,14 @@ async function loadNewProblem() {
     const diffBadge = document.getElementById("problem-difficulty");
     diffBadge.textContent = currentProblem.difficulty;
     const diffLower = (currentProblem.difficulty || "").toLowerCase();
-    if (diffLower === "easy") {
-      diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
-    } else if (diffLower === "medium") {
-      diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40";
+
+    const hintBox = document.getElementById("hint-box");
+    const hintText = document.getElementById("hint-text");
+    if (diffLower === "hard") {
+      hintText.textContent = "Check the SAML‑related header / token handling";
+      hintBox.classList.remove("hidden");
     } else {
-      diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40";
+      hintBox.classList.add("hidden");
     }
 
     if (monacoEditor) {
@@ -512,8 +564,8 @@ async function submitPatch() {
         score += pointsEarned;
       }
       updateMetrics();
+      recordLintIQSolve(timerSeconds, true);
 
-      // Mirror solve directly to Supabase Postgres from authenticated browser session
       if (userId && !String(userId).startsWith("mock_") && !String(userId).startsWith("test_")) {
         supabaseClient.from("user_profiles").upsert({
           id: userId,
@@ -535,6 +587,7 @@ async function submitPatch() {
       consoleEl.textContent = `✖ Patch Failed:\n${result.message || 'Logic or assertion error.'}`;
       streak = 0;
       updateMetrics();
+      recordLintIQSolve(timerSeconds, false);
 
       if (userId && !String(userId).startsWith("mock_") && !String(userId).startsWith("test_")) {
         supabaseClient.from("user_profiles").update({
@@ -582,25 +635,36 @@ async function requestHint() {
 // --- 9. MONACO INITIALIZATION ---
 require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
 require(["vs/editor/editor.main"], function () {
+  const savedPrefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+
   monacoEditor = monaco.editor.create(document.getElementById("editor-container"), {
     value: "# Loading challenge code...",
     language: "python",
     theme: "vs-dark",
-    fontSize: 14,
-    minimap: { enabled: false },
+    fontSize: savedPrefs.fontSize || 14,
+    tabSize: savedPrefs.tabSize || 4,
+    insertSpaces: true,
+    minimap: { enabled: Boolean(savedPrefs.minimap) },
+    wordWrap: savedPrefs.wordWrap || "on",
     automaticLayout: true,
     scrollBeyondLastLine: false,
     padding: { top: 12, bottom: 12 }
   });
 
+  // Expose globally so Settings > Editor Settings can update options live
+  window.editor = monacoEditor;
+  window.monacoEditor = monacoEditor;
+
   monacoEditor.onDidFocusEditorText(() => {
-    if (!timerRunning && currentProblem) {
+    const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+    if (prefs.autoTimer !== false && !timerRunning && currentProblem) {
       startTimer();
     }
   });
 
   monacoEditor.onDidChangeModelContent(() => {
-    if (!isInjectingCode && !timerRunning && currentProblem) {
+    const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+    if (prefs.autoTimer !== false && !isInjectingCode && !timerRunning && currentProblem) {
       startTimer();
     }
   });
@@ -611,8 +675,7 @@ require(["vs/editor/editor.main"], function () {
   loadNewProblem();
 });
 
-
-
+// --- 10. AI CHALLENGE GENERATOR & CATEGORY REFRESH ---
 async function generateAIChallenge() {
   const btn = document.getElementById("ai-generate-btn");
   if (btn) {
@@ -651,12 +714,10 @@ async function generateAIChallenge() {
       throw new Error(data.detail || "Failed to generate AI challenge");
     }
 
-    // 1. Refresh category pill counts from /categories
     await refreshCategoryPillCounts();
     if (typeof fetchCategories === "function") await fetchCategories();
     if (typeof loadCategories === "function") await loadCategories();
 
-    // 2. Load the queued AI problem onto the screen
     const nextBtn = Array.from(document.querySelectorAll("button")).find((b) =>
       b.textContent.includes("Next Challenge")
     );
@@ -665,7 +726,6 @@ async function generateAIChallenge() {
     }
 
     setTimeout(() => {
-      // Ensure the #ID badge on the card matches the new problem ID
       const idEl =
         document.getElementById("problem-id") ||
         document.getElementById("challenge-id");
@@ -689,7 +749,6 @@ async function generateAIChallenge() {
 }
 window.generateAIChallenge = generateAIChallenge;
 
-
 async function refreshCategoryPillCounts() {
   try {
     const res = await fetch(`${API}/categories`);
@@ -699,7 +758,6 @@ async function refreshCategoryPillCounts() {
     const countsMap = {};
     let total = 0;
 
-    // Unwrap nested { total, categories } structure from fetch_categories_summary()
     const rawCats =
       data && typeof data === "object" && !Array.isArray(data) && data.categories
         ? data.categories

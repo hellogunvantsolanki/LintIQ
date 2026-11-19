@@ -1,5 +1,19 @@
 from typing import Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, Query
+import logging
+from fastapi import Depends
+
+# Simple token verification
+async def verify_token(token: str = "") -> str:
+    # In a real app, validate JWT via Supabase or another auth provider.
+    # Here we just ensure a token is provided; replace with proper verification.
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing access token")
+    return token
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import SubmitPatchRequest, HintRequest
@@ -43,7 +57,7 @@ _ai_problems_cache: Dict[int, Dict[str, Any]] = {}
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "LintIQ Engine", "version": "1.4.0"}
+    return {"status": "OK", "service": "LintIQ Engine", "version": "1.4.0", "timestamp": datetime.utcnow().isoformat() + "Z"}
 
 
 @app.get("/categories")
@@ -71,7 +85,7 @@ def get_problem(
     if not problem:
         raise HTTPException(
             status_code=404,
-            detail="No challenges match the selected category and difficulty filter.",
+            detail="No challenges were found matching the selected category and difficulty filter.",
         )
     return problem
 
@@ -93,7 +107,14 @@ def create_ai_problem(
 
 
 @app.post("/submit-patch")
-def submit_patch(payload: SubmitPatchRequest):
+def submit_patch(payload: SubmitPatchRequest, token: str = Header(..., alias="Authorization")):
+    # Verify access token (Bearer <token>)
+    verify_token(token.split(' ', 1)[-1])
+    test_cases = payload.test_cases
+    if not test_cases and payload.problem_id:
+        test_cases = fetch_problem_test_cases(payload.problem_id)
+        if not test_cases and payload.problem_id in _ai_problems_cache:
+            test_cases = _ai_problems_cache[payload.problem_id].get("test_cases", [])
     test_cases = payload.test_cases
     if not test_cases and payload.problem_id:
         test_cases = fetch_problem_test_cases(payload.problem_id)
@@ -140,12 +161,14 @@ def get_hint(payload: HintRequest):
 
 
 @app.get("/profile/{user_id}")
-def get_user_profile(user_id: str):
+def get_user_profile(user_id: str, token: str = Header(..., alias="Authorization")):
+    # Verify access token (Bearer <token>)
+    verify_token(token.split(' ', 1)[-1])
+    profile = fetch_user_profile(user_id=user_id)
     profile = fetch_user_profile(user_id=user_id)
     if not profile:
         return {
             "id": user_id,
-            "score": 0,
             "streak": 0,
             "solves": 0,
             "tier": "free",

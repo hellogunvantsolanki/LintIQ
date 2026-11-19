@@ -21,3 +21,253 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Added stat-box styling */
+.stat-box {
+  background: #161b22;
+  color: #e6edf3;
+  padding: 10px;
+  border-radius: 6px;
+}
+.lintiq-btn-secondary {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lintiq-btn-secondary:hover {
+  background: #30363d;
+  border-color: #8b949e;
+}
+
+.lintiq-btn-primary {
+  background: #238636;
+  color: #ffffff;
+  border: 1px solid rgba(240, 246, 252, 0.1);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lintiq-btn-primary:hover {
+  background: #2ea043;
+}
+
+.lintiq-modal.hidden {
+  display: none;
+}
+
+.lintiq-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lintiq-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.lintiq-modal-card {
+  position: relative;
+  width: min(920px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  color: #e6edf3;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+  z-index: 1;
+}
+
+.lintiq-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #30363d;
+  background: #0d1117;
+}
+
+.lintiq-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.lintiq-icon-btn {
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lintiq-icon-btn:hover {
+  color: #e6edf3;
+}
+
+.lintiq-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 20px;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .lintiq-modal-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-panel {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.settings-panel h3 {
+  margin: 0 0 14px 0;
+  font-size: 14px;
+  color: #f0f6fc;
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #21262d;
+}
+
+.profile-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1f6feb, #238636);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+}
+
+.profile-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.profile-meta {
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.profile-form input,
+.profile-form select {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #e6edf3;
+  font-size: 13px;
+}
+
+.profile-form input:focus,
+.profile-form select:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.save-status {
+  font-size: 12px;
+  color: #3fb950;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.badge-live {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(56, 139, 253, 0.15);
+  color: #58a6ff;
+  border: 1px solid rgba(56, 139, 253, 0.4);
+}
+
+.stats-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stat-box {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #8b949e;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f0f6fc;
+  margin-top: 2px;
+}
+
+.chart-container {
+  position: relative;
+  height: 220px;
+  width: 100%;
+}
