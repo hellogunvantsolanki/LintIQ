@@ -342,7 +342,6 @@ async function fetchLeaderboard() {
 // --- 5. ARCADE METRICS & CONTROLLED TIMER ---
 function updateMetrics() {
   document.getElementById("streak-count").textContent = streak;
-  document.getElementById("score-count").textContent = score;
   localStorage.setItem("lintiq_streak", streak);
   localStorage.setItem("lintiq_score", score);
   localStorage.setItem("lintiq_solves", solves);
@@ -526,7 +525,6 @@ async function submitPatch() {
       }
 
       setTimeout(() => {
-        alert(`Bug squashed! +${pointsEarned} Points`);
         loadNewProblem();
       }, 500);
     } else {
