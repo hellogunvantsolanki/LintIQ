@@ -7,6 +7,22 @@ const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Theme handling (day/night)
+let userTheme = localStorage.getItem("lintiq_theme") || "dark";
+function applyTheme() {
+  if (userTheme === "dark") {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}
+function toggleTheme() {
+  userTheme = userTheme === "dark" ? "light" : "dark";
+  localStorage.setItem("lintiq_theme", userTheme);
+  applyTheme();
+}
+applyTheme();
+
 // Game & Filter State
 let currentUser = null;
 let currentSession = null;
@@ -83,6 +99,7 @@ async function handleEmailAuth(event) {
 }
 
 async function logout() {
+  if (!currentUser) return;
   await supabaseClient.auth.signOut();
   window.location.reload();
 }
@@ -103,7 +120,6 @@ async function syncUserProfileWithCloud(user) {
       .maybeSingle();
 
     if (!error && cloudProfile) {
-      // If local progress is higher than cloud (e.g., before cloud table was created), push local up
       if (score > (cloudProfile.score || 0)) {
         const mergedSolves = Math.max(solves, cloudProfile.solves || 0, streak, 1);
         await supabaseClient.from("user_profiles").upsert({
@@ -122,11 +138,18 @@ async function syncUserProfileWithCloud(user) {
         solves = cloudProfile.solves || 0;
       }
       updateMetrics();
+      if (typeof window.syncSettingsModalAuth === "function") {
+        window.syncSettingsModalAuth();
+      }
       return;
     }
 
     // 2. If user is not yet in Supabase cloud but has existing score/solves, migrate them up
-    const res = await fetch(`${API}/profile/${encodeURIComponent(user.id)}`);
+    const headers = {};
+    if (currentSession?.access_token) {
+      headers["Authorization"] = `Bearer ${currentSession.access_token}`;
+    }
+    const res = await fetch(`${API}/profile/${encodeURIComponent(user.id)}`, { headers });
     if (res.ok) {
       const backendProfile = await res.json();
       score = Math.max(score, backendProfile.score || 0);
@@ -174,18 +197,30 @@ function updateAuthUI(user) {
   const loginBtn = document.getElementById("btn-login");
   const userProfile = document.getElementById("user-profile");
   const userDisplayName = document.getElementById("user-display-name");
+  const settingsLogoutBtn = document.getElementById("settings-logout-btn");
+  const settingsLogoutDivider = document.getElementById("settings-logout-divider");
 
   if (user) {
     closeAuthModal();
-    loginBtn.classList.add("hidden");
-    userProfile.classList.remove("hidden");
+    loginBtn?.classList.add("hidden");
+    userProfile?.classList.remove("hidden");
+    settingsLogoutBtn?.classList.remove("hidden");
+    settingsLogoutDivider?.classList.remove("hidden");
 
     const name = getDisplayUsername(user);
-    userDisplayName.textContent = name;
-    userDisplayName.title = name;
+    if (userDisplayName) {
+      userDisplayName.textContent = name;
+      userDisplayName.title = name;
+    }
   } else {
-    loginBtn.classList.remove("hidden");
-    userProfile.classList.add("hidden");
+    loginBtn?.classList.remove("hidden");
+    userProfile?.classList.add("hidden");
+    settingsLogoutBtn?.classList.add("hidden");
+    settingsLogoutDivider?.classList.add("hidden");
+  }
+
+  if (typeof window.syncSettingsModalAuth === "function") {
+    window.syncSettingsModalAuth();
   }
 }
 
@@ -257,7 +292,6 @@ async function fetchLeaderboard() {
     let leaders = [];
     let usedSupabaseCloud = false;
 
-    // 1. Query Supabase Postgres directly for permanent cloud leaderboard
     const { data: cloudLeaders, error: cloudError } = await supabaseClient
       .from("user_profiles")
       .select("id, username, score, streak, solves, tier")
@@ -271,7 +305,6 @@ async function fetchLeaderboard() {
       usedSupabaseCloud = true;
     }
 
-    // 2. Also fetch Backend Leaderboard & merge any local profiles not yet in cloud
     try {
       const res = await fetch(`${API}/leaderboard`);
       if (res.ok) {
@@ -290,9 +323,7 @@ async function fetchLeaderboard() {
           .sort((a, b) => (b.score || 0) - (a.score || 0))
           .slice(0, 10);
       }
-    } catch (_) {
-      // Backend fallback optional if Supabase direct succeeded
-    }
+    } catch (_) {}
 
     if (syncStatus) {
       syncStatus.textContent = usedSupabaseCloud
@@ -314,8 +345,8 @@ async function fetchLeaderboard() {
       else if (index === 1) rankBadge = "🥈";
       else if (index === 2) rankBadge = "🥉";
 
-      const rowHighlight = isCurrentUser 
-        ? "bg-emerald-950/40 border-l-2 border-emerald-500 text-white font-bold" 
+      const rowHighlight = isCurrentUser
+        ? "bg-emerald-950/40 border-l-2 border-emerald-500 text-white font-bold"
         : "hover:bg-zinc-800/40 text-zinc-300";
 
       return `
@@ -339,12 +370,52 @@ async function fetchLeaderboard() {
   }
 }
 
-// --- 5. ARCADE METRICS & CONTROLLED TIMER ---
+// --- 5. ARCADE METRICS, GRAPH TELEMETRY & CONTROLLED TIMER ---
 function updateMetrics() {
-  document.getElementById("streak-count").textContent = streak;
+  const streakEl = document.getElementById("streak-count");
+  const scoreEl = document.getElementById("score-count");
+  if (streakEl) streakEl.textContent = streak;
+  if (scoreEl) scoreEl.textContent = score;
   localStorage.setItem("lintiq_streak", streak);
   localStorage.setItem("lintiq_score", score);
   localStorage.setItem("lintiq_solves", solves);
+}
+
+function recordLintIQSolve(solveSeconds, passed) {
+  if (!currentUser?.id) return;
+
+  const key = `lintiq_user_metrics_${currentUser.id}`;
+  const current = JSON.parse(localStorage.getItem(key) || "null") || {
+    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    patchesSolved: [0, 0, 0, 0, 0, 0, 0],
+    avgLatencyMs: [0, 0, 0, 0, 0, 0, 0],
+    totalAccepted: 0,
+    totalAttempts: 0,
+    passRate: 0,
+    bestStreak: 0
+  };
+
+  const todayIdx = current.patchesSolved.length - 1;
+  current.totalAttempts = (current.totalAttempts || 0) + 1;
+
+  if (passed) {
+    current.patchesSolved[todayIdx] += 1;
+    current.totalAccepted = (current.totalAccepted || 0) + 1;
+    current.bestStreak = Math.max(current.bestStreak || 0, streak);
+  }
+
+  current.passRate = Math.round((current.totalAccepted / current.totalAttempts) * 100);
+
+  const simulatedExecMs = Math.max(18, Math.min(120, Math.round(solveSeconds * 1.5)));
+  current.avgLatencyMs[todayIdx] = current.avgLatencyMs[todayIdx] === 0
+    ? simulatedExecMs
+    : Math.round((current.avgLatencyMs[todayIdx] + simulatedExecMs) / 2);
+
+  localStorage.setItem(key, JSON.stringify(current));
+
+  if (typeof window.syncSettingsModalAuth === "function") {
+    window.syncSettingsModalAuth();
+  }
 }
 
 function resetTimer() {
@@ -362,7 +433,7 @@ function startTimer() {
   timerRunning = true;
   document.getElementById("timer-status").textContent = "(Running)";
   document.getElementById("timer-status").className = "text-[10px] uppercase tracking-wider text-emerald-400 ml-1";
-  
+
   timerInterval = setInterval(() => {
     timerSeconds++;
     updateTimerDisplay();
@@ -414,7 +485,7 @@ async function loadNewProblem() {
     }
 
     if (!res.ok) throw new Error("Could not fetch problem from backend.");
-    
+
     currentProblem = await res.json();
 
     document.getElementById("problem-id").textContent = `#${currentProblem.id}`;
@@ -424,23 +495,18 @@ async function loadNewProblem() {
 
     const tagsContainer = document.getElementById("problem-tags");
     const tagsList = Array.isArray(currentProblem.tags) ? currentProblem.tags : [];
-    tagsContainer.innerHTML = tagsList.map(tag => 
-      `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">#${tag}</span>`
-    ).join("");
+    tagsContainer.innerHTML = tagsList.map(tag => {
+      const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
+      return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
+    }).join("");
 
     const tcCount = Array.isArray(currentProblem.test_cases) ? currentProblem.test_cases.length : 0;
     document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
-    
+
     const diffBadge = document.getElementById("problem-difficulty");
     diffBadge.textContent = currentProblem.difficulty;
-    const diffLower = (currentProblem.difficulty || "").toLowerCase();
-    if (diffLower === "easy") {
-      diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
-    } else if (diffLower === "medium") {
-      diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40";
-    } else {
-      diffBadge.className = "text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40";
-    }
+
+    document.getElementById("hint-box").classList.add("hidden");
 
     if (monacoEditor) {
       isInjectingCode = true;
@@ -475,9 +541,14 @@ async function submitPatch() {
   const accessToken = currentSession?.access_token || null;
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
     const res = await fetch(`${API}/submit-patch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers,
       body: JSON.stringify({
         problem_id: currentProblem.id,
         user_code: userCode,
@@ -490,12 +561,14 @@ async function submitPatch() {
     });
 
     const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.detail || `Server error (${res.status})`);
+    }
 
     if (result.passed) {
       stopTimer();
       statusTag.textContent = "Passed";
       statusTag.className = "text-emerald-400";
-      consoleEl.textContent = `✔ Cleared in ${timerSeconds}s!\n${result.message || ''}`;
 
       let pointsEarned = 0;
       if (result.profile) {
@@ -510,9 +583,11 @@ async function submitPatch() {
         pointsEarned = 100 + (streak * 10) + timeBonus;
         score += pointsEarned;
       }
-      updateMetrics();
 
-      // Mirror solve directly to Supabase Postgres from authenticated browser session
+      consoleEl.textContent = `✔ Cleared in ${timerSeconds}s! (+${pointsEarned} Points)\n${result.message || ''}`;
+      updateMetrics();
+      recordLintIQSolve(timerSeconds, true);
+
       if (userId && !String(userId).startsWith("mock_") && !String(userId).startsWith("test_")) {
         supabaseClient.from("user_profiles").upsert({
           id: userId,
@@ -523,16 +598,13 @@ async function submitPatch() {
           last_active: new Date().toISOString()
         }, { onConflict: "id" }).then(() => {});
       }
-
-      setTimeout(() => {
-        loadNewProblem();
-      }, 500);
     } else {
       statusTag.textContent = "Failed";
       statusTag.className = "text-rose-400";
       consoleEl.textContent = `✖ Patch Failed:\n${result.message || 'Logic or assertion error.'}`;
       streak = 0;
       updateMetrics();
+      recordLintIQSolve(timerSeconds, false);
 
       if (userId && !String(userId).startsWith("mock_") && !String(userId).startsWith("test_")) {
         supabaseClient.from("user_profiles").update({
@@ -544,7 +616,7 @@ async function submitPatch() {
   } catch (err) {
     statusTag.textContent = "Error";
     statusTag.className = "text-rose-400";
-    consoleEl.textContent = "Failed to communicate with test runner.";
+    consoleEl.textContent = `Failed to communicate with test runner: ${err.message}`;
     console.error(err);
   } finally {
     submitBtn.disabled = false;
@@ -580,25 +652,36 @@ async function requestHint() {
 // --- 9. MONACO INITIALIZATION ---
 require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
 require(["vs/editor/editor.main"], function () {
+  const savedPrefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+
   monacoEditor = monaco.editor.create(document.getElementById("editor-container"), {
     value: "# Loading challenge code...",
     language: "python",
     theme: "vs-dark",
-    fontSize: 14,
-    minimap: { enabled: false },
+    fontSize: savedPrefs.fontSize || 14,
+    tabSize: savedPrefs.tabSize || 4,
+    insertSpaces: true,
+    minimap: { enabled: Boolean(savedPrefs.minimap) },
+    wordWrap: savedPrefs.wordWrap || "on",
     automaticLayout: true,
     scrollBeyondLastLine: false,
     padding: { top: 12, bottom: 12 }
   });
 
+  // Expose globally so Settings > Editor Settings can update options live
+  window.editor = monacoEditor;
+  window.monacoEditor = monacoEditor;
+
   monacoEditor.onDidFocusEditorText(() => {
-    if (!timerRunning && currentProblem) {
+    const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+    if (prefs.autoTimer !== false && !timerRunning && currentProblem) {
       startTimer();
     }
   });
 
   monacoEditor.onDidChangeModelContent(() => {
-    if (!isInjectingCode && !timerRunning && currentProblem) {
+    const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+    if (prefs.autoTimer !== false && !isInjectingCode && !timerRunning && currentProblem) {
       startTimer();
     }
   });
@@ -609,8 +692,7 @@ require(["vs/editor/editor.main"], function () {
   loadNewProblem();
 });
 
-
-
+// --- 10. AI CHALLENGE GENERATOR & CATEGORY REFRESH ---
 async function generateAIChallenge() {
   const btn = document.getElementById("ai-generate-btn");
   if (btn) {
@@ -649,12 +731,10 @@ async function generateAIChallenge() {
       throw new Error(data.detail || "Failed to generate AI challenge");
     }
 
-    // 1. Refresh category pill counts from /categories
     await refreshCategoryPillCounts();
     if (typeof fetchCategories === "function") await fetchCategories();
     if (typeof loadCategories === "function") await loadCategories();
 
-    // 2. Load the queued AI problem onto the screen
     const nextBtn = Array.from(document.querySelectorAll("button")).find((b) =>
       b.textContent.includes("Next Challenge")
     );
@@ -663,7 +743,6 @@ async function generateAIChallenge() {
     }
 
     setTimeout(() => {
-      // Ensure the #ID badge on the card matches the new problem ID
       const idEl =
         document.getElementById("problem-id") ||
         document.getElementById("challenge-id");
@@ -687,7 +766,6 @@ async function generateAIChallenge() {
 }
 window.generateAIChallenge = generateAIChallenge;
 
-
 async function refreshCategoryPillCounts() {
   try {
     const res = await fetch(`${API}/categories`);
@@ -697,7 +775,6 @@ async function refreshCategoryPillCounts() {
     const countsMap = {};
     let total = 0;
 
-    // Unwrap nested { total, categories } structure from fetch_categories_summary()
     const rawCats =
       data && typeof data === "object" && !Array.isArray(data) && data.categories
         ? data.categories

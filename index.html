@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LintIQ — AI Bug-Hunting & Code Review Arcade</title>
+  <meta name="description" content="LintIQ is an interactive, gamified AI code review and bug-hunting arcade for developers." />
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,11 +12,14 @@
   <!-- Supabase JS Client CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+  <!-- Chart.js CDN (MUST load before Monaco's AMD loader) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <!-- Monaco Editor Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 
   <!-- External Stylesheet -->
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body class="bg-[#0d1117] text-zinc-100 flex flex-col min-h-screen antialiased">
 
@@ -30,16 +34,13 @@
         <span class="text-xs uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded font-mono">Arcade v1.4</span>
       </div>
 
-      <!-- Center Stats: Streak, Score, Timer -->
+      <!-- Center Stats: Streak, Timer -->
       <div class="flex items-center gap-3 font-mono text-sm flex-wrap">
         <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
           <span class="text-amber-400">⚡ Streak:</span>
           <span id="streak-count" class="text-white font-bold">0</span>
         </div>
-          <!-- <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
-            <span class="text-emerald-400">★ Score:</span> 
-            <span id="score-count" class="text-white font-bold">0</span>
-          </div> -->
+
         <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
           <span class="text-sky-400">⏱ Time:</span>
           <span id="timer-display" class="text-white font-bold">00:00</span>
@@ -48,7 +49,7 @@
       </div>
 
       <!-- Right Action & Auth Section -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5 flex-wrap">
         <button onclick="openLeaderboardModal()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition">
           <span>🏆 Leaderboard</span>
         </button>
@@ -56,6 +57,85 @@
         <button id="btn-hint" onclick="requestHint()" class="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
           <span>💡 AI Hint</span>
         </button>
+
+        <!-- Settings Floating Popover Dropdown -->
+        <div class="relative" id="settings-dropdown-wrapper">
+          <button
+            id="open-settings-btn"
+            onclick="toggleSettingsDropdown(event)"
+            class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition"
+            title="Settings Menu"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294a6.4 6.4 0 0 1 0 .772c-.01.147.039.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/>
+            </svg>
+            <span>Settings</span>
+          </button>
+
+          <!-- Floating Rounded Popover Menu -->
+          <div
+            id="settings-popover-menu"
+            class="hidden absolute right-0 mt-2.5 w-56 bg-[#181b20] border border-zinc-800/90 rounded-2xl py-2.5 px-2 shadow-2xl shadow-black/80 z-50 select-none"
+          >
+            <!-- Profile -->
+            <button
+              onclick="openSettingsAtTab('profile')"
+              class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
+            >
+              <svg class="w-[18px] h-[18px] text-zinc-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+              <span>Profile</span>
+            </button>
+
+            <!-- Dashboard (Graph & Analytics) -->
+            <button
+              onclick="openSettingsAtTab('analytics')"
+              class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
+            >
+              <svg class="w-[18px] h-[18px] text-zinc-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+              </svg>
+              <span>Dashboard</span>
+            </button>
+
+            <!-- Editor Settings -->
+            <button
+              onclick="openSettingsAtTab('editor')"
+              class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
+            >
+              <svg class="w-[18px] h-[18px] text-zinc-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+              </svg>
+              <span>Editor Settings</span>
+            </button>
+
+            <!-- Export Stats -->
+            <button
+              onclick="closeSettingsDropdown(); exportLintIQData();"
+              class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
+            >
+              <svg class="w-[18px] h-[18px] text-zinc-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              <span>Export Stats</span>
+            </button>
+
+            <div id="settings-logout-divider" class="hidden my-1.5 border-t border-zinc-800/90"></div>
+
+            <!-- Logout (Only visible when signed in) -->
+            <button
+              id="settings-logout-btn"
+              onclick="closeSettingsDropdown(); if (typeof logout === 'function') logout();"
+              class="hidden w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left"
+            >
+              <svg class="w-[18px] h-[18px] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
 
         <div id="auth-section" class="flex items-center gap-2 border-l border-zinc-800 pl-3">
           <button id="btn-login" onclick="openAuthModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-medium rounded-lg transition shadow-sm">
@@ -141,21 +221,20 @@
           </div>
 
           <!-- Test Case Counter & Skip Action -->
-          <div class="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between gap-3">
+          <div class="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between gap-3 flex-wrap">
             <span id="test-case-count" class="text-xs font-mono text-zinc-300">🧪 0 Test Assertions</span>
-            <button onclick="loadNewProblem()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition whitespace-nowrap">
-              Next Challenge →
-            </button>
             <div class="flex items-center gap-2">
-  <button
-    id="ai-generate-btn"
-    onclick="generateAIChallenge()"
-    class="px-3 py-1.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition cursor-pointer"
-  >
-    ✨ Generate AI Bug
-  </button>
-  <!-- Keep your existing Next Challenge button right here -->
-</div>
+              <button
+                id="ai-generate-btn"
+                onclick="generateAIChallenge()"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition cursor-pointer"
+              >
+                ✨ Generate AI Bug
+              </button>
+              <button onclick="loadNewProblem()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition whitespace-nowrap">
+                Next Challenge →
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -182,8 +261,8 @@
           <!-- Language Track Indicator -->
           <div class="flex items-center gap-1.5 text-xs font-mono">
             <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">Python 3.11</span>
-            <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="JavaScript Node.js track coming soon">JS (Soon)</span>
-            <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="Go track coming soon">Go (Soon)</span>
+            <span class="px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="JavaScript Node.js track coming soon">JS (Soon)</span>
+            <span class="px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="Go track coming soon">Go (Soon)</span>
           </div>
         </div>
 
@@ -201,6 +280,267 @@
       </div>
     </div>
   </main>
+
+  <!-- ⚙️ Expanded Settings, Editor Preferences & Analytics Modal -->
+  <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl relative flex flex-col">
+      
+      <!-- Modal Header & Tab Navigation -->
+      <div class="px-6 pt-4 bg-[#090d13] border-b border-zinc-800">
+        <div class="flex items-center justify-between pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-emerald-400 font-mono text-sm">⚙</span>
+            <h2 id="settings-title" class="text-base font-bold text-white tracking-wide">LintIQ Control Center</h2>
+          </div>
+          <button onclick="closeSettingsModal()" class="text-zinc-400 hover:text-zinc-200 text-sm px-2 py-1 rounded">✕</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex items-center gap-2 text-xs font-mono">
+          <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold transition">
+            👤 Profile & Bio
+          </button>
+          <button onclick="switchSettingsTab('editor')" id="tab-btn-editor" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
+            🖥 Editor & Sandbox
+          </button>
+          <button onclick="switchSettingsTab('analytics')" id="tab-btn-analytics" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
+            📊 Dashboard & Graph
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 1: Profile & Personal Information -->
+      <div id="settings-panel-profile" class="settings-tab-panel p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div class="md:col-span-5 bg-[#0d1117] border border-zinc-800 rounded-xl p-5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-3 pb-4 mb-4 border-b border-zinc-800">
+              <div id="profile-initials" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-sky-600 flex items-center justify-center font-bold text-base text-white shrink-0">
+                LQ
+              </div>
+              <div class="min-w-0">
+                <div id="profile-display-name" class="text-base font-bold text-white truncate">Guest Engineer</div>
+                <div id="profile-display-role" class="text-xs text-zinc-400 truncate">LintIQ Bug Hunter</div>
+                <div id="profile-display-github" class="text-[11px] font-mono text-emerald-400 mt-0.5 truncate"></div>
+              </div>
+            </div>
+
+            <div class="space-y-2.5 text-xs font-mono">
+              <div class="flex justify-between py-1.5 border-b border-zinc-800/70">
+                <span class="text-zinc-400">Primary Stack</span>
+                <span id="summary-lang" class="text-zinc-200">Python 3.11</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-zinc-800/70">
+                <span class="text-zinc-400">Location</span>
+                <span id="summary-location" class="text-zinc-200">India</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-zinc-800/70">
+                <span class="text-zinc-400">Rank Tier</span>
+                <span class="text-amber-400 font-semibold">Bug Hunter II</span>
+              </div>
+              <div class="flex justify-between py-1.5">
+                <span class="text-zinc-400">Sandbox Timeout</span>
+                <span class="text-sky-400">2.5s AST Guard</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-zinc-800 text-[11px] font-mono text-zinc-500">
+            Synced with LintIQ Account & Local Storage
+          </div>
+        </div>
+
+        <div class="md:col-span-7 bg-[#0d1117] border border-zinc-800 rounded-xl p-5">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400 mb-4">Edit Personal Details</h3>
+          <form id="profile-form" onsubmit="saveUserProfile(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">Full Name</label>
+              <input type="text" id="input-fullname" placeholder="Your full name" required class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">GitHub Username</label>
+              <input type="text" id="input-github" placeholder="github-username" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">Email Address</label>
+              <input type="email" id="input-email" placeholder="you@example.com" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">Location / University</label>
+              <input type="text" id="input-location" placeholder="India" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">Headline / Bio</label>
+              <input type="text" id="input-bio" placeholder="Full-Stack Developer | Python & FastAPI" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">Portfolio / LinkedIn URL</label>
+              <input type="url" id="input-website" placeholder="https://github.com/username" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-400 mb-1">Preferred Runtime</label>
+              <select id="input-lang" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-emerald-500">
+                <option value="python" selected>Python 3.11</option>
+                <option value="javascript">JavaScript (Node.js - Soon)</option>
+                <option value="cpp">C++20 (Phase 2)</option>
+              </select>
+            </div>
+
+            <div class="sm:col-span-2 pt-2 flex items-center justify-between">
+              <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition">
+                Save Personal Profile
+              </button>
+              <span id="profile-save-status" class="text-xs font-mono text-emerald-400"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- TAB 2: Monaco Editor & Sandbox Preferences -->
+      <div id="settings-panel-editor" class="settings-tab-panel hidden p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-[#0d1117] border border-zinc-800 rounded-xl p-5 space-y-4">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">Monaco Editor Configuration</h3>
+
+          <div>
+            <div class="flex justify-between text-xs font-mono mb-1">
+              <span class="text-zinc-300">Font Size</span>
+              <span id="editor-fontsize-val" class="text-emerald-400">14px</span>
+            </div>
+            <input type="range" id="pref-fontsize" min="12" max="20" value="14" oninput="applyEditorPrefs()" class="w-full accent-emerald-500 cursor-pointer" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-mono text-zinc-300 mb-1">Indentation Size (Python Standard: 4)</label>
+            <select id="pref-tabsize" onchange="applyEditorPrefs()" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white font-mono">
+              <option value="4" selected>4 Spaces (Recommended)</option>
+              <option value="2">2 Spaces</option>
+            </select>
+          </div>
+
+          <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer">
+            <span class="text-xs text-zinc-200">Show Code Minimap</span>
+            <input type="checkbox" id="pref-minimap" onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
+          </label>
+
+          <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer">
+            <span class="text-xs text-zinc-200">Word Wrap Long Lines</span>
+            <input type="checkbox" id="pref-wordwrap" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
+          </label>
+        </div>
+
+        <div class="bg-[#0d1117] border border-zinc-800 rounded-xl p-5 flex flex-col justify-between">
+          <div class="space-y-4">
+            <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">Arcade & Sandbox Behavior</h3>
+
+            <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer">
+              <div>
+                <div class="text-xs font-semibold text-zinc-200">Auto-Start Timer on Keystroke</div>
+                <div class="text-[11px] text-zinc-400">Starts challenge stopwatch immediately when editing</div>
+              </div>
+              <input type="checkbox" id="pref-autotimer" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
+            </label>
+
+            <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer">
+              <div>
+                <div class="text-xs font-semibold text-zinc-200">Show AST Safety Warnings</div>
+                <div class="text-[11px] text-zinc-400">Highlight blocked imports before submitting</div>
+              </div>
+              <input type="checkbox" id="pref-astwarn" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
+            </label>
+
+            <div class="p-3 bg-[#161b22] border border-zinc-800 rounded-lg text-xs font-mono space-y-1">
+              <div class="text-zinc-400 text-[11px] uppercase">Keyboard Shortcuts</div>
+              <div class="flex justify-between text-zinc-300"><span>Submit Patch</span><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px]">Ctrl + Enter</kbd></div>
+              <div class="flex justify-between text-zinc-300"><span>Format Code</span><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px]">Shift + Alt + F</kbd></div>
+            </div>
+          </div>
+
+          <div class="pt-3 flex justify-end">
+            <span id="editor-pref-status" class="text-xs font-mono text-emerald-400">Preferences applied live</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Performance Graph, Track Breakdown & Data Export -->
+      <div id="settings-panel-analytics" class="settings-tab-panel hidden p-6">
+        <!-- Logged-Out State -->
+        <div id="analytics-logged-out" class="hidden py-14 px-6 text-center bg-[#0d1117] border border-zinc-800 rounded-xl">
+          <div class="text-3xl mb-3">🔒</div>
+          <h3 class="text-base font-bold text-white mb-1">Sign in to view your Dashboard</h3>
+          <p class="text-xs text-zinc-400 max-w-md mx-auto mb-5">
+            Your 7-day bug-hunt telemetry, pass rate, runtime latency, and personal streak history are tracked per account.
+          </p>
+          <button
+            onclick="closeSettingsModal(); openAuthModal();"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition"
+          >
+            Sign In / Register
+          </button>
+        </div>
+
+        <!-- Logged-In Dashboard Content -->
+        <div id="analytics-auth-content" class="space-y-5">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Patches Solved</div>
+              <div id="stat-patches" class="text-lg font-bold text-emerald-400 mt-0.5">0</div>
+            </div>
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Avg Runtime</div>
+              <div id="stat-runtime" class="text-lg font-bold text-sky-400 mt-0.5">0 ms</div>
+            </div>
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Pass Rate</div>
+              <div id="stat-accuracy" class="text-lg font-bold text-amber-400 mt-0.5">0%</div>
+            </div>
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Best Streak</div>
+              <div id="stat-best-streak" class="text-lg font-bold text-purple-400 mt-0.5">0</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
+            <!-- Line Chart -->
+            <div class="md:col-span-8 bg-[#0d1117] border border-zinc-800 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">7-Day Bug-Hunt & Latency Graph</h3>
+                <span class="text-[11px] font-mono text-emerald-400">● Live Telemetry</span>
+              </div>
+              <div class="relative h-56 w-full">
+                <canvas id="lintiq-activity-chart"></canvas>
+              </div>
+            </div>
+
+            <!-- Export & Reset Controls -->
+            <div class="md:col-span-4 bg-[#0d1117] border border-zinc-800 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400 mb-3">Account Telemetry</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                  Stats update automatically each time you submit a patch while signed in as
+                  <span id="analytics-account-name" class="text-emerald-400 font-mono"></span>.
+                </p>
+              </div>
+
+              <div class="pt-4 mt-4 border-t border-zinc-800 flex flex-col gap-2">
+                <button onclick="exportLintIQData()" class="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-mono text-zinc-200 rounded-lg transition">
+                  ⬇ Export Profile & Stats (JSON)
+                </button>
+                <button onclick="resetLintIQMetrics()" class="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-mono text-rose-400 rounded-lg transition">
+                  ↺ Reset Local Telemetry
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- 🏆 Global Leaderboard Modal -->
   <div id="leaderboard-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -279,5 +619,328 @@
 
   <!-- External JavaScript Module -->
   <script src="app.js"></script>
+
+  <!-- Settings Popover, Personal Profile, Editor Preferences & Analytics Controller -->
+  <script>
+    const LINTIQ_PREFS_KEY = "lintiq_editor_prefs_v1";
+    let lintiqChartInstance = null;
+
+    function getProfileStorageKey() {
+      const uid = typeof currentUser !== "undefined" && currentUser?.id ? currentUser.id : "guest";
+      return `lintiq_user_profile_${uid}`;
+    }
+
+    function getMetricsStorageKey() {
+      const uid = typeof currentUser !== "undefined" && currentUser?.id ? currentUser.id : null;
+      return uid ? `lintiq_user_metrics_${uid}` : null;
+    }
+
+    function getDefaultProfileFromAuth() {
+      const user = typeof currentUser !== "undefined" ? currentUser : null;
+      const fullName = user && typeof getDisplayUsername === "function"
+        ? getDisplayUsername(user)
+        : "Guest Engineer";
+      const email = user?.email || "";
+      const github = user?.user_metadata?.user_name || "";
+
+      return {
+        full_name: fullName,
+        github: github,
+        email: email,
+        location: "India",
+        bio: "LintIQ Bug Hunter",
+        website: github ? `https://github.com/${github}` : "",
+        language: "python"
+      };
+    }
+
+    function getDefaultLintIQMetrics() {
+      return {
+        labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        patchesSolved: [0, 0, 0, 0, 0, 0, 0],
+        avgLatencyMs: [0, 0, 0, 0, 0, 0, 0],
+        totalAccepted: 0,
+        totalAttempts: 0,
+        passRate: 0,
+        bestStreak: 0
+      };
+    }
+
+    function toggleSettingsDropdown(event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById("settings-popover-menu");
+      menu?.classList.toggle("hidden");
+    }
+
+    function closeSettingsDropdown() {
+      document.getElementById("settings-popover-menu")?.classList.add("hidden");
+    }
+
+    function openSettingsAtTab(tabName) {
+      closeSettingsDropdown();
+      openSettingsModal();
+      switchSettingsTab(tabName);
+    }
+
+    document.addEventListener("click", (e) => {
+      const wrapper = document.getElementById("settings-dropdown-wrapper");
+      if (wrapper && !wrapper.contains(e.target)) {
+        closeSettingsDropdown();
+      }
+    });
+
+    function switchSettingsTab(tabName) {
+      document.querySelectorAll(".settings-tab-panel").forEach(p => p.classList.add("hidden"));
+      document.querySelectorAll(".settings-tab-btn").forEach(b => {
+        b.classList.remove("border-emerald-500", "text-emerald-400", "font-semibold");
+        b.classList.add("border-transparent", "text-zinc-400");
+      });
+
+      document.getElementById(`settings-panel-${tabName}`)?.classList.remove("hidden");
+      const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+      if (activeBtn) {
+        activeBtn.classList.remove("border-transparent", "text-zinc-400");
+        activeBtn.classList.add("border-emerald-500", "text-emerald-400", "font-semibold");
+      }
+
+      if (tabName === "analytics") {
+        requestAnimationFrame(() => renderLintIQActivityChart());
+      }
+    }
+
+    function updateProfileSummaryUI(p) {
+      const cleanName = (p.full_name || "Guest Engineer").trim();
+      document.getElementById("profile-display-name").textContent = cleanName;
+      document.getElementById("profile-display-role").textContent = (p.bio || "LintIQ Bug Hunter").trim();
+      document.getElementById("profile-display-github").textContent = p.github ? `@${p.github.replace(/^@/, "")}` : "";
+      document.getElementById("summary-location").textContent = p.location || "India";
+
+      const langMap = { python: "Python 3.11", javascript: "JavaScript (Node.js)", cpp: "C++20" };
+      document.getElementById("summary-lang").textContent = langMap[p.language] || "Python 3.11";
+
+      const initials = cleanName
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(part => part[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+      document.getElementById("profile-initials").textContent = initials || "LQ";
+    }
+
+    function loadLocalProfile() {
+      const defaults = getDefaultProfileFromAuth();
+      const saved = JSON.parse(localStorage.getItem(getProfileStorageKey()) || "null");
+      const profile = saved ? { ...defaults, ...saved } : defaults;
+
+      document.getElementById("input-fullname").value = profile.full_name || "";
+      document.getElementById("input-github").value = profile.github || "";
+      document.getElementById("input-email").value = profile.email || "";
+      document.getElementById("input-location").value = profile.location || "India";
+      document.getElementById("input-bio").value = profile.bio || "";
+      document.getElementById("input-website").value = profile.website || "";
+      document.getElementById("input-lang").value = profile.language || "python";
+      updateProfileSummaryUI(profile);
+    }
+
+    function applyEditorPrefs() {
+      const fontSize = parseInt(document.getElementById("pref-fontsize").value, 10) || 14;
+      const tabSize = parseInt(document.getElementById("pref-tabsize").value, 10) || 4;
+      const minimap = document.getElementById("pref-minimap").checked;
+      const wordWrap = document.getElementById("pref-wordwrap").checked ? "on" : "off";
+      const autoTimer = document.getElementById("pref-autotimer").checked;
+      const astWarn = document.getElementById("pref-astwarn").checked;
+
+      document.getElementById("editor-fontsize-val").textContent = `${fontSize}px`;
+
+      const prefs = { fontSize, tabSize, minimap, wordWrap, autoTimer, astWarn };
+      localStorage.setItem(LINTIQ_PREFS_KEY, JSON.stringify(prefs));
+
+      if (window.editor && typeof window.editor.updateOptions === "function") {
+        window.editor.updateOptions({
+          fontSize,
+          tabSize,
+          minimap: { enabled: minimap },
+          wordWrap
+        });
+      }
+    }
+
+    function loadEditorPrefs() {
+      const prefs = JSON.parse(localStorage.getItem(LINTIQ_PREFS_KEY) || "null");
+      if (!prefs) return;
+      document.getElementById("pref-fontsize").value = prefs.fontSize || 14;
+      document.getElementById("pref-tabsize").value = prefs.tabSize || 4;
+      document.getElementById("pref-minimap").checked = Boolean(prefs.minimap);
+      document.getElementById("pref-wordwrap").checked = prefs.wordWrap !== "off";
+      document.getElementById("pref-autotimer").checked = prefs.autoTimer !== false;
+      document.getElementById("pref-astwarn").checked = prefs.astWarn !== false;
+      applyEditorPrefs();
+    }
+
+    function renderLintIQActivityChart() {
+      const loggedOutEl = document.getElementById("analytics-logged-out");
+      const authContentEl = document.getElementById("analytics-auth-content");
+      const metricsKey = getMetricsStorageKey();
+
+      if (!metricsKey) {
+        loggedOutEl?.classList.remove("hidden");
+        authContentEl?.classList.add("hidden");
+        if (lintiqChartInstance) {
+          lintiqChartInstance.destroy();
+          lintiqChartInstance = null;
+        }
+        return;
+      }
+
+      loggedOutEl?.classList.add("hidden");
+      authContentEl?.classList.remove("hidden");
+
+      const accountNameEl = document.getElementById("analytics-account-name");
+      if (accountNameEl && typeof getDisplayUsername === "function" && currentUser) {
+        accountNameEl.textContent = getDisplayUsername(currentUser);
+      }
+
+      const metrics = JSON.parse(localStorage.getItem(metricsKey) || "null") || getDefaultLintIQMetrics();
+      const totalSolves = Math.max(metrics.totalAccepted || 0, typeof solves === "number" ? solves : 0);
+      const bestStreak = Math.max(metrics.bestStreak || 0, typeof streak === "number" ? streak : 0);
+      const latestMs = metrics.avgLatencyMs[metrics.avgLatencyMs.length - 1] || 0;
+
+      document.getElementById("stat-patches").textContent = totalSolves;
+      document.getElementById("stat-runtime").textContent = `${latestMs} ms`;
+      document.getElementById("stat-accuracy").textContent = `${metrics.passRate || 0}%`;
+      document.getElementById("stat-best-streak").textContent = bestStreak;
+
+      const canvas = document.getElementById("lintiq-activity-chart");
+      if (!canvas || typeof Chart === "undefined") return;
+
+      if (lintiqChartInstance) lintiqChartInstance.destroy();
+
+      lintiqChartInstance = new Chart(canvas.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: metrics.labels,
+          datasets: [
+            {
+              label: "Bugs Patched",
+              data: metrics.patchesSolved,
+              borderColor: "#34d399",
+              backgroundColor: "rgba(52, 211, 153, 0.16)",
+              borderWidth: 2,
+              tension: 0.35,
+              fill: true,
+              yAxisID: "y"
+            },
+            {
+              label: "Exec Latency (ms)",
+              data: metrics.avgLatencyMs,
+              borderColor: "#38bdf8",
+              backgroundColor: "rgba(56, 189, 248, 0.1)",
+              borderWidth: 2,
+              borderDash: [4, 4],
+              tension: 0.35,
+              fill: false,
+              yAxisID: "y1"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: "#d4d4d8", font: { size: 11 } } }
+          },
+          scales: {
+            x: {
+              ticks: { color: "#a1a1aa", font: { size: 11 } },
+              grid: { color: "rgba(63, 63, 70, 0.4)" }
+            },
+            y: {
+              type: "linear",
+              position: "left",
+              beginAtZero: true,
+              ticks: { color: "#34d399", stepSize: 1, font: { size: 11 } },
+              grid: { color: "rgba(63, 63, 70, 0.4)" }
+            },
+            y1: {
+              type: "linear",
+              position: "right",
+              beginAtZero: true,
+              ticks: { color: "#38bdf8", font: { size: 11 } },
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+    }
+
+    function openSettingsModal() {
+      document.getElementById("settings-modal").classList.remove("hidden");
+      loadLocalProfile();
+      loadEditorPrefs();
+    }
+
+    function closeSettingsModal() {
+      document.getElementById("settings-modal").classList.add("hidden");
+    }
+
+    function saveUserProfile(event) {
+      event.preventDefault();
+      const payload = {
+        full_name: document.getElementById("input-fullname").value.trim(),
+        github: document.getElementById("input-github").value.trim(),
+        email: document.getElementById("input-email").value.trim(),
+        location: document.getElementById("input-location").value.trim(),
+        bio: document.getElementById("input-bio").value.trim(),
+        website: document.getElementById("input-website").value.trim(),
+        language: document.getElementById("input-lang").value
+      };
+
+      localStorage.setItem(getProfileStorageKey(), JSON.stringify(payload));
+      updateProfileSummaryUI(payload);
+
+      const statusEl = document.getElementById("profile-save-status");
+      statusEl.textContent = "Saved!";
+      setTimeout(() => { statusEl.textContent = ""; }, 2000);
+    }
+
+    function exportLintIQData() {
+      const metricsKey = getMetricsStorageKey();
+      const bundle = {
+        exported_at: new Date().toISOString(),
+        profile: JSON.parse(localStorage.getItem(getProfileStorageKey()) || "null") || getDefaultProfileFromAuth(),
+        preferences: JSON.parse(localStorage.getItem(LINTIQ_PREFS_KEY) || "{}"),
+        metrics: metricsKey ? (JSON.parse(localStorage.getItem(metricsKey) || "null") || getDefaultLintIQMetrics()) : null
+      };
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "lintiq-profile-backup.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetLintIQMetrics() {
+      const metricsKey = getMetricsStorageKey();
+      if (!metricsKey) return;
+      localStorage.setItem(metricsKey, JSON.stringify(getDefaultLintIQMetrics()));
+      renderLintIQActivityChart();
+    }
+
+    window.syncSettingsModalAuth = function () {
+      const modal = document.getElementById("settings-modal");
+      if (modal && !modal.classList.contains("hidden")) {
+        loadLocalProfile();
+        const analyticsPanel = document.getElementById("settings-panel-analytics");
+        if (analyticsPanel && !analyticsPanel.classList.contains("hidden")) {
+          renderLintIQActivityChart();
+        }
+      }
+    };
+
+    window.addEventListener("DOMContentLoaded", loadEditorPrefs);
+  </script>
 </body>
 </html>
