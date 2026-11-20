@@ -19,15 +19,17 @@ from ai_generator import generate_ai_bug_challenge
 
 app = FastAPI(title="LintIQ API", version="1.4.0")
 
-# Enable Cross-Origin Resource Sharing for local & production frontends
+# Enable Cross-Origin Resource Sharing for local, custom domain, & Vercel preview frontends
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "https://lint-iq.vercel.app",
-        "https://lint-iq.vercel.app/",
+        "https://thelintiq.com",
+        "https://www.thelintiq.com",
     ],
+    allow_origin_regex=r"https://lint-.*-hellogunvantsolankis-projects\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
