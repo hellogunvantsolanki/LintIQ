@@ -1,4 +1,12 @@
 // --- 1. CONFIGURATION ---
+const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+  ? "http://127.0.0.1:8000"
+  : "https://lintiq.onrender.com";
+
+const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // Theme handling (day/night)
 let userTheme = localStorage.getItem("lintiq_theme") || "dark";
 function applyTheme() {
@@ -12,27 +20,8 @@ function toggleTheme() {
   userTheme = userTheme === "dark" ? "light" : "dark";
   localStorage.setItem("lintiq_theme", userTheme);
   applyTheme();
-  // If user is logged in, sync to backend
-  if (currentUser && currentUser.id) {
-    fetch(`${API}/profile/${encodeURIComponent(currentUser.id)}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${currentUser.access_token || ""}`,
-      },
-      body: JSON.stringify({ theme: userTheme }),
-    }).catch(console.warn);
-  }
 }
 applyTheme();
-
-const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-  ? "http://127.0.0.1:8000"
-  : "https://lintiq.onrender.com";
-
-const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
-const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Game & Filter State
 let currentUser = null;
@@ -110,6 +99,7 @@ async function handleEmailAuth(event) {
 }
 
 async function logout() {
+  if (!currentUser) return;
   await supabaseClient.auth.signOut();
   window.location.reload();
 }
@@ -148,11 +138,18 @@ async function syncUserProfileWithCloud(user) {
         solves = cloudProfile.solves || 0;
       }
       updateMetrics();
+      if (typeof window.syncSettingsModalAuth === "function") {
+        window.syncSettingsModalAuth();
+      }
       return;
     }
 
     // 2. If user is not yet in Supabase cloud but has existing score/solves, migrate them up
-    const res = await fetch(`${API}/profile/${encodeURIComponent(user.id)}`);
+    const headers = {};
+    if (currentSession?.access_token) {
+      headers["Authorization"] = `Bearer ${currentSession.access_token}`;
+    }
+    const res = await fetch(`${API}/profile/${encodeURIComponent(user.id)}`, { headers });
     if (res.ok) {
       const backendProfile = await res.json();
       score = Math.max(score, backendProfile.score || 0);
@@ -200,11 +197,15 @@ function updateAuthUI(user) {
   const loginBtn = document.getElementById("btn-login");
   const userProfile = document.getElementById("user-profile");
   const userDisplayName = document.getElementById("user-display-name");
+  const settingsLogoutBtn = document.getElementById("settings-logout-btn");
+  const settingsLogoutDivider = document.getElementById("settings-logout-divider");
 
   if (user) {
     closeAuthModal();
     loginBtn?.classList.add("hidden");
     userProfile?.classList.remove("hidden");
+    settingsLogoutBtn?.classList.remove("hidden");
+    settingsLogoutDivider?.classList.remove("hidden");
 
     const name = getDisplayUsername(user);
     if (userDisplayName) {
@@ -214,6 +215,12 @@ function updateAuthUI(user) {
   } else {
     loginBtn?.classList.remove("hidden");
     userProfile?.classList.add("hidden");
+    settingsLogoutBtn?.classList.add("hidden");
+    settingsLogoutDivider?.classList.add("hidden");
+  }
+
+  if (typeof window.syncSettingsModalAuth === "function") {
+    window.syncSettingsModalAuth();
   }
 }
 
@@ -338,8 +345,8 @@ async function fetchLeaderboard() {
       else if (index === 1) rankBadge = "🥈";
       else if (index === 2) rankBadge = "🥉";
 
-      const rowHighlight = isCurrentUser 
-        ? "bg-emerald-950/40 border-l-2 border-emerald-500 text-white font-bold" 
+      const rowHighlight = isCurrentUser
+        ? "bg-emerald-950/40 border-l-2 border-emerald-500 text-white font-bold"
         : "hover:bg-zinc-800/40 text-zinc-300";
 
       return `
@@ -375,27 +382,40 @@ function updateMetrics() {
 }
 
 function recordLintIQSolve(solveSeconds, passed) {
-  const key = "lintiq_user_metrics_v1";
+  if (!currentUser?.id) return;
+
+  const key = `lintiq_user_metrics_${currentUser.id}`;
   const current = JSON.parse(localStorage.getItem(key) || "null") || {
     labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    patchesSolved: [2, 4, 3, 5, 4, 3, 3],
-    avgLatencyMs: [52, 48, 44, 41, 39, 36, 35],
-    totalAccepted: 24,
-    passRate: 89
+    patchesSolved: [0, 0, 0, 0, 0, 0, 0],
+    avgLatencyMs: [0, 0, 0, 0, 0, 0, 0],
+    totalAccepted: 0,
+    totalAttempts: 0,
+    passRate: 0,
+    bestStreak: 0
   };
 
   const todayIdx = current.patchesSolved.length - 1;
+  current.totalAttempts = (current.totalAttempts || 0) + 1;
+
   if (passed) {
     current.patchesSolved[todayIdx] += 1;
-    current.totalAccepted += 1;
-    current.passRate = Math.min(99, current.passRate + 1);
-  } else {
-    current.passRate = Math.max(50, current.passRate - 1);
+    current.totalAccepted = (current.totalAccepted || 0) + 1;
+    current.bestStreak = Math.max(current.bestStreak || 0, streak);
   }
 
+  current.passRate = Math.round((current.totalAccepted / current.totalAttempts) * 100);
+
   const simulatedExecMs = Math.max(18, Math.min(120, Math.round(solveSeconds * 1.5)));
-  current.avgLatencyMs[todayIdx] = Math.round((current.avgLatencyMs[todayIdx] + simulatedExecMs) / 2);
+  current.avgLatencyMs[todayIdx] = current.avgLatencyMs[todayIdx] === 0
+    ? simulatedExecMs
+    : Math.round((current.avgLatencyMs[todayIdx] + simulatedExecMs) / 2);
+
   localStorage.setItem(key, JSON.stringify(current));
+
+  if (typeof window.syncSettingsModalAuth === "function") {
+    window.syncSettingsModalAuth();
+  }
 }
 
 function resetTimer() {
@@ -413,7 +433,7 @@ function startTimer() {
   timerRunning = true;
   document.getElementById("timer-status").textContent = "(Running)";
   document.getElementById("timer-status").className = "text-[10px] uppercase tracking-wider text-emerald-400 ml-1";
-  
+
   timerInterval = setInterval(() => {
     timerSeconds++;
     updateTimerDisplay();
@@ -465,7 +485,7 @@ async function loadNewProblem() {
     }
 
     if (!res.ok) throw new Error("Could not fetch problem from backend.");
-    
+
     currentProblem = await res.json();
 
     document.getElementById("problem-id").textContent = `#${currentProblem.id}`;
@@ -475,25 +495,18 @@ async function loadNewProblem() {
 
     const tagsContainer = document.getElementById("problem-tags");
     const tagsList = Array.isArray(currentProblem.tags) ? currentProblem.tags : [];
-    tagsContainer.innerHTML = tagsList.map(tag => 
-      `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">#${tag}</span>`
-    ).join("");
+    tagsContainer.innerHTML = tagsList.map(tag => {
+      const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
+      return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
+    }).join("");
 
     const tcCount = Array.isArray(currentProblem.test_cases) ? currentProblem.test_cases.length : 0;
     document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
-    
+
     const diffBadge = document.getElementById("problem-difficulty");
     diffBadge.textContent = currentProblem.difficulty;
-    const diffLower = (currentProblem.difficulty || "").toLowerCase();
 
-    const hintBox = document.getElementById("hint-box");
-    const hintText = document.getElementById("hint-text");
-    if (diffLower === "hard") {
-      hintText.textContent = "Check the SAML‑related header / token handling";
-      hintBox.classList.remove("hidden");
-    } else {
-      hintBox.classList.add("hidden");
-    }
+    document.getElementById("hint-box").classList.add("hidden");
 
     if (monacoEditor) {
       isInjectingCode = true;
@@ -528,9 +541,14 @@ async function submitPatch() {
   const accessToken = currentSession?.access_token || null;
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
     const res = await fetch(`${API}/submit-patch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers,
       body: JSON.stringify({
         problem_id: currentProblem.id,
         user_code: userCode,
@@ -543,12 +561,14 @@ async function submitPatch() {
     });
 
     const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.detail || `Server error (${res.status})`);
+    }
 
     if (result.passed) {
       stopTimer();
       statusTag.textContent = "Passed";
       statusTag.className = "text-emerald-400";
-      consoleEl.textContent = `✔ Cleared in ${timerSeconds}s!\n${result.message || ''}`;
 
       let pointsEarned = 0;
       if (result.profile) {
@@ -563,6 +583,8 @@ async function submitPatch() {
         pointsEarned = 100 + (streak * 10) + timeBonus;
         score += pointsEarned;
       }
+
+      consoleEl.textContent = `✔ Cleared in ${timerSeconds}s! (+${pointsEarned} Points)\n${result.message || ''}`;
       updateMetrics();
       recordLintIQSolve(timerSeconds, true);
 
@@ -576,11 +598,6 @@ async function submitPatch() {
           last_active: new Date().toISOString()
         }, { onConflict: "id" }).then(() => {});
       }
-
-      setTimeout(() => {
-        alert(`Bug squashed! +${pointsEarned} Points`);
-        loadNewProblem();
-      }, 500);
     } else {
       statusTag.textContent = "Failed";
       statusTag.className = "text-rose-400";
@@ -599,7 +616,7 @@ async function submitPatch() {
   } catch (err) {
     statusTag.textContent = "Error";
     statusTag.className = "text-rose-400";
-    consoleEl.textContent = "Failed to communicate with test runner.";
+    consoleEl.textContent = `Failed to communicate with test runner: ${err.message}`;
     console.error(err);
   } finally {
     submitBtn.disabled = false;

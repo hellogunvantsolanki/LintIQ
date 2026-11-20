@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LintIQ — AI Bug-Hunting & Code Review Arcade</title>
+  <meta name="description" content="LintIQ is an interactive, gamified AI code review and bug-hunting arcade for developers." />
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,14 +12,14 @@
   <!-- Supabase JS Client CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+  <!-- Chart.js CDN (MUST load before Monaco's AMD loader) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <!-- Monaco Editor Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 
   <!-- External Stylesheet -->
-  <link rel="stylesheet" href="styles.css" />
-
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body class="bg-[#0d1117] text-zinc-100 flex flex-col min-h-screen antialiased">
 
@@ -33,7 +34,7 @@
         <span class="text-xs uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded font-mono">Arcade v1.4</span>
       </div>
 
-      <!-- Center Stats: Streak, Score, Timer -->
+      <!-- Center Stats: Streak, Timer -->
       <div class="flex items-center gap-3 font-mono text-sm flex-wrap">
         <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
           <span class="text-amber-400">⚡ Streak:</span>
@@ -120,12 +121,13 @@
               <span>Export Stats</span>
             </button>
 
-            <div class="my-1.5 border-t border-zinc-800/90"></div>
+            <div id="settings-logout-divider" class="hidden my-1.5 border-t border-zinc-800/90"></div>
 
-            <!-- Logout -->
+            <!-- Logout (Only visible when signed in) -->
             <button
+              id="settings-logout-btn"
               onclick="closeSettingsDropdown(); if (typeof logout === 'function') logout();"
-              class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left"
+              class="hidden w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left"
             >
               <svg class="w-[18px] h-[18px] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
@@ -313,12 +315,12 @@
           <div>
             <div class="flex items-center gap-3 pb-4 mb-4 border-b border-zinc-800">
               <div id="profile-initials" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-sky-600 flex items-center justify-center font-bold text-base text-white shrink-0">
-                YP
+                LQ
               </div>
               <div class="min-w-0">
-                <div id="profile-display-name" class="text-base font-bold text-white truncate">Yug Patel</div>
-                <div id="profile-display-role" class="text-xs text-zinc-400 truncate">CS Undergrad | Python, C++ & FastAPI</div>
-                <div id="profile-display-github" class="text-[11px] font-mono text-emerald-400 mt-0.5 truncate">@helloyugpatel</div>
+                <div id="profile-display-name" class="text-base font-bold text-white truncate">Guest Engineer</div>
+                <div id="profile-display-role" class="text-xs text-zinc-400 truncate">LintIQ Bug Hunter</div>
+                <div id="profile-display-github" class="text-[11px] font-mono text-emerald-400 mt-0.5 truncate"></div>
               </div>
             </div>
 
@@ -343,7 +345,7 @@
           </div>
 
           <div class="mt-4 pt-3 border-t border-zinc-800 text-[11px] font-mono text-zinc-500">
-            Synced with LintIQ Cloud & Local Storage
+            Synced with LintIQ Account & Local Storage
           </div>
         </div>
 
@@ -352,12 +354,12 @@
           <form id="profile-form" onsubmit="saveUserProfile(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label class="block text-[11px] font-mono text-zinc-400 mb-1">Full Name</label>
-              <input type="text" id="input-fullname" value="Yug Patel" required class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+              <input type="text" id="input-fullname" placeholder="Your full name" required class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
             </div>
 
             <div>
               <label class="block text-[11px] font-mono text-zinc-400 mb-1">GitHub Username</label>
-              <input type="text" id="input-github" value="helloyugpatel" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+              <input type="text" id="input-github" placeholder="github-username" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
             </div>
 
             <div>
@@ -367,17 +369,17 @@
 
             <div>
               <label class="block text-[11px] font-mono text-zinc-400 mb-1">Location / University</label>
-              <input type="text" id="input-location" value="India" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+              <input type="text" id="input-location" placeholder="India" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
             </div>
 
             <div class="sm:col-span-2">
               <label class="block text-[11px] font-mono text-zinc-400 mb-1">Headline / Bio</label>
-              <input type="text" id="input-bio" value="CS Undergrad | Python, C++ & FastAPI" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+              <input type="text" id="input-bio" placeholder="Full-Stack Developer | Python & FastAPI" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
             </div>
 
             <div>
               <label class="block text-[11px] font-mono text-zinc-400 mb-1">Portfolio / LinkedIn URL</label>
-              <input type="url" id="input-website" placeholder="https://github.com/helloyugpatel" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
+              <input type="url" id="input-website" placeholder="https://github.com/username" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500" />
             </div>
 
             <div>
@@ -465,69 +467,73 @@
       </div>
 
       <!-- TAB 3: Performance Graph, Track Breakdown & Data Export -->
-      <div id="settings-panel-analytics" class="settings-tab-panel hidden p-6 space-y-5">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
-            <div class="text-[11px] font-mono text-zinc-400">Patches Solved</div>
-            <div id="stat-patches" class="text-lg font-bold text-emerald-400 mt-0.5">24</div>
-          </div>
-          <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
-            <div class="text-[11px] font-mono text-zinc-400">Avg Runtime</div>
-            <div id="stat-runtime" class="text-lg font-bold text-sky-400 mt-0.5">38 ms</div>
-          </div>
-          <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
-            <div class="text-[11px] font-mono text-zinc-400">Pass Rate</div>
-            <div id="stat-accuracy" class="text-lg font-bold text-amber-400 mt-0.5">89%</div>
-          </div>
-          <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
-            <div class="text-[11px] font-mono text-zinc-400">Best Streak</div>
-            <div id="stat-best-streak" class="text-lg font-bold text-purple-400 mt-0.5">7 Days</div>
-          </div>
+      <div id="settings-panel-analytics" class="settings-tab-panel hidden p-6">
+        <!-- Logged-Out State -->
+        <div id="analytics-logged-out" class="hidden py-14 px-6 text-center bg-[#0d1117] border border-zinc-800 rounded-xl">
+          <div class="text-3xl mb-3">🔒</div>
+          <h3 class="text-base font-bold text-white mb-1">Sign in to view your Dashboard</h3>
+          <p class="text-xs text-zinc-400 max-w-md mx-auto mb-5">
+            Your 7-day bug-hunt telemetry, pass rate, runtime latency, and personal streak history are tracked per account.
+          </p>
+          <button
+            onclick="closeSettingsModal(); openAuthModal();"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition"
+          >
+            Sign In / Register
+          </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
-          <!-- Line Chart -->
-          <div class="md:col-span-8 bg-[#0d1117] border border-zinc-800 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">7-Day Bug-Hunt & Latency Graph</h3>
-              <span class="text-[11px] font-mono text-emerald-400">● Live Telemetry</span>
+        <!-- Logged-In Dashboard Content -->
+        <div id="analytics-auth-content" class="space-y-5">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Patches Solved</div>
+              <div id="stat-patches" class="text-lg font-bold text-emerald-400 mt-0.5">0</div>
             </div>
-            <div class="relative h-56 w-full">
-              <canvas id="lintiq-activity-chart"></canvas>
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Avg Runtime</div>
+              <div id="stat-runtime" class="text-lg font-bold text-sky-400 mt-0.5">0 ms</div>
+            </div>
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Pass Rate</div>
+              <div id="stat-accuracy" class="text-lg font-bold text-amber-400 mt-0.5">0%</div>
+            </div>
+            <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
+              <div class="text-[11px] font-mono text-zinc-400">Best Streak</div>
+              <div id="stat-best-streak" class="text-lg font-bold text-purple-400 mt-0.5">0</div>
             </div>
           </div>
 
-          <!-- Track Mastery & Export -->
-          <div class="md:col-span-4 bg-[#0d1117] border border-zinc-800 rounded-xl p-4 flex flex-col justify-between">
-            <div>
-              <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400 mb-3">Track Mastery</h3>
-              <div class="space-y-2.5 text-xs font-mono">
-                <div>
-                  <div class="flex justify-between mb-1"><span class="text-zinc-300">Algorithms</span><span class="text-emerald-400">85%</span></div>
-                  <div class="w-full bg-zinc-800 h-1.5 rounded-full"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: 85%"></div></div>
-                </div>
-                <div>
-                  <div class="flex justify-between mb-1"><span class="text-zinc-300">Edge Cases</span><span class="text-sky-400">72%</span></div>
-                  <div class="w-full bg-zinc-800 h-1.5 rounded-full"><div class="bg-sky-500 h-1.5 rounded-full" style="width: 72%"></div></div>
-                </div>
-                <div>
-                  <div class="flex justify-between mb-1"><span class="text-zinc-300">Memory & State</span><span class="text-amber-400">64%</span></div>
-                  <div class="w-full bg-zinc-800 h-1.5 rounded-full"><div class="bg-amber-500 h-1.5 rounded-full" style="width: 64%"></div></div>
-                </div>
-                <div>
-                  <div class="flex justify-between mb-1"><span class="text-zinc-300">Concurrency</span><span class="text-purple-400">50%</span></div>
-                  <div class="w-full bg-zinc-800 h-1.5 rounded-full"><div class="bg-purple-500 h-1.5 rounded-full" style="width: 50%"></div></div>
-                </div>
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
+            <!-- Line Chart -->
+            <div class="md:col-span-8 bg-[#0d1117] border border-zinc-800 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">7-Day Bug-Hunt & Latency Graph</h3>
+                <span class="text-[11px] font-mono text-emerald-400">● Live Telemetry</span>
+              </div>
+              <div class="relative h-56 w-full">
+                <canvas id="lintiq-activity-chart"></canvas>
               </div>
             </div>
 
-            <div class="pt-4 mt-4 border-t border-zinc-800 flex flex-col gap-2">
-              <button onclick="exportLintIQData()" class="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-mono text-zinc-200 rounded-lg transition">
-                ⬇ Export Profile & Stats (JSON)
-              </button>
-              <button onclick="resetLintIQMetrics()" class="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-mono text-rose-400 rounded-lg transition">
-                ↺ Reset Local Telemetry
-              </button>
+            <!-- Export & Reset Controls -->
+            <div class="md:col-span-4 bg-[#0d1117] border border-zinc-800 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400 mb-3">Account Telemetry</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                  Stats update automatically each time you submit a patch while signed in as
+                  <span id="analytics-account-name" class="text-emerald-400 font-mono"></span>.
+                </p>
+              </div>
+
+              <div class="pt-4 mt-4 border-t border-zinc-800 flex flex-col gap-2">
+                <button onclick="exportLintIQData()" class="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-mono text-zinc-200 rounded-lg transition">
+                  ⬇ Export Profile & Stats (JSON)
+                </button>
+                <button onclick="resetLintIQMetrics()" class="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-mono text-rose-400 rounded-lg transition">
+                  ↺ Reset Local Telemetry
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -616,14 +622,49 @@
 
   <!-- Settings Popover, Personal Profile, Editor Preferences & Analytics Controller -->
   <script>
-    const LINTIQ_PROFILE_KEY = "lintiq_user_profile_v2";
-    const LINTIQ_METRICS_KEY = "lintiq_user_metrics_v1";
     const LINTIQ_PREFS_KEY = "lintiq_editor_prefs_v1";
-    const LINTIQ_API_URL = window.location.hostname === "127.0.0.1"
-      ? "http://127.0.0.1:8000"
-      : "https://lintiq.onrender.com";
-
     let lintiqChartInstance = null;
+
+    function getProfileStorageKey() {
+      const uid = typeof currentUser !== "undefined" && currentUser?.id ? currentUser.id : "guest";
+      return `lintiq_user_profile_${uid}`;
+    }
+
+    function getMetricsStorageKey() {
+      const uid = typeof currentUser !== "undefined" && currentUser?.id ? currentUser.id : null;
+      return uid ? `lintiq_user_metrics_${uid}` : null;
+    }
+
+    function getDefaultProfileFromAuth() {
+      const user = typeof currentUser !== "undefined" ? currentUser : null;
+      const fullName = user && typeof getDisplayUsername === "function"
+        ? getDisplayUsername(user)
+        : "Guest Engineer";
+      const email = user?.email || "";
+      const github = user?.user_metadata?.user_name || "";
+
+      return {
+        full_name: fullName,
+        github: github,
+        email: email,
+        location: "India",
+        bio: "LintIQ Bug Hunter",
+        website: github ? `https://github.com/${github}` : "",
+        language: "python"
+      };
+    }
+
+    function getDefaultLintIQMetrics() {
+      return {
+        labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        patchesSolved: [0, 0, 0, 0, 0, 0, 0],
+        avgLatencyMs: [0, 0, 0, 0, 0, 0, 0],
+        totalAccepted: 0,
+        totalAttempts: 0,
+        passRate: 0,
+        bestStreak: 0
+      };
+    }
 
     function toggleSettingsDropdown(event) {
       if (event) event.stopPropagation();
@@ -663,45 +704,43 @@
       }
 
       if (tabName === "analytics") {
-        renderLintIQActivityChart();
+        requestAnimationFrame(() => renderLintIQActivityChart());
       }
     }
 
-    function getDefaultLintIQMetrics() {
-      return {
-        labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        patchesSolved: [2, 4, 3, 5, 4, 3, 3],
-        avgLatencyMs: [52, 48, 44, 41, 39, 36, 35],
-        totalAccepted: 24,
-        passRate: 89
-      };
-    }
-
     function updateProfileSummaryUI(p) {
-      const cleanName = (p.full_name || "Yug Patel").trim();
+      const cleanName = (p.full_name || "Guest Engineer").trim();
       document.getElementById("profile-display-name").textContent = cleanName;
-      document.getElementById("profile-display-role").textContent = (p.bio || "LintIQ Contributor").trim();
+      document.getElementById("profile-display-role").textContent = (p.bio || "LintIQ Bug Hunter").trim();
       document.getElementById("profile-display-github").textContent = p.github ? `@${p.github.replace(/^@/, "")}` : "";
       document.getElementById("summary-location").textContent = p.location || "India";
 
       const langMap = { python: "Python 3.11", javascript: "JavaScript (Node.js)", cpp: "C++20" };
       document.getElementById("summary-lang").textContent = langMap[p.language] || "Python 3.11";
 
-      const initials = cleanName.split(" ").map(part => part[0]).join("").toUpperCase().slice(0, 2);
+      const initials = cleanName
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(part => part[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
       document.getElementById("profile-initials").textContent = initials || "LQ";
     }
 
     function loadLocalProfile() {
-      const saved = JSON.parse(localStorage.getItem(LINTIQ_PROFILE_KEY) || "null");
-      if (!saved) return;
-      document.getElementById("input-fullname").value = saved.full_name || "Yug Patel";
-      document.getElementById("input-github").value = saved.github || "helloyugpatel";
-      document.getElementById("input-email").value = saved.email || "";
-      document.getElementById("input-location").value = saved.location || "India";
-      document.getElementById("input-bio").value = saved.bio || "";
-      document.getElementById("input-website").value = saved.website || "";
-      document.getElementById("input-lang").value = saved.language || "python";
-      updateProfileSummaryUI(saved);
+      const defaults = getDefaultProfileFromAuth();
+      const saved = JSON.parse(localStorage.getItem(getProfileStorageKey()) || "null");
+      const profile = saved ? { ...defaults, ...saved } : defaults;
+
+      document.getElementById("input-fullname").value = profile.full_name || "";
+      document.getElementById("input-github").value = profile.github || "";
+      document.getElementById("input-email").value = profile.email || "";
+      document.getElementById("input-location").value = profile.location || "India";
+      document.getElementById("input-bio").value = profile.bio || "";
+      document.getElementById("input-website").value = profile.website || "";
+      document.getElementById("input-lang").value = profile.language || "python";
+      updateProfileSummaryUI(profile);
     }
 
     function applyEditorPrefs() {
@@ -740,14 +779,40 @@
     }
 
     function renderLintIQActivityChart() {
-      const canvas = document.getElementById("lintiq-activity-chart");
-      if (!canvas) return;
+      const loggedOutEl = document.getElementById("analytics-logged-out");
+      const authContentEl = document.getElementById("analytics-auth-content");
+      const metricsKey = getMetricsStorageKey();
 
-      const metrics = JSON.parse(localStorage.getItem(LINTIQ_METRICS_KEY) || "null") || getDefaultLintIQMetrics();
-      document.getElementById("stat-patches").textContent = metrics.totalAccepted;
-      const latestMs = metrics.avgLatencyMs[metrics.avgLatencyMs.length - 1] || 38;
+      if (!metricsKey) {
+        loggedOutEl?.classList.remove("hidden");
+        authContentEl?.classList.add("hidden");
+        if (lintiqChartInstance) {
+          lintiqChartInstance.destroy();
+          lintiqChartInstance = null;
+        }
+        return;
+      }
+
+      loggedOutEl?.classList.add("hidden");
+      authContentEl?.classList.remove("hidden");
+
+      const accountNameEl = document.getElementById("analytics-account-name");
+      if (accountNameEl && typeof getDisplayUsername === "function" && currentUser) {
+        accountNameEl.textContent = getDisplayUsername(currentUser);
+      }
+
+      const metrics = JSON.parse(localStorage.getItem(metricsKey) || "null") || getDefaultLintIQMetrics();
+      const totalSolves = Math.max(metrics.totalAccepted || 0, typeof solves === "number" ? solves : 0);
+      const bestStreak = Math.max(metrics.bestStreak || 0, typeof streak === "number" ? streak : 0);
+      const latestMs = metrics.avgLatencyMs[metrics.avgLatencyMs.length - 1] || 0;
+
+      document.getElementById("stat-patches").textContent = totalSolves;
       document.getElementById("stat-runtime").textContent = `${latestMs} ms`;
-      document.getElementById("stat-accuracy").textContent = `${metrics.passRate}%`;
+      document.getElementById("stat-accuracy").textContent = `${metrics.passRate || 0}%`;
+      document.getElementById("stat-best-streak").textContent = bestStreak;
+
+      const canvas = document.getElementById("lintiq-activity-chart");
+      if (!canvas || typeof Chart === "undefined") return;
 
       if (lintiqChartInstance) lintiqChartInstance.destroy();
 
@@ -810,76 +875,43 @@
       });
     }
 
-    async function openSettingsModal() {
+    function openSettingsModal() {
       document.getElementById("settings-modal").classList.remove("hidden");
       loadLocalProfile();
       loadEditorPrefs();
-      renderLintIQActivityChart();
-
-      try {
-        const res = await fetch(`${LINTIQ_API_URL}/settings-data`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.profile) {
-            const merged = { ...JSON.parse(localStorage.getItem(LINTIQ_PROFILE_KEY) || "{}"), ...data.profile };
-            localStorage.setItem(LINTIQ_PROFILE_KEY, JSON.stringify(merged));
-            loadLocalProfile();
-          }
-          if (data.metrics) {
-            localStorage.setItem(LINTIQ_METRICS_KEY, JSON.stringify({
-              labels: data.metrics.labels,
-              patchesSolved: data.metrics.patches_solved,
-              avgLatencyMs: data.metrics.avg_latency_ms,
-              totalAccepted: data.metrics.total_accepted,
-              passRate: data.metrics.pass_rate
-            }));
-            renderLintIQActivityChart();
-          }
-        }
-      } catch (_) {}
     }
 
     function closeSettingsModal() {
       document.getElementById("settings-modal").classList.add("hidden");
     }
 
-    async function saveUserProfile(event) {
+    function saveUserProfile(event) {
       event.preventDefault();
       const payload = {
-        full_name: document.getElementById("input-fullname").value,
-        github: document.getElementById("input-github").value,
-        email: document.getElementById("input-email").value,
-        location: document.getElementById("input-location").value,
-        bio: document.getElementById("input-bio").value,
-        website: document.getElementById("input-website").value,
+        full_name: document.getElementById("input-fullname").value.trim(),
+        github: document.getElementById("input-github").value.trim(),
+        email: document.getElementById("input-email").value.trim(),
+        location: document.getElementById("input-location").value.trim(),
+        bio: document.getElementById("input-bio").value.trim(),
+        website: document.getElementById("input-website").value.trim(),
         language: document.getElementById("input-lang").value
       };
 
-      localStorage.setItem(LINTIQ_PROFILE_KEY, JSON.stringify(payload));
+      localStorage.setItem(getProfileStorageKey(), JSON.stringify(payload));
       updateProfileSummaryUI(payload);
 
       const statusEl = document.getElementById("profile-save-status");
-      statusEl.textContent = "Saving...";
-
-      try {
-        await fetch(`${LINTIQ_API_URL}/profile`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        statusEl.textContent = "Synced!";
-      } catch (_) {
-        statusEl.textContent = "Saved locally";
-      }
+      statusEl.textContent = "Saved!";
       setTimeout(() => { statusEl.textContent = ""; }, 2000);
     }
 
     function exportLintIQData() {
+      const metricsKey = getMetricsStorageKey();
       const bundle = {
         exported_at: new Date().toISOString(),
-        profile: JSON.parse(localStorage.getItem(LINTIQ_PROFILE_KEY) || "{}"),
+        profile: JSON.parse(localStorage.getItem(getProfileStorageKey()) || "null") || getDefaultProfileFromAuth(),
         preferences: JSON.parse(localStorage.getItem(LINTIQ_PREFS_KEY) || "{}"),
-        metrics: JSON.parse(localStorage.getItem(LINTIQ_METRICS_KEY) || "null") || getDefaultLintIQMetrics()
+        metrics: metricsKey ? (JSON.parse(localStorage.getItem(metricsKey) || "null") || getDefaultLintIQMetrics()) : null
       };
       const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -891,9 +923,22 @@
     }
 
     function resetLintIQMetrics() {
-      localStorage.setItem(LINTIQ_METRICS_KEY, JSON.stringify(getDefaultLintIQMetrics()));
+      const metricsKey = getMetricsStorageKey();
+      if (!metricsKey) return;
+      localStorage.setItem(metricsKey, JSON.stringify(getDefaultLintIQMetrics()));
       renderLintIQActivityChart();
     }
+
+    window.syncSettingsModalAuth = function () {
+      const modal = document.getElementById("settings-modal");
+      if (modal && !modal.classList.contains("hidden")) {
+        loadLocalProfile();
+        const analyticsPanel = document.getElementById("settings-panel-analytics");
+        if (analyticsPanel && !analyticsPanel.classList.contains("hidden")) {
+          renderLintIQActivityChart();
+        }
+      }
+    };
 
     window.addEventListener("DOMContentLoaded", loadEditorPrefs);
   </script>
