@@ -13,6 +13,13 @@ class SubmitPatchRequest(BaseModel):
     access_token: Optional[str] = None
 
 
+class RunCodeRequest(BaseModel):
+    problem_id: Optional[int] = None
+    user_code: str
+    stdin: Optional[str] = ""
+    language: Optional[str] = "python"
+
+
 class HintRequest(BaseModel):
     problem_id: Optional[int] = None
     user_code: Optional[str] = None

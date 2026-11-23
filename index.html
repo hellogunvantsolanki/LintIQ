@@ -20,53 +20,72 @@
 
   <!-- External Stylesheet -->
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Height-aware responsive desktop workspace (prevents clipping on 14"/16" laptops & DPI scaling) -->
+  <style>
+    @media (min-width: 1024px) and (min-height: 760px) {
+      body.lintiq-shell {
+        height: 100dvh;
+        overflow: hidden;
+      }
+      main.lintiq-main {
+        min-height: 0;
+        overflow: hidden;
+      }
+      .lintiq-col {
+        height: 100%;
+        min-height: 0;
+      }
+    }
+  </style>
 </head>
-<body class="bg-[#0d1117] text-zinc-100 flex flex-col min-h-screen antialiased">
+<body class="lintiq-shell bg-[#0d1117] text-zinc-100 flex flex-col min-h-[100dvh] w-full overflow-x-hidden antialiased">
 
   <!-- Header & Arcade Status Bar -->
-  <header class="border-b border-zinc-800 bg-[#090d13] sticky top-0 z-40">
-    <div class="px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
-      <div class="flex items-center gap-3">
+  <header class="border-b border-zinc-800 bg-[#090d13] sticky top-0 z-40 shrink-0 w-full">
+    <div class="w-full max-w-[1920px] mx-auto px-3 sm:px-5 py-2 flex items-center justify-between gap-2.5 flex-wrap">
+      <!-- Brand -->
+      <div class="flex items-center gap-2.5 shrink-0">
         <div class="flex items-center gap-2">
-          <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-          <h1 class="text-lg font-bold text-white tracking-wide">Lint<span class="text-emerald-400">IQ</span></h1>
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <h1 class="text-base sm:text-lg font-bold text-white tracking-wide">Lint<span class="text-emerald-400">IQ</span></h1>
         </div>
-        <span class="text-xs uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded font-mono">Arcade v1.4</span>
+        <span class="text-[11px] uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded font-mono">Arcade v1.6</span>
       </div>
 
       <!-- Center Stats: Streak, Timer -->
-      <div class="stats-group">
-        <div class="streak-badge">
-          <span class="text-amber-400">🔥 Streak:</span>
-          <span id="streak-count" class="text-white font-bold font-mono">0</span>
+      <div class="flex items-center gap-2 font-mono text-xs sm:text-sm flex-wrap">
+        <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-2.5 py-1 rounded-md whitespace-nowrap">
+          <span class="text-amber-400">⚡ Streak:</span>
+          <span id="streak-count" class="text-white font-bold">0</span>
         </div>
 
-        <div id="timer-hud" class="timer-badge">
+        <div id="timer-hud" class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-2.5 py-1 rounded-md whitespace-nowrap">
           <span class="text-sky-400">⏱ Time:</span>
-          <span id="timer-display" class="text-white font-bold font-mono">00:00</span>
-          <span id="timer-status" class="timer-status">(Ready)</span>
+          <span id="timer-display" class="text-white font-bold">00:00</span>
+          <span id="timer-status" class="text-[10px] uppercase tracking-wider text-zinc-400 ml-0.5">(Ready)</span>
         </div>
       </div>
 
       <!-- Right Action & Auth Section -->
-      <div class="flex items-center gap-2.5 flex-wrap">
-        <button onclick="openLeaderboardModal()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition">
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="openLeaderboardModal()" class="px-2.5 sm:px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition whitespace-nowrap">
           <span>🏆 Leaderboard</span>
         </button>
 
-        <button id="btn-hint" onclick="requestHint()" class="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-medium rounded-lg flex items-center gap-1.5 transition">
+        <button id="btn-hint" onclick="requestHint()" class="px-2.5 sm:px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-medium rounded-lg flex items-center gap-1.5 transition whitespace-nowrap">
           <span>💡 AI Hint</span>
         </button>
 
         <!-- Settings Floating Popover Dropdown -->
-        <div class="relative" id="settings-dropdown-wrapper">
+        <div class="relative shrink-0" id="settings-dropdown-wrapper">
           <button
             id="open-settings-btn"
             onclick="toggleSettingsDropdown(event)"
-            class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition"
+            class="px-2.5 sm:px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-100 rounded-lg flex items-center gap-1.5 transition whitespace-nowrap"
             title="Settings Menu"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="shrink-0">
               <path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294a6.4 6.4 0 0 1 0 .772c-.01.147.039.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/>
             </svg>
             <span>Settings</span>
@@ -77,7 +96,6 @@
             id="settings-popover-menu"
             class="hidden absolute right-0 mt-2.5 w-56 bg-[#181b20] border border-zinc-800/90 rounded-2xl py-2.5 px-2 shadow-2xl shadow-black/80 z-50 select-none"
           >
-            <!-- Profile -->
             <button
               onclick="openSettingsAtTab('profile')"
               class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
@@ -88,7 +106,6 @@
               <span>Profile</span>
             </button>
 
-            <!-- Dashboard (Graph & Analytics) -->
             <button
               onclick="openSettingsAtTab('analytics')"
               class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
@@ -99,7 +116,6 @@
               <span>Dashboard</span>
             </button>
 
-            <!-- Editor Settings -->
             <button
               onclick="openSettingsAtTab('editor')"
               class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
@@ -110,7 +126,6 @@
               <span>Editor Settings</span>
             </button>
 
-            <!-- Export Stats -->
             <button
               onclick="closeSettingsDropdown(); exportLintIQData();"
               class="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-zinc-200 hover:bg-zinc-800/80 hover:text-white transition text-left"
@@ -123,7 +138,6 @@
 
             <div id="settings-logout-divider" class="hidden my-1.5 border-t border-zinc-800/90"></div>
 
-            <!-- Logout (Only visible when signed in) -->
             <button
               id="settings-logout-btn"
               onclick="closeSettingsDropdown(); if (typeof logout === 'function') logout();"
@@ -137,141 +151,176 @@
           </div>
         </div>
 
-        <div id="auth-section" class="flex items-center gap-2 border-l border-zinc-800 pl-3">
-          <button id="btn-login" onclick="openAuthModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-medium rounded-lg transition shadow-sm">
+        <div id="auth-section" class="flex items-center gap-2 border-l border-zinc-800 pl-2.5 shrink-0">
+          <button id="btn-login" onclick="openAuthModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-medium rounded-lg transition shadow-sm whitespace-nowrap">
             Sign In / Register
           </button>
 
           <div id="user-profile" class="hidden flex items-center gap-2">
-            <span id="user-display-name" class="text-xs text-zinc-200 font-mono bg-[#161b22] border border-zinc-700 px-2.5 py-1 rounded max-w-[160px] truncate" title=""></span>
-            <button onclick="logout()" class="text-xs text-zinc-400 hover:text-rose-400 transition" title="Log out">Sign out</button>
+            <span id="user-display-name" class="text-xs text-zinc-200 font-mono bg-[#161b22] border border-zinc-700 px-2.5 py-1 rounded max-w-[140px] sm:max-w-[160px] truncate" title=""></span>
+            <button onclick="logout()" class="text-xs text-zinc-400 hover:text-rose-400 transition whitespace-nowrap" title="Log out">Sign out</button>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Sub-Header: Domain Category Filter Pills & Difficulty Selector -->
-    <div class="px-6 py-2.5 bg-[#11161f] border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
-      <div id="category-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-        <button onclick="selectCategory('All')" data-cat="All" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-emerald-600 text-white shadow-sm whitespace-nowrap">
-          All Tracks <span id="total-count-badge" class="ml-1 text-[10px] opacity-90"></span>
-        </button>
-        <button onclick="selectCategory('Algorithms')" data-cat="Algorithms" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Algorithms
-        </button>
-        <button onclick="selectCategory('Data Structures')" data-cat="Data Structures" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Data Structures
-        </button>
-        <button onclick="selectCategory('Off-by-One')" data-cat="Off-by-One" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Off-by-One
-        </button>
-        <button onclick="selectCategory('Edge Cases')" data-cat="Edge Cases" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Edge Cases
-        </button>
-        <button onclick="selectCategory('Type Coercion')" data-cat="Type Coercion" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Type Coercion
-        </button>
-        <button onclick="selectCategory('Memory & State')" data-cat="Memory & State" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Memory & State
-        </button>
-        <button onclick="selectCategory('Concurrency')" data-cat="Concurrency" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap">
-          Concurrency
-        </button>
-      </div>
+    <div class="bg-[#11161f] border-t border-zinc-800/80 w-full">
+      <div class="w-full max-w-[1920px] mx-auto px-3 sm:px-5 py-2 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+        <div id="category-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1">
+          <button onclick="selectCategory('All')" data-cat="All" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-emerald-600 text-white shadow-sm whitespace-nowrap shrink-0">
+            All Tracks <span id="total-count-badge" class="ml-1 text-[10px] opacity-90"></span>
+          </button>
+          <button onclick="selectCategory('Algorithms')" data-cat="Algorithms" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Algorithms
+          </button>
+          <button onclick="selectCategory('Data Structures')" data-cat="Data Structures" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Data Structures
+          </button>
+          <button onclick="selectCategory('Off-by-One')" data-cat="Off-by-One" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Off-by-One
+          </button>
+          <button onclick="selectCategory('Edge Cases')" data-cat="Edge Cases" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Edge Cases
+          </button>
+          <button onclick="selectCategory('Type Coercion')" data-cat="Type Coercion" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Type Coercion
+          </button>
+          <button onclick="selectCategory('Memory & State')" data-cat="Memory & State" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Memory & State
+          </button>
+          <button onclick="selectCategory('Concurrency')" data-cat="Concurrency" class="cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0">
+            Concurrency
+          </button>
+        </div>
 
-      <div class="flex items-center gap-2">
-        <label for="difficulty-select" class="text-[11px] font-mono text-zinc-400 uppercase">Difficulty:</label>
-        <select id="difficulty-select" onchange="selectDifficulty(this.value)" class="bg-[#161b22] border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2.5 py-1 font-mono focus:outline-none focus:border-emerald-500">
-          <option value="All">All Levels</option>
-          <option value="Easy">Easy</option>
-          <option value="Medium">Medium</option>
-          <option value="Hard">Hard</option>
-        </select>
+        <div class="flex items-center gap-2 shrink-0">
+          <label for="difficulty-select" class="text-[11px] font-mono text-zinc-400 uppercase whitespace-nowrap">Difficulty:</label>
+          <select id="difficulty-select" onchange="selectDifficulty(this.value)" class="bg-[#161b22] border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2.5 py-1 font-mono focus:outline-none focus:border-emerald-500">
+            <option value="All">All Levels</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- Main Arcade Canvas -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-    
-    <!-- Left Panel: Problem Context, Category Tags & Tests -->
-    <div class="lg:col-span-5 flex flex-col gap-4">
-      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-5 flex-1 flex flex-col justify-between shadow-lg">
-        <div>
+  <!-- Main Arcade Canvas (Scales smoothly across Mobile, 13"-16" Laptops, and 2K/Ultrawide) -->
+  <main class="lintiq-main flex-1 w-full max-w-[1920px] mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4">
+
+    <!-- Left Panel: Problem Context, Problem Sequence & Sandbox Output -->
+    <div class="lintiq-col lg:col-span-5 2xl:col-span-4 flex flex-col gap-3 min-w-0">
+      <!-- Problem Context Card -->
+      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-4 sm:p-5 flex-1 flex flex-col justify-between shadow-lg min-h-[240px] lg:min-h-0 min-w-0 overflow-hidden">
+        <div class="overflow-y-auto pr-1 flex-1 min-h-0">
           <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span id="problem-difficulty" class="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-300">Loading...</span>
               <span id="problem-category" class="text-xs font-mono px-2.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">Track</span>
             </div>
             <span id="problem-id" class="text-xs font-mono text-zinc-400 font-semibold">#0</span>
           </div>
 
-          <h2 id="problem-title" class="text-xl font-bold text-white mb-2">Connecting to challenge bank...</h2>
+          <h2 id="problem-title" class="text-lg sm:text-xl font-bold text-white mb-2 break-words">Connecting to challenge bank...</h2>
 
           <!-- Granular Problem Tags -->
-          <div id="problem-tags" class="flex flex-wrap gap-1.5 mb-4"></div>
+          <div id="problem-tags" class="flex flex-wrap gap-1.5 mb-3"></div>
 
-          <p id="problem-desc" class="text-sm text-zinc-300 leading-relaxed"></p>
-        </div>
+          <p id="problem-desc" class="text-sm text-zinc-300 leading-relaxed break-words"></p>
 
-        <div>
           <!-- Hint Card -->
-          <div id="hint-box" class="hidden mt-4 p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg text-xs text-amber-200 leading-relaxed">
+          <div id="hint-box" class="hidden mt-4 p-3 bg-amber-500/15 border border-amber-500/40 rounded-lg text-xs text-amber-200 leading-relaxed break-words">
             <strong class="font-bold text-amber-300">Hint: </strong><span id="hint-text"></span>
           </div>
+        </div>
 
-          <!-- Test Case Counter & Skip Action -->
-          <div class="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between gap-3 flex-wrap">
-            <span id="test-case-count" class="text-xs font-mono text-zinc-300">🧪 0 Test Assertions</span>
-            <div class="flex items-center gap-2">
-              <button
-                id="ai-generate-btn"
-                onclick="generateAIChallenge()"
-                class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition cursor-pointer"
-              >
-                ✨ Generate AI Bug
-              </button>
-              <button onclick="loadPrevProblem()" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition">
-                ← Prev
-              </button>
-              <button onclick="loadNextProblem()" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition">
-                Next →
-              </button>
-            </div>
+        <!-- Test Case Counter, AI Bug & Prev/Next Actions -->
+        <div class="mt-3.5 pt-3 border-t border-zinc-800 flex items-center justify-between gap-2 flex-wrap shrink-0">
+          <span id="test-case-count" class="text-xs font-mono text-zinc-300 whitespace-nowrap">🧪 0 Test Assertions</span>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button
+              id="ai-generate-btn"
+              onclick="generateAIChallenge()"
+              class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition cursor-pointer whitespace-nowrap"
+            >
+              ✨ Generate AI Bug
+            </button>
+            <button onclick="loadPrevProblem()" class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition whitespace-nowrap">
+              ← Prev
+            </button>
+            <button onclick="loadNextProblem()" class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition whitespace-nowrap">
+              Next →
+            </button>
           </div>
         </div>
       </div>
 
       <!-- Sequential Question List -->
-      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-3 shadow-lg">
-        <div class="flex items-center justify-between mb-2 px-1">
-          <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Problem Sequence</span>
-          <div class="flex items-center gap-2">
-            <span class="text-[11px] font-mono text-zinc-500" id="seq-progress">1 / 2</span>
-            <button onclick="openProblemListDrawer()" class="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition">
+      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-3 shadow-lg shrink-0 min-w-0">
+        <div class="flex items-center justify-between mb-2 px-1 gap-2">
+          <span class="text-xs font-mono uppercase tracking-wider text-zinc-400 truncate">Problem Sequence</span>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-[11px] font-mono text-zinc-500" id="seq-progress">0 / 0</span>
+            <button onclick="openProblemListDrawer()" class="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition whitespace-nowrap">
               View All ↗
             </button>
           </div>
         </div>
-        <div id="problem-sequence-list" class="max-h-40 overflow-y-auto space-y-1 pr-1">
+        <div id="problem-sequence-list" class="max-h-28 overflow-y-auto space-y-1 pr-1">
           <!-- Populated by JS -->
         </div>
       </div>
 
-      <!-- Execution Console / Verdict -->
-      <div class="bg-[#090d13] border border-zinc-800 rounded-xl p-4 font-mono text-xs shadow-lg">
-        <div class="text-zinc-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between">
-          <span>Sandbox Execution Output</span>
-          <span id="status-tag" class="text-zinc-400">Idle</span>
+      <!-- Execution Console / Verdict + Safe Test Run Custom Input Drawer -->
+      <div class="bg-[#090d13] border border-zinc-800 rounded-xl p-3.5 font-mono text-xs shadow-lg shrink-0 min-w-0">
+        <div class="text-zinc-400 mb-1.5 font-bold uppercase tracking-wider flex items-center justify-between gap-2">
+          <span class="truncate">Sandbox Execution Output</span>
+          <span id="status-tag" class="text-zinc-400 shrink-0">Idle</span>
         </div>
-        <pre id="console-output" class="text-zinc-300 whitespace-pre-wrap max-h-36 overflow-y-auto">Click inside the code editor to start timing and solve the bug.</pre>
+
+        <!-- Collapsible Custom Input (stdin) Bar for Safe Test Run -->
+        <div class="mb-2 pb-1.5 border-b border-zinc-800/80">
+          <div class="flex items-center justify-between gap-2 text-[11px] flex-wrap">
+            <button
+              type="button"
+              id="btn-toggle-stdin"
+              onclick="toggleCustomInput()"
+              class="text-zinc-400 hover:text-sky-300 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span id="stdin-caret">▸</span>
+              <span>Custom Input (stdin)</span>
+              <span id="stdin-mode-badge" class="px-1.5 py-0.2 rounded bg-zinc-800 text-sky-400 border border-zinc-700 text-[10px]">Sample #1</span>
+            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="fillSampleInput()" class="text-[10px] text-zinc-400 hover:text-emerald-400 transition cursor-pointer" title="Load first sample test input">
+                Use Sample
+              </button>
+              <button type="button" onclick="clearCustomInput()" class="text-[10px] text-zinc-500 hover:text-rose-400 transition cursor-pointer" title="Clear input to test empty stdin">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div id="custom-stdin-wrapper" class="hidden mt-2">
+            <textarea
+              id="custom-stdin"
+              rows="2"
+              placeholder="Type custom stdin for Test Run (leave empty to test empty input)..."
+              class="w-full px-2.5 py-1.5 bg-[#0d1117] border border-zinc-700/80 rounded-lg text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-sky-500 resize-none font-mono"
+            ></textarea>
+          </div>
+        </div>
+
+        <pre id="console-output" class="text-zinc-300 whitespace-pre-wrap break-words h-24 overflow-y-auto">Click inside the code editor to start timing and solve the bug.</pre>
       </div>
     </div>
 
     <!-- Right Panel: Monaco Code Editor -->
-    <div class="lg:col-span-7 flex flex-col gap-4">
-      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-4 flex flex-col h-full shadow-lg">
-        <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+    <div class="lintiq-col lg:col-span-7 2xl:col-span-8 flex flex-col min-w-0">
+      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-3.5 sm:p-4 flex flex-col flex-1 min-h-0 min-w-0 shadow-lg">
+        <div class="flex items-center justify-between mb-2.5 gap-2 flex-wrap shrink-0">
           <div class="flex items-center gap-2">
             <span id="editor-filename" class="text-xs font-mono text-white font-semibold">solution.py</span>
             <span class="text-[11px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded">Editable Patch</span>
@@ -288,27 +337,43 @@
           </div>
         </div>
 
-        <!-- Monaco Mount Point -->
-        <div id="editor-container" class="w-full h-[420px] rounded-lg border border-zinc-700 overflow-hidden"></div>
+        <!-- Monaco Mount Point (Auto-stretches to fill available height & width on every ratio) -->
+        <div id="editor-container" class="w-full flex-1 min-w-0 min-h-[380px] lg:min-h-[320px] rounded-lg border border-zinc-700 overflow-hidden"></div>
 
-        <div class="mt-4 flex items-center justify-between gap-3">
-          <button onclick="resetStarterCode()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200 transition">
+        <div class="mt-3 flex items-center justify-between gap-2.5 flex-wrap shrink-0">
+          <button onclick="resetStarterCode()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200 transition whitespace-nowrap">
             ↺ Reset Starter Code
           </button>
-          <button id="btn-submit" onclick="submitPatch()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wider uppercase rounded-lg transition shadow-lg shadow-emerald-950/60">
-            Submit Patch
-          </button>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              id="btn-test-run"
+              onclick="runTestCode()"
+              title="Run code safely in cloud sandbox without affecting your streak (Ctrl + ')"
+              class="px-4 py-2 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/40 font-semibold text-xs tracking-wider uppercase rounded-lg transition whitespace-nowrap"
+            >
+              ▶ Test Run
+            </button>
+            <button
+              id="btn-submit"
+              onclick="submitPatch()"
+              title="Grade against all hidden tests (Ctrl + Enter)"
+              class="px-5 sm:px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wider uppercase rounded-lg transition shadow-lg shadow-emerald-950/60 whitespace-nowrap"
+            >
+              Submit Patch
+            </button>
+          </div>
         </div>
       </div>
     </div>
   </main>
 
   <!-- ⚙️ Expanded Settings, Editor Preferences & Analytics Modal -->
-  <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl relative flex flex-col">
-      
+  <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl relative flex flex-col">
+
       <!-- Modal Header & Tab Navigation -->
-      <div class="px-6 pt-4 bg-[#090d13] border-b border-zinc-800">
+      <div class="px-5 sm:px-6 pt-4 bg-[#090d13] border-b border-zinc-800 shrink-0">
         <div class="flex items-center justify-between pb-3">
           <div class="flex items-center gap-2">
             <span class="text-emerald-400 font-mono text-sm">⚙</span>
@@ -318,22 +383,22 @@
         </div>
 
         <!-- Tabs -->
-        <div class="flex items-center gap-2 text-xs font-mono">
-          <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold transition">
+        <div class="flex items-center gap-2 text-xs font-mono overflow-x-auto no-scrollbar">
+          <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold transition whitespace-nowrap">
             👤 Profile & Bio
           </button>
-          <button onclick="switchSettingsTab('editor')" id="tab-btn-editor" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
+          <button onclick="switchSettingsTab('editor')" id="tab-btn-editor" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap">
             🖥 Editor & Sandbox
           </button>
-          <button onclick="switchSettingsTab('analytics')" id="tab-btn-analytics" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition">
+          <button onclick="switchSettingsTab('analytics')" id="tab-btn-analytics" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap">
             📊 Dashboard & Graph
           </button>
         </div>
       </div>
 
       <!-- TAB 1: Profile & Personal Information -->
-      <div id="settings-panel-profile" class="settings-tab-panel p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-        <div class="md:col-span-5 bg-[#0d1117] border border-zinc-800 rounded-xl p-5 flex flex-col justify-between">
+      <div id="settings-panel-profile" class="settings-tab-panel p-5 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6">
+        <div class="md:col-span-5 bg-[#0d1117] border border-zinc-800 rounded-xl p-5 flex flex-col justify-between min-w-0">
           <div>
             <div class="flex items-center gap-3 pb-4 mb-4 border-b border-zinc-800">
               <div id="profile-initials" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-sky-600 flex items-center justify-center font-bold text-base text-white shrink-0">
@@ -347,21 +412,21 @@
             </div>
 
             <div class="space-y-2.5 text-xs font-mono">
-              <div class="flex justify-between py-1.5 border-b border-zinc-800/70">
+              <div class="flex justify-between py-1.5 border-b border-zinc-800/70 gap-2">
                 <span class="text-zinc-400">Primary Stack</span>
-                <span id="summary-lang" class="text-zinc-200">Python 3.11</span>
+                <span id="summary-lang" class="text-zinc-200 truncate">Python 3.11</span>
               </div>
-              <div class="flex justify-between py-1.5 border-b border-zinc-800/70">
+              <div class="flex justify-between py-1.5 border-b border-zinc-800/70 gap-2">
                 <span class="text-zinc-400">Location</span>
-                <span id="summary-location" class="text-zinc-200">India</span>
+                <span id="summary-location" class="text-zinc-200 truncate">India</span>
               </div>
-              <div class="flex justify-between py-1.5 border-b border-zinc-800/70">
+              <div class="flex justify-between py-1.5 border-b border-zinc-800/70 gap-2">
                 <span class="text-zinc-400">Rank Tier</span>
                 <span class="text-amber-400 font-semibold">Bug Hunter II</span>
               </div>
-              <div class="flex justify-between py-1.5">
+              <div class="flex justify-between py-1.5 gap-2">
                 <span class="text-zinc-400">Sandbox Timeout</span>
-                <span class="text-sky-400">2.5s AST Guard</span>
+                <span class="text-sky-400">3.5s Cloud Container</span>
               </div>
             </div>
           </div>
@@ -371,7 +436,7 @@
           </div>
         </div>
 
-        <div class="md:col-span-7 bg-[#0d1117] border border-zinc-800 rounded-xl p-5">
+        <div class="md:col-span-7 bg-[#0d1117] border border-zinc-800 rounded-xl p-5 min-w-0">
           <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400 mb-4">Edit Personal Details</h3>
           <form id="profile-form" onsubmit="saveUserProfile(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
@@ -408,12 +473,12 @@
               <label class="block text-[11px] font-mono text-zinc-400 mb-1">Preferred Runtime</label>
               <select id="input-lang" class="w-full px-3 py-1.5 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-emerald-500">
                 <option value="python" selected>Python 3.11</option>
-                <option value="javascript">JavaScript (Node.js - Soon)</option>
-                <option value="cpp">C++20 (Phase 2)</option>
+                <option value="javascript">JavaScript (Node.js)</option>
+                <option value="cpp">C++20</option>
               </select>
             </div>
 
-            <div class="sm:col-span-2 pt-2 flex items-center justify-between">
+            <div class="sm:col-span-2 pt-2 flex items-center justify-between gap-2">
               <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition">
                 Save Personal Profile
               </button>
@@ -424,7 +489,7 @@
       </div>
 
       <!-- TAB 2: Monaco Editor & Sandbox Preferences -->
-      <div id="settings-panel-editor" class="settings-tab-panel hidden p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div id="settings-panel-editor" class="settings-tab-panel hidden p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
         <div class="bg-[#0d1117] border border-zinc-800 rounded-xl p-5 space-y-4">
           <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">Monaco Editor Configuration</h3>
 
@@ -459,24 +524,25 @@
           <div class="space-y-4">
             <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">Arcade & Sandbox Behavior</h3>
 
-            <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer">
+            <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer gap-2">
               <div>
                 <div class="text-xs font-semibold text-zinc-200">Auto-Start Timer on Keystroke</div>
                 <div class="text-[11px] text-zinc-400">Starts challenge stopwatch immediately when editing</div>
               </div>
-              <input type="checkbox" id="pref-autotimer" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
+              <input type="checkbox" id="pref-autotimer" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4 shrink-0" />
             </label>
 
-            <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer">
+            <label class="flex items-center justify-between p-2.5 bg-[#161b22] border border-zinc-800 rounded-lg cursor-pointer gap-2">
               <div>
                 <div class="text-xs font-semibold text-zinc-200">Show AST Safety Warnings</div>
                 <div class="text-[11px] text-zinc-400">Highlight blocked imports before submitting</div>
               </div>
-              <input type="checkbox" id="pref-astwarn" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
+              <input type="checkbox" id="pref-astwarn" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4 shrink-0" />
             </label>
 
             <div class="p-3 bg-[#161b22] border border-zinc-800 rounded-lg text-xs font-mono space-y-1">
               <div class="text-zinc-400 text-[11px] uppercase">Keyboard Shortcuts</div>
+              <div class="flex justify-between text-zinc-300"><span>Safe Test Run</span><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px]">Ctrl + '</kbd></div>
               <div class="flex justify-between text-zinc-300"><span>Submit Patch</span><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px]">Ctrl + Enter</kbd></div>
               <div class="flex justify-between text-zinc-300"><span>Format Code</span><kbd class="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px]">Shift + Alt + F</kbd></div>
             </div>
@@ -489,8 +555,7 @@
       </div>
 
       <!-- TAB 3: Performance Graph, Track Breakdown & Data Export -->
-      <div id="settings-panel-analytics" class="settings-tab-panel hidden p-6">
-        <!-- Logged-Out State -->
+      <div id="settings-panel-analytics" class="settings-tab-panel hidden p-5 sm:p-6">
         <div id="analytics-logged-out" class="hidden py-14 px-6 text-center bg-[#0d1117] border border-zinc-800 rounded-xl">
           <div class="text-3xl mb-3">🔒</div>
           <h3 class="text-base font-bold text-white mb-1">Sign in to view your Dashboard</h3>
@@ -505,7 +570,6 @@
           </button>
         </div>
 
-        <!-- Logged-In Dashboard Content -->
         <div id="analytics-auth-content" class="space-y-5">
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div class="bg-[#0d1117] border border-zinc-800 rounded-lg p-3">
@@ -527,19 +591,17 @@
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
-            <!-- Line Chart -->
-            <div class="md:col-span-8 bg-[#0d1117] border border-zinc-800 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-2">
+            <div class="md:col-span-8 bg-[#0d1117] border border-zinc-800 rounded-xl p-4 min-w-0">
+              <div class="flex items-center justify-between mb-2 gap-2">
                 <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">7-Day Bug-Hunt & Latency Graph</h3>
-                <span class="text-[11px] font-mono text-emerald-400">● Live Telemetry</span>
+                <span class="text-[11px] font-mono text-emerald-400 whitespace-nowrap">● Live Telemetry</span>
               </div>
               <div class="relative h-56 w-full">
                 <canvas id="lintiq-activity-chart"></canvas>
               </div>
             </div>
 
-            <!-- Export & Reset Controls -->
-            <div class="md:col-span-4 bg-[#0d1117] border border-zinc-800 rounded-xl p-4 flex flex-col justify-between">
+            <div class="md:col-span-4 bg-[#0d1117] border border-zinc-800 rounded-xl p-4 flex flex-col justify-between min-w-0">
               <div>
                 <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400 mb-3">Account Telemetry</h3>
                 <p class="text-xs text-zinc-400 leading-relaxed">
@@ -565,8 +627,8 @@
   </div>
 
   <!-- 🏆 Global Leaderboard Modal -->
-  <div id="leaderboard-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-lg rounded-xl p-6 shadow-2xl relative">
+  <div id="leaderboard-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-[#161b22] border border-zinc-800 w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-xl p-5 sm:p-6 shadow-2xl relative">
       <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
         <div class="flex items-center gap-2">
           <span class="text-xl">🏆</span>
@@ -594,15 +656,15 @@
         </table>
       </div>
 
-      <div class="mt-5 pt-3 border-t border-zinc-800 flex justify-between items-center text-[11px] text-zinc-400">
+      <div class="mt-5 pt-3 border-t border-zinc-800 flex justify-between items-center text-[11px] text-zinc-400 gap-2">
         <span id="leaderboard-sync-status">☁️ Permanent Cloud Leaderboard</span>
-        <button onclick="fetchLeaderboard()" class="text-emerald-400 hover:underline font-mono">Refresh</button>
+        <button onclick="fetchLeaderboard()" class="text-emerald-400 hover:underline font-mono shrink-0">Refresh</button>
       </div>
     </div>
   </div>
 
   <!-- Auth Modal -->
-  <div id="auth-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div id="auth-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
     <div class="bg-[#161b22] border border-zinc-800 w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
       <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-zinc-200 text-sm">✕</button>
       <h3 class="text-lg font-bold text-white mb-1">Enter the Bug Arcade</h3>
@@ -641,11 +703,8 @@
 
   <!-- Problem List Drawer -->
   <div id="problem-list-drawer" class="hidden fixed inset-0 z-50 flex">
-    <!-- Backdrop -->
     <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeProblemListDrawer()"></div>
-    <!-- Drawer Panel -->
-    <div class="relative ml-auto w-full max-w-md h-full bg-[#0d1117] border-l border-zinc-800 flex flex-col shadow-2xl animate-slide-in-right">
-      <!-- Drawer Header -->
+    <div class="relative ml-auto w-full max-w-md h-full bg-[#0d1117] border-l border-zinc-800 flex flex-col shadow-2xl">
       <div class="px-5 py-4 border-b border-zinc-800 bg-[#090d13] flex items-center justify-between shrink-0">
         <div>
           <h3 class="text-sm font-bold text-white">📋 Problem Sequence</h3>
@@ -653,7 +712,6 @@
         </div>
         <button onclick="closeProblemListDrawer()" class="text-zinc-400 hover:text-zinc-200 text-lg px-2 py-1 rounded transition">✕</button>
       </div>
-      <!-- Search -->
       <div class="px-4 py-3 border-b border-zinc-800/60 shrink-0">
         <input
           type="text"
@@ -662,7 +720,6 @@
           class="w-full px-3 py-2 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
         />
       </div>
-      <!-- Problem Rows -->
       <div id="problem-sequence-rows" class="flex-1 overflow-y-auto divide-y divide-zinc-800/40">
         <!-- Populated by JS -->
       </div>
@@ -992,7 +1049,19 @@
       }
     };
 
-    window.addEventListener("DOMContentLoaded", loadEditorPrefs);
+    // Keep Monaco Editor perfectly sized to its container on any screen resize
+    window.addEventListener("DOMContentLoaded", () => {
+      loadEditorPrefs();
+      const editorEl = document.getElementById("editor-container");
+      if (editorEl && typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(() => {
+          if (window.editor && typeof window.editor.layout === "function") {
+            window.editor.layout();
+          }
+        });
+        ro.observe(editorEl);
+      }
+    });
   </script>
 </body>
 </html>
