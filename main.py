@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import logging
 import sqlite3
+import json
 
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,13 +38,25 @@ def verify_token(authorization: Optional[str]) -> str:
     return token
 
 
+DB_PATH = "problems.db"
+
+
 def ensure_db_indexes() -> None:
     """Ensure SQLite indexes exist so 1,500+ problem queries stay sub-millisecond."""
     try:
-        conn = sqlite3.connect("problems.db")
+        conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute("CREATE INDEX IF NOT EXISTS idx_problems_cat_diff ON problems(category, difficulty)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_problems_diff ON problems(difficulty)")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_solves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                problem_id INTEGER NOT NULL,
+                solved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, problem_id)
+            )
+        """)
         conn.commit()
         conn.close()
     except Exception as exc:
@@ -122,6 +135,96 @@ def get_problem(
             detail="No challenges were found matching the selected category and difficulty filter.",
         )
     return problem
+
+
+@app.get("/problems")
+def list_problems_sequential(
+    category: str = Query("All"),
+    difficulty: str = Query("All"),
+    user_id: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    where_clauses = []
+    params = []
+
+    if category != "All":
+        where_clauses.append("category = ?")
+        params.append(category)
+    if difficulty != "All":
+        where_clauses.append("LOWER(difficulty) = LOWER(?)")
+        params.append(difficulty)
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    # Deduplicate by title (keeping the lowest ID) so the sequence stays clean
+    query = f"""
+        SELECT MIN(id) AS id, title, difficulty, category, language
+        FROM problems
+        {where_sql}
+        GROUP BY title
+        ORDER BY id ASC
+        LIMIT ? OFFSET ?
+    """
+    rows = cur.execute(query, params + [limit, offset]).fetchall()
+
+    solved_ids = set()
+    if user_id:
+        try:
+            solved_rows = cur.execute(
+                "SELECT problem_id FROM user_solves WHERE user_id = ?", (user_id,)
+            ).fetchall()
+            solved_ids = {r["problem_id"] for r in solved_rows}
+        except Exception:
+            solved_ids = set()
+
+    total_row = cur.execute(
+        f"SELECT COUNT(DISTINCT title) AS total FROM problems {where_sql}", params
+    ).fetchone()
+    conn.close()
+
+    return {
+        "total": total_row["total"] if total_row else 0,
+        "problems": [
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "difficulty": r["difficulty"].capitalize() if r["difficulty"] else "",
+                "category": r["category"],
+                "language": r["language"],
+                "solved": r["id"] in solved_ids,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/problems/{problem_id}")
+def get_problem_by_id(problem_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute("SELECT * FROM problems WHERE id = ?", (problem_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "description": row["description"],
+        "difficulty": row["difficulty"].capitalize() if row["difficulty"] else "",
+        "buggy_code": row["buggy_code"],
+        "test_cases": json.loads(row["test_cases"]) if isinstance(row["test_cases"], str) else (row["test_cases"] or []),
+        "hint": row["hint"],
+        "category": row["category"],
+        "tags": json.loads(row["tags"] or "[]") if isinstance(row["tags"], str) else (row["tags"] or []),
+        "language": row["language"],
+    }
 
 
 @app.post("/generate-ai-problem")

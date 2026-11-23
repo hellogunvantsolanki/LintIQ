@@ -60,6 +60,11 @@ window.PROBLEMS = PROBLEMS;
 let currentProblemIndex = 0;
 let currentLanguage = "python";
 
+// --- Sequential Problem Navigation State ---
+let problemSequence = [];
+let currentSeqIndex = 0;
+const API_BASE = API;  // alias for the sequential functions
+
 const FILE_NAMES = {
   python: "solution.py",
   cpp: "solution.cpp",
@@ -301,12 +306,14 @@ function selectCategory(category) {
       btn.className = "cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap";
     }
   });
-  loadNewProblem();
+  currentSeqIndex = 0;
+  fetchProblemSequence(category, selectedDifficulty);
 }
 
 function selectDifficulty(difficulty) {
   selectedDifficulty = difficulty;
-  loadNewProblem();
+  currentSeqIndex = 0;
+  fetchProblemSequence(selectedCategory, difficulty);
 }
 
 function getProblemCode(problem, lang) {
@@ -324,14 +331,30 @@ function renderProblemSequence() {
   const container = document.getElementById("problem-sequence-list");
   if (!container) return;
 
-  container.innerHTML = PROBLEMS.map((p, idx) => {
-    const active = idx === currentProblemIndex
+  // Use API-fetched sequence if available, otherwise fall back to local PROBLEMS
+  const list = problemSequence.length > 0 ? problemSequence : PROBLEMS;
+  const activeIdx = problemSequence.length > 0 ? currentSeqIndex : currentProblemIndex;
+
+  container.innerHTML = list.map((p, idx) => {
+    const active = idx === activeIdx
       ? "bg-emerald-500/15 border-emerald-500/40 text-white"
       : "bg-[#0d1117] border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/70";
 
     const diffColor = p.difficulty === "Easy" ? "text-emerald-400"
       : p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
 
+    if (problemSequence.length > 0) {
+      return `
+        <button type="button" onclick="jumpToProblemById(${p.id})"
+          class="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition cursor-pointer ${active}">
+          <span class="flex items-center gap-1.5 truncate font-medium">
+            <span class="w-4 text-center">${p.solved ? "✅" : "○"}</span>
+            ${idx + 1}. ${p.title}
+          </span>
+          <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
+        </button>
+      `;
+    }
     return `
       <button type="button" onclick="selectProblem(${idx})"
         class="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition cursor-pointer ${active}">
@@ -343,7 +366,9 @@ function renderProblemSequence() {
 
   const progEl = document.getElementById("seq-progress");
   if (progEl) {
-    progEl.textContent = `${currentProblemIndex + 1} / ${PROBLEMS.length}`;
+    const idx = problemSequence.length > 0 ? currentSeqIndex : currentProblemIndex;
+    const total = list.length;
+    progEl.textContent = `${idx + 1} / ${total}`;
   }
 }
 window.renderProblemSequence = renderProblemSequence;
@@ -420,6 +445,174 @@ function resetStarterCode() {
   loadStarterCodeForLanguage(currentLanguage);
   resetTimer();
 }
+
+// --- SEQUENTIAL PROBLEM NAVIGATION (API-Backed) ---
+
+async function fetchProblemSequence(category, difficulty) {
+  category = category || selectedCategory || "All";
+  difficulty = difficulty || selectedDifficulty || "All";
+  const uid = typeof currentUser !== "undefined" && currentUser?.id ? `&user_id=${currentUser.id}` : "";
+  const url = `${API_BASE}/problems?category=${encodeURIComponent(category)}&difficulty=${encodeURIComponent(difficulty)}&limit=200${uid}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    problemSequence = data.problems || [];
+
+    const drawerCount = document.getElementById("drawer-count");
+    if (drawerCount) drawerCount.textContent = `${data.total} Challenges (Sequential)`;
+
+    renderDrawerRows(problemSequence);
+    renderProblemSequence();
+
+    // Automatically load #1 on first visit
+    if (problemSequence.length > 0 && currentSeqIndex === 0) {
+      loadSequentialProblem(0);
+    }
+  } catch (err) {
+    console.warn("Could not fetch problem sequence, using local fallback:", err);
+  }
+}
+window.fetchProblemSequence = fetchProblemSequence;
+
+function renderDrawerRows(list) {
+  const container = document.getElementById("problem-sequence-rows");
+  if (!container) return;
+
+  container.innerHTML = list.map((p, idx) => {
+    const isActive = problemSequence[currentSeqIndex]?.id === p.id;
+    const diffClass =
+      p.difficulty === "Easy" ? "text-emerald-400" :
+      p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
+
+    return `
+      <button
+        onclick="jumpToProblemById(${p.id})"
+        class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition ${
+          isActive ? "bg-emerald-500/15 border-l-2 border-emerald-400" : "hover:bg-[#161b22]"
+        }"
+      >
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="w-4 text-center text-xs">${p.solved ? "✅" : "○"}</span>
+          <span class="text-xs font-mono text-zinc-500 shrink-0">${idx + 1}.</span>
+          <span class="text-xs font-medium text-zinc-200 truncate">${p.title}</span>
+        </div>
+        <span class="text-[11px] font-mono font-semibold shrink-0 ${diffClass}">${p.difficulty}</span>
+      </button>
+    `;
+  }).join("");
+}
+window.renderDrawerRows = renderDrawerRows;
+
+function filterDrawerList(query) {
+  const q = query.trim().toLowerCase();
+  const filtered = problemSequence.filter(
+    (p, idx) => p.title.toLowerCase().includes(q) || String(idx + 1) === q || String(p.id) === q
+  );
+  renderDrawerRows(filtered);
+}
+window.filterDrawerList = filterDrawerList;
+
+async function loadSequentialProblem(seqIndex) {
+  if (seqIndex < 0 || seqIndex >= problemSequence.length) return;
+  currentSeqIndex = seqIndex;
+  const target = problemSequence[seqIndex];
+
+  try {
+    resetTimer();
+    document.getElementById("problem-title").textContent = "Loading challenge...";
+    document.getElementById("hint-box").classList.add("hidden");
+    document.getElementById("console-output").textContent = "Click inside the code editor to start timing and solve the bug.";
+    document.getElementById("status-tag").textContent = "Idle";
+    document.getElementById("status-tag").className = "text-zinc-400";
+
+    const res = await fetch(`${API_BASE}/problems/${target.id}`);
+    const problem = await res.json();
+
+    // Render into your existing LintIQ UI elements
+    document.getElementById("problem-id").textContent = `#${seqIndex + 1}`;
+    document.getElementById("problem-title").textContent = problem.title;
+    document.getElementById("problem-difficulty").textContent = problem.difficulty;
+    document.getElementById("problem-category").textContent = problem.category;
+    document.getElementById("problem-desc").textContent = problem.description;
+
+    const tcCount = Array.isArray(problem.test_cases) ? problem.test_cases.length : 0;
+    document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
+
+    const tagsEl = document.getElementById("problem-tags");
+    tagsEl.innerHTML = (problem.tags || [])
+      .map(t => `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${t.startsWith("#") ? t : "#" + t}</span>`)
+      .join("");
+
+    // Load into Monaco Editor & store currentProblem for submit/reset functions
+    window.currentProblem = problem;
+    currentProblem = problem;
+    if (window.editor) {
+      isInjectingCode = true;
+      window.editor.setValue(problem.buggy_code || getProblemCode(problem, currentLanguage));
+      isInjectingCode = false;
+    }
+
+    renderDrawerRows(problemSequence);
+    renderProblemSequence();
+  } catch (err) {
+    console.error("Failed to load sequential problem:", err);
+    document.getElementById("problem-title").textContent = "Failed to load challenge";
+    document.getElementById("problem-desc").textContent = "Make sure your FastAPI backend is running.";
+  }
+}
+window.loadSequentialProblem = loadSequentialProblem;
+
+function jumpToProblemById(id) {
+  const idx = problemSequence.findIndex(p => p.id === id);
+  if (idx !== -1) {
+    loadSequentialProblem(idx);
+    closeProblemListDrawer();
+  }
+}
+window.jumpToProblemById = jumpToProblemById;
+
+function loadNextProblem() {
+  // If we have a backend sequence, use sequential navigation
+  if (problemSequence.length > 0) {
+    if (currentSeqIndex + 1 < problemSequence.length) {
+      loadSequentialProblem(currentSeqIndex + 1);
+    }
+    return;
+  }
+  // Fallback to local PROBLEMS
+  if (PROBLEMS.length === 0) return;
+  currentProblemIndex = (currentProblemIndex + 1) % PROBLEMS.length;
+  selectProblem(currentProblemIndex);
+  resetTimer();
+}
+window.loadNextProblem = loadNextProblem;
+
+function loadPrevProblem() {
+  // If we have a backend sequence, use sequential navigation
+  if (problemSequence.length > 0) {
+    if (currentSeqIndex - 1 >= 0) {
+      loadSequentialProblem(currentSeqIndex - 1);
+    }
+    return;
+  }
+  // Fallback to local PROBLEMS
+  if (PROBLEMS.length === 0) return;
+  currentProblemIndex = (currentProblemIndex - 1 + PROBLEMS.length) % PROBLEMS.length;
+  selectProblem(currentProblemIndex);
+  resetTimer();
+}
+window.loadPrevProblem = loadPrevProblem;
+
+function openProblemListDrawer() {
+  document.getElementById("problem-list-drawer")?.classList.remove("hidden");
+}
+window.openProblemListDrawer = openProblemListDrawer;
+
+function closeProblemListDrawer() {
+  document.getElementById("problem-list-drawer")?.classList.add("hidden");
+}
+window.closeProblemListDrawer = closeProblemListDrawer;
 
 // --- 4. PERMANENT CLOUD LEADERBOARD MODAL LOGIC ---
 function openLeaderboardModal() {
@@ -876,11 +1069,22 @@ require(["vs/editor/editor.main"], function () {
   initAuth();
   updateMetrics();
   initCategoryCounts();
-  if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
-    selectProblem(0);
-  } else {
-    loadNewProblem();
-  }
+  // Try to load sequential problems from backend first; fall back to local
+  fetchProblemSequence().then(() => {
+    if (problemSequence.length === 0) {
+      if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
+        selectProblem(0);
+      } else {
+        loadNewProblem();
+      }
+    }
+  }).catch(() => {
+    if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
+      selectProblem(0);
+    } else {
+      loadNewProblem();
+    }
+  });
 });
 
 // --- 10. AI CHALLENGE GENERATOR & CATEGORY REFRESH ---
@@ -926,11 +1130,12 @@ async function generateAIChallenge() {
     if (typeof fetchCategories === "function") await fetchCategories();
     if (typeof loadCategories === "function") await loadCategories();
 
-    const nextBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-      b.textContent.includes("Next Challenge")
-    );
-    if (nextBtn) {
-      nextBtn.click();
+    // Refresh sequence after AI generation and load the new challenge
+    await fetchProblemSequence();
+    if (problemSequence.length > 0) {
+      loadSequentialProblem(problemSequence.length - 1);
+    } else {
+      loadNewProblem();
     }
 
     setTimeout(() => {

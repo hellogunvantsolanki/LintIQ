@@ -231,8 +231,11 @@
               >
                 ✨ Generate AI Bug
               </button>
-              <button onclick="loadNewProblem()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition whitespace-nowrap">
-                Next Challenge →
+              <button onclick="loadPrevProblem()" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition">
+                ← Prev
+              </button>
+              <button onclick="loadNextProblem()" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-zinc-100 rounded-lg transition">
+                Next →
               </button>
             </div>
           </div>
@@ -243,7 +246,12 @@
       <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-3 shadow-lg">
         <div class="flex items-center justify-between mb-2 px-1">
           <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Problem Sequence</span>
-          <span class="text-[11px] font-mono text-zinc-500" id="seq-progress">1 / 2</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-mono text-zinc-500" id="seq-progress">1 / 2</span>
+            <button onclick="openProblemListDrawer()" class="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition">
+              View All ↗
+            </button>
+          </div>
         </div>
         <div id="problem-sequence-list" class="max-h-40 overflow-y-auto space-y-1 pr-1">
           <!-- Populated by JS -->
@@ -628,6 +636,36 @@
         </button>
         <p id="auth-msg" class="text-[11px] text-center"></p>
       </form>
+    </div>
+  </div>
+
+  <!-- Problem List Drawer -->
+  <div id="problem-list-drawer" class="hidden fixed inset-0 z-50 flex">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeProblemListDrawer()"></div>
+    <!-- Drawer Panel -->
+    <div class="relative ml-auto w-full max-w-md h-full bg-[#0d1117] border-l border-zinc-800 flex flex-col shadow-2xl animate-slide-in-right">
+      <!-- Drawer Header -->
+      <div class="px-5 py-4 border-b border-zinc-800 bg-[#090d13] flex items-center justify-between shrink-0">
+        <div>
+          <h3 class="text-sm font-bold text-white">📋 Problem Sequence</h3>
+          <span id="drawer-count" class="text-[11px] font-mono text-zinc-400">Loading...</span>
+        </div>
+        <button onclick="closeProblemListDrawer()" class="text-zinc-400 hover:text-zinc-200 text-lg px-2 py-1 rounded transition">✕</button>
+      </div>
+      <!-- Search -->
+      <div class="px-4 py-3 border-b border-zinc-800/60 shrink-0">
+        <input
+          type="text"
+          placeholder="Search by title, number, or ID..."
+          oninput="filterDrawerList(this.value)"
+          class="w-full px-3 py-2 bg-[#161b22] border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
+        />
+      </div>
+      <!-- Problem Rows -->
+      <div id="problem-sequence-rows" class="flex-1 overflow-y-auto divide-y divide-zinc-800/40">
+        <!-- Populated by JS -->
+      </div>
     </div>
   </div>
 

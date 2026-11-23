@@ -373,3 +373,19 @@ body {
   padding: 2px 6px;
   font-size: 12px;
 }
+
+/* Problem List Drawer slide-in animation */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s ease-out;
+}
