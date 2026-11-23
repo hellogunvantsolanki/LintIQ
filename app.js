@@ -37,6 +37,9 @@ let timerSeconds = 0;
 let timerInterval = null;
 let timerRunning = false;
 let isInjectingCode = false;
+let isExecutionBusy = false;
+let testRunCooldownUntil = 0;
+let lastDiffCardText = "";
 
 // --- 2. AUTHENTICATION & CLOUD PROFILE SYNC ---
 function getDisplayUsername(user) {
@@ -112,7 +115,6 @@ async function syncUserProfileWithCloud(user) {
   const username = getDisplayUsername(user);
 
   try {
-    // 1. Query Supabase user_profiles directly
     const { data: cloudProfile, error } = await supabaseClient
       .from("user_profiles")
       .select("id, username, score, streak, solves, tier")
@@ -144,7 +146,6 @@ async function syncUserProfileWithCloud(user) {
       return;
     }
 
-    // 2. If user is not yet in Supabase cloud but has existing score/solves, migrate them up
     const headers = {};
     if (currentSession?.access_token) {
       headers["Authorization"] = `Bearer ${currentSession.access_token}`;
@@ -271,6 +272,7 @@ function resetStarterCode() {
   isInjectingCode = true;
   monacoEditor.setValue(currentProblem.buggy_code);
   isInjectingCode = false;
+  hideCopyDiffButton();
   resetTimer();
 }
 
@@ -370,7 +372,7 @@ async function fetchLeaderboard() {
   }
 }
 
-// --- 5. ARCADE METRICS, GRAPH TELEMETRY & CONTROLLED TIMER ---
+// --- 5. ARCADE METRICS, CUSTOM STDIN, SEEN AI POOL & SHARE FIX HELPERS ---
 function updateMetrics() {
   const streakEl = document.getElementById("streak-count");
   const scoreEl = document.getElementById("score-count");
@@ -381,7 +383,198 @@ function updateMetrics() {
   localStorage.setItem("lintiq_solves", solves);
 }
 
-function recordLintIQSolve(solveSeconds, passed) {
+function getSeenAiIdsKey() {
+  return `lintiq_seen_ai_ids_${currentUser?.id || "guest"}`;
+}
+
+function getLocalSeenAiIds() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(getSeenAiIdsKey()) || "[]");
+    return Array.isArray(arr) ? arr.filter(Number.isFinite) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function recordLocalSeenAiId(problemId) {
+  const numId = Number(problemId);
+  if (!Number.isFinite(numId) || numId < 100000) return;
+  try {
+    const existing = getLocalSeenAiIds().filter(id => id !== numId);
+    existing.push(numId);
+    const trimmed = existing.slice(-150);
+    localStorage.setItem(getSeenAiIdsKey(), JSON.stringify(trimmed));
+  } catch (_) {}
+}
+
+function getSampleTestCase() {
+  if (!currentProblem || !Array.isArray(currentProblem.test_cases) || currentProblem.test_cases.length === 0) {
+    return null;
+  }
+  return currentProblem.test_cases[0];
+}
+
+function getSampleInput() {
+  const tc = getSampleTestCase();
+  return tc ? String(tc.input ?? "") : "";
+}
+
+function normalizeOutput(text) {
+  return String(text ?? "").replace(/\r\n/g, "\n").trim();
+}
+
+function updateStdinBadge() {
+  const inputEl = document.getElementById("custom-stdin");
+  const badgeEl = document.getElementById("stdin-mode-badge");
+  if (!inputEl || !badgeEl) return;
+
+  const val = inputEl.value;
+  const sampleTc = getSampleTestCase();
+  const sample = sampleTc ? String(sampleTc.input ?? "") : "";
+
+  if (sampleTc && val === sample) {
+    badgeEl.textContent = "Sample #1";
+    badgeEl.className = "px-1.5 py-0.2 rounded bg-zinc-800 text-sky-400 border border-zinc-700 text-[10px]";
+  } else if (val === "") {
+    badgeEl.textContent = "Empty";
+    badgeEl.className = "px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]";
+  } else {
+    badgeEl.textContent = "Custom";
+    badgeEl.className = "px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[10px]";
+  }
+}
+
+function toggleCustomInput(forceOpen = null) {
+  const wrapper = document.getElementById("custom-stdin-wrapper");
+  const caret = document.getElementById("stdin-caret");
+  if (!wrapper) return;
+
+  const shouldOpen = forceOpen !== null ? forceOpen : wrapper.classList.contains("hidden");
+  wrapper.classList.toggle("hidden", !shouldOpen);
+  if (caret) caret.textContent = shouldOpen ? "▾" : "▸";
+}
+
+function fillSampleInput() {
+  const inputEl = document.getElementById("custom-stdin");
+  if (!inputEl) return;
+  inputEl.value = getSampleInput();
+  updateStdinBadge();
+  toggleCustomInput(true);
+}
+
+function clearCustomInput() {
+  const inputEl = document.getElementById("custom-stdin");
+  if (!inputEl) return;
+  inputEl.value = "";
+  updateStdinBadge();
+  toggleCustomInput(true);
+  inputEl.focus();
+}
+
+function getSolvedMapKey() {
+  return `lintiq_solved_map_${currentUser?.id || "guest"}`;
+}
+
+function getSolvedMap() {
+  try {
+    return JSON.parse(localStorage.getItem(getSolvedMapKey()) || "{}") || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveSolvedMap(map) {
+  try {
+    localStorage.setItem(getSolvedMapKey(), JSON.stringify(map));
+  } catch (_) {}
+}
+
+function getGradeIcon(grade) {
+  if (grade === "Surgical") return "🩹";
+  if (grade === "Clean") return "✨";
+  return "🔧";
+}
+
+function ensureCopyDiffButton() {
+  let btn = document.getElementById("btn-copy-diff-card");
+  if (btn) return btn;
+
+  const statusTag = document.getElementById("status-tag");
+  if (!statusTag || !statusTag.parentElement) return null;
+
+  btn = document.createElement("button");
+  btn.id = "btn-copy-diff-card";
+  btn.type = "button";
+  btn.className = "hidden ml-auto mr-2 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700 transition cursor-pointer";
+  btn.textContent = "📋 Share Fix";
+  btn.addEventListener("click", copyDiffCardToClipboard);
+
+  statusTag.parentElement.insertBefore(btn, statusTag);
+  return btn;
+}
+
+function hideCopyDiffButton() {
+  lastDiffCardText = "";
+  const btn = document.getElementById("btn-copy-diff-card");
+  if (btn) {
+    btn.classList.add("hidden");
+    btn.textContent = "📋 Share Fix";
+  }
+}
+
+function buildDiffCardMarkdown(problem, metrics, pointsEarned, solveSecs) {
+  const fence = String.fromCharCode(96).repeat(3);
+  const icon = getGradeIcon(metrics.grade);
+  const allDiff = Array.isArray(metrics.diff_lines) ? metrics.diff_lines : [];
+  const shownLines = allDiff.slice(0, 10);
+  const totalChanged = (metrics.lines_added || 0) + (metrics.lines_removed || 0);
+  const remaining = Math.max(0, totalChanged - shownLines.length);
+
+  const codeBody = shownLines.length > 0
+    ? shownLines.join("\n") + (remaining > 0 ? `\n... (+${remaining} more changed lines)` : "")
+    : "# (No line diff recorded)";
+
+  const multPart = metrics.multiplier > 1 ? `, ${metrics.multiplier}x` : "";
+  const ptsPart = pointsEarned > 0 ? ` | +${pointsEarned} pts` : "";
+
+  return [
+    `${icon} LintIQ — ${problem.title} (#${problem.id})`,
+    `${metrics.grade} Patch (+${metrics.lines_added} -${metrics.lines_removed} lines${multPart}) | ⚡ ${metrics.runtime_ms}ms | ⏱️ ${solveSecs}s${ptsPart}`,
+    fence,
+    codeBody,
+    fence,
+    "Try to beat my fix 👉 https://thelintiq.com"
+  ].join("\n");
+}
+
+async function copyDiffCardToClipboard() {
+  if (!lastDiffCardText) return;
+  const btn = document.getElementById("btn-copy-diff-card");
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(lastDiffCardText);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = lastDiffCardText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    if (btn) {
+      btn.textContent = "✓ Copied!";
+      setTimeout(() => {
+        if (btn && !btn.classList.contains("hidden")) {
+          btn.textContent = "📋 Share Fix";
+        }
+      }, 2000);
+    }
+  } catch (err) {
+    console.warn("Clipboard copy failed:", err);
+  }
+}
+
+function recordLintIQSolve(solveSeconds, passed, actualRuntimeMs = null) {
   if (!currentUser?.id) return;
 
   const key = `lintiq_user_metrics_${currentUser.id}`;
@@ -406,10 +599,13 @@ function recordLintIQSolve(solveSeconds, passed) {
 
   current.passRate = Math.round((current.totalAccepted / current.totalAttempts) * 100);
 
-  const simulatedExecMs = Math.max(18, Math.min(120, Math.round(solveSeconds * 1.5)));
+  const execMs = (typeof actualRuntimeMs === "number" && actualRuntimeMs > 0)
+    ? Math.round(actualRuntimeMs)
+    : Math.max(18, Math.min(120, Math.round(solveSeconds * 1.5)));
+
   current.avgLatencyMs[todayIdx] = current.avgLatencyMs[todayIdx] === 0
-    ? simulatedExecMs
-    : Math.round((current.avgLatencyMs[todayIdx] + simulatedExecMs) / 2);
+    ? execMs
+    : Math.round((current.avgLatencyMs[todayIdx] + execMs) / 2);
 
   localStorage.setItem(key, JSON.stringify(current));
 
@@ -454,13 +650,61 @@ function updateTimerDisplay() {
   document.getElementById("timer-display").textContent = `${mins}:${secs}`;
 }
 
-// --- 6. PROBLEM LIFECYCLE ---
+// --- 6. PROBLEM LIFECYCLE (STATELESS RENDERER) ---
+function renderProblem(problem, customConsoleMsg = null) {
+  if (!problem) return;
+
+  currentProblem = problem;
+  hideCopyDiffButton();
+
+  document.getElementById("problem-id").textContent = `#${problem.id}`;
+  document.getElementById("problem-title").textContent = problem.title;
+  document.getElementById("problem-desc").textContent = problem.description;
+  document.getElementById("problem-category").textContent = problem.category || "General";
+
+  const tagsContainer = document.getElementById("problem-tags");
+  const tagsList = Array.isArray(problem.tags) ? problem.tags : [];
+  tagsContainer.innerHTML = tagsList.map(tag => {
+    const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
+    return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
+  }).join("");
+
+  const tcCount = Array.isArray(problem.test_cases) ? problem.test_cases.length : 0;
+  document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
+
+  const diffBadge = document.getElementById("problem-difficulty");
+  diffBadge.textContent = problem.difficulty || "Medium";
+
+  document.getElementById("hint-box").classList.add("hidden");
+  document.getElementById("status-tag").textContent = "Idle";
+  document.getElementById("status-tag").className = "text-zinc-400";
+  document.getElementById("console-output").textContent =
+    customConsoleMsg ||
+    "Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.";
+
+  const stdinEl = document.getElementById("custom-stdin");
+  if (stdinEl) {
+    stdinEl.value = getSampleInput();
+    updateStdinBadge();
+    toggleCustomInput(false);
+  }
+
+  if (monacoEditor) {
+    isInjectingCode = true;
+    monacoEditor.setValue(problem.buggy_code || "");
+    isInjectingCode = false;
+  }
+
+  resetTimer();
+}
+
 async function loadNewProblem() {
   try {
     resetTimer();
+    hideCopyDiffButton();
     document.getElementById("problem-title").textContent = "Fetching next bug hunt...";
     document.getElementById("hint-box").classList.add("hidden");
-    document.getElementById("console-output").textContent = "Click inside the code editor to start timing and solve the bug.";
+    document.getElementById("console-output").textContent = "Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.";
     document.getElementById("status-tag").textContent = "Idle";
     document.getElementById("status-tag").className = "text-zinc-400";
 
@@ -486,35 +730,8 @@ async function loadNewProblem() {
 
     if (!res.ok) throw new Error("Could not fetch problem from backend.");
 
-    currentProblem = await res.json();
-
-    document.getElementById("problem-id").textContent = `#${currentProblem.id}`;
-    document.getElementById("problem-title").textContent = currentProblem.title;
-    document.getElementById("problem-desc").textContent = currentProblem.description;
-    document.getElementById("problem-category").textContent = currentProblem.category || "General";
-
-    const tagsContainer = document.getElementById("problem-tags");
-    const tagsList = Array.isArray(currentProblem.tags) ? currentProblem.tags : [];
-    tagsContainer.innerHTML = tagsList.map(tag => {
-      const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
-      return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
-    }).join("");
-
-    const tcCount = Array.isArray(currentProblem.test_cases) ? currentProblem.test_cases.length : 0;
-    document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
-
-    const diffBadge = document.getElementById("problem-difficulty");
-    diffBadge.textContent = currentProblem.difficulty;
-
-    document.getElementById("hint-box").classList.add("hidden");
-
-    if (monacoEditor) {
-      isInjectingCode = true;
-      monacoEditor.setValue(currentProblem.buggy_code);
-      isInjectingCode = false;
-    }
-
-    resetTimer();
+    const problem = await res.json();
+    renderProblem(problem);
   } catch (err) {
     document.getElementById("problem-title").textContent = "Failed to load challenge";
     document.getElementById("problem-desc").textContent = "Make sure your FastAPI backend is running on port 8000.";
@@ -522,17 +739,168 @@ async function loadNewProblem() {
   }
 }
 
-// --- 7. PATCH SUBMISSION & SUPABASE CLOUD PERSISTENCE ---
+// --- 7. SAFE TEST RUN (SAMPLE #1 ASSERTION CHECK + CUSTOM STDIN, ZERO STREAK PENALTY) ---
+async function runTestCode() {
+  if (!currentProblem || !monacoEditor || isExecutionBusy) return;
+
+  const now = Date.now();
+  if (now < testRunCooldownUntil) return;
+
+  const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
+  const timerStatusText = document.getElementById("timer-status")?.textContent || "";
+  if (prefs.autoTimer !== false && !timerRunning && timerStatusText !== "(Solved)") {
+    startTimer();
+  }
+
+  const userCode = monacoEditor.getValue();
+  const stdinEl = document.getElementById("custom-stdin");
+  const sampleTc = getSampleTestCase();
+  const sampleInput = sampleTc ? String(sampleTc.input ?? "") : "";
+  const stdinVal = stdinEl ? stdinEl.value : sampleInput;
+  const modeLabel = document.getElementById("stdin-mode-badge")?.textContent || "Custom";
+
+  const isSampleMode = Boolean(
+    sampleTc &&
+    stdinVal === sampleInput &&
+    sampleTc.expected_output !== undefined &&
+    sampleTc.expected_output !== null
+  );
+
+  const consoleEl = document.getElementById("console-output");
+  const statusTag = document.getElementById("status-tag");
+  const testBtn = document.getElementById("btn-test-run");
+  const submitBtn = document.getElementById("btn-submit");
+
+  isExecutionBusy = true;
+  testRunCooldownUntil = now + 1500;
+  hideCopyDiffButton();
+
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.textContent = "Running...";
+  }
+  if (submitBtn) submitBtn.disabled = true;
+
+  statusTag.textContent = "Testing...";
+  statusTag.className = "text-sky-400";
+
+  try {
+    const res = await fetch(`${API}/run-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        problem_id: currentProblem.id,
+        user_code: userCode,
+        stdin: stdinVal,
+        language: currentProblem.language || "python"
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || `Server error (${res.status})`);
+    }
+
+    const msText = data.runtime_ms ? `${data.runtime_ms}ms` : "<1ms";
+    const stdoutRaw = String(data.stdout || "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
+    const stderrTrimmed = String(data.stderr || "").trim();
+
+    if (data.ok) {
+      if (isSampleMode) {
+        const actualNorm = normalizeOutput(data.stdout);
+        const expectedNorm = normalizeOutput(sampleTc.expected_output);
+
+        if (actualNorm === expectedNorm) {
+          statusTag.textContent = "Sample Passed";
+          statusTag.className = "text-emerald-400";
+
+          const lines = [
+            `✓ SAMPLE #1 PASSED (⚡ ${msText} | Streak safe)`,
+            `Output:\n${actualNorm || "(Empty output)"}`
+          ];
+          if (stderrTrimmed) {
+            lines.push(`\nSTDERR:\n${stderrTrimmed}`);
+          }
+          lines.push("\n→ Ready? Click SUBMIT PATCH to grade all hidden assertions.");
+          consoleEl.textContent = lines.join("\n");
+        } else {
+          statusTag.textContent = "Sample Failed";
+          statusTag.className = "text-rose-400";
+
+          const lines = [
+            `✖ SAMPLE #1 FAILED (⚡ ${msText} | Streak safe)`,
+            `Input:\n${stdinVal || "(Empty)"}`,
+            `Expected:\n${expectedNorm || "(Empty)"}`,
+            `Your Output:\n${actualNorm || "(No stdout printed)"}`
+          ];
+          if (stderrTrimmed) {
+            lines.push(`STDERR:\n${stderrTrimmed}`);
+          }
+          consoleEl.textContent = lines.join("\n\n");
+        }
+      } else {
+        statusTag.textContent = "Test Run";
+        statusTag.className = "text-sky-400";
+
+        const lines = [
+          `▶ TEST RUN (${modeLabel} | ⚡ ${msText} | Streak safe)`
+        ];
+        lines.push(stdoutRaw ? stdoutRaw : "(No stdout printed)");
+        if (stderrTrimmed) {
+          lines.push(`\nSTDERR:\n${stderrTrimmed}`);
+        }
+        consoleEl.textContent = lines.join("\n");
+      }
+    } else {
+      statusTag.textContent = "Test Error";
+      statusTag.className = "text-rose-400";
+
+      const errTitle = (data.error_type || "error").replace(/_/g, " ").toUpperCase();
+      const lines = [
+        `✖ TEST RUN — ${errTitle} (${modeLabel} | ⚡ ${msText} | Streak safe)`
+      ];
+      if (stdoutRaw) {
+        lines.push(`STDOUT (before error):\n${stdoutRaw}`);
+      }
+      if (stderrTrimmed) {
+        lines.push(stderrTrimmed);
+      }
+      consoleEl.textContent = lines.join("\n");
+    }
+  } catch (err) {
+    statusTag.textContent = "Test Error";
+    statusTag.className = "text-rose-400";
+    consoleEl.textContent = `✖ Test Run failed: ${err.message}`;
+    console.error(err);
+  } finally {
+    isExecutionBusy = false;
+    if (submitBtn) submitBtn.disabled = false;
+    const waitLeft = Math.max(0, testRunCooldownUntil - Date.now());
+    setTimeout(() => {
+      if (testBtn) {
+        testBtn.disabled = false;
+        testBtn.textContent = "▶ Test Run";
+      }
+    }, waitLeft);
+  }
+}
+
+// --- 8. PATCH SUBMISSION & SURGICAL PATCH SCORING ---
 async function submitPatch() {
-  if (!currentProblem || !monacoEditor) return;
+  if (!currentProblem || !monacoEditor || isExecutionBusy) return;
 
   const userCode = monacoEditor.getValue();
   const consoleEl = document.getElementById("console-output");
   const statusTag = document.getElementById("status-tag");
   const submitBtn = document.getElementById("btn-submit");
+  const testBtn = document.getElementById("btn-test-run");
 
+  isExecutionBusy = true;
+  hideCopyDiffButton();
   submitBtn.disabled = true;
   submitBtn.textContent = "Judging...";
+  if (testBtn) testBtn.disabled = true;
+
   statusTag.textContent = "Running...";
   statusTag.className = "text-amber-400";
 
@@ -553,6 +921,7 @@ async function submitPatch() {
         problem_id: currentProblem.id,
         user_code: userCode,
         test_cases: currentProblem.test_cases,
+        language: currentProblem.language || "python",
         user_id: userId,
         username: username,
         time_seconds: timerSeconds,
@@ -570,7 +939,18 @@ async function submitPatch() {
       statusTag.textContent = "Passed";
       statusTag.className = "text-emerald-400";
 
+      const pm = result.patch_metrics || null;
+      const multiplier = pm ? Number(pm.multiplier || 1.0) : 1.0;
+      const grade = pm ? pm.grade : "Refactor";
+      const runtimeMs = pm ? pm.runtime_ms : (result.runtime_ms || null);
+
+      const solvedMap = getSolvedMap();
+      const pidKey = String(currentProblem.id);
+      const prevRecord = solvedMap[pidKey];
+
       let pointsEarned = 0;
+      let solveNote = "";
+
       if (result.profile) {
         streak = result.profile.streak;
         score = result.profile.score;
@@ -578,26 +958,45 @@ async function submitPatch() {
         pointsEarned = result.profile.points_earned;
       } else {
         const timeBonus = Math.max(0, 60 - timerSeconds);
-        streak += 1;
-        solves += 1;
-        pointsEarned = 100 + (streak * 10) + timeBonus;
-        score += pointsEarned;
+        if (prevRecord) {
+          const candidatePoints = Math.round((100 + (Math.max(1, streak) * 10) + timeBonus) * multiplier);
+          if (candidatePoints > (prevRecord.bestPoints || 0)) {
+            pointsEarned = candidatePoints - (prevRecord.bestPoints || 0);
+            score += pointsEarned;
+            solvedMap[pidKey] = { bestPoints: candidatePoints, bestGrade: grade };
+            saveSolvedMap(solvedMap);
+            solveNote = " (New Best Grade!)";
+          } else {
+            pointsEarned = 0;
+            solveNote = " (Already solved)";
+          }
+        } else {
+          streak += 1;
+          solves += 1;
+          pointsEarned = Math.round((100 + (streak * 10) + timeBonus) * multiplier);
+          score += pointsEarned;
+          solvedMap[pidKey] = { bestPoints: pointsEarned, bestGrade: grade };
+          saveSolvedMap(solvedMap);
+        }
       }
 
-      consoleEl.textContent = `✔ Cleared in ${timerSeconds}s! (+${pointsEarned} Points)\n${result.message || ''}`;
+      if (pm) {
+        const icon = getGradeIcon(pm.grade);
+        const multLabel = pm.multiplier > 1 ? ` (${pm.multiplier}x)` : "";
+        const summaryLine = `✓ PASSED | ${icon} ${pm.grade} Patch (+${pm.lines_added} -${pm.lines_removed} lines) | ⚡ ${pm.runtime_ms}ms | +${pointsEarned} pts${multLabel}${solveNote}`;
+        consoleEl.textContent = `${summaryLine}\nCleared in ${timerSeconds}s — ${result.message || ''}`;
+
+        lastDiffCardText = buildDiffCardMarkdown(currentProblem, pm, pointsEarned, timerSeconds);
+        const copyBtn = ensureCopyDiffButton();
+        if (copyBtn) {
+          copyBtn.classList.remove("hidden");
+        }
+      } else {
+        consoleEl.textContent = `✔ Cleared in ${timerSeconds}s! (+${pointsEarned} Points${solveNote})\n${result.message || ''}`;
+      }
+
       updateMetrics();
-      recordLintIQSolve(timerSeconds, true);
-
-      if (userId && !String(userId).startsWith("mock_") && !String(userId).startsWith("test_")) {
-        supabaseClient.from("user_profiles").upsert({
-          id: userId,
-          username: username,
-          streak: streak,
-          score: score,
-          solves: solves,
-          last_active: new Date().toISOString()
-        }, { onConflict: "id" }).then(() => {});
-      }
+      recordLintIQSolve(timerSeconds, true, runtimeMs);
     } else {
       statusTag.textContent = "Failed";
       statusTag.className = "text-rose-400";
@@ -605,13 +1004,6 @@ async function submitPatch() {
       streak = 0;
       updateMetrics();
       recordLintIQSolve(timerSeconds, false);
-
-      if (userId && !String(userId).startsWith("mock_") && !String(userId).startsWith("test_")) {
-        supabaseClient.from("user_profiles").update({
-          streak: 0,
-          last_active: new Date().toISOString()
-        }).eq("id", userId).then(() => {});
-      }
     }
   } catch (err) {
     statusTag.textContent = "Error";
@@ -619,12 +1011,14 @@ async function submitPatch() {
     consoleEl.textContent = `Failed to communicate with test runner: ${err.message}`;
     console.error(err);
   } finally {
+    isExecutionBusy = false;
     submitBtn.disabled = false;
     submitBtn.textContent = "Submit Patch";
+    if (testBtn) testBtn.disabled = false;
   }
 }
 
-// --- 8. AI HINT ENGINE ---
+// --- 9. AI HINT ENGINE ---
 async function requestHint() {
   if (!currentProblem || !monacoEditor) return;
   const hintBox = document.getElementById("hint-box");
@@ -649,7 +1043,7 @@ async function requestHint() {
   }
 }
 
-// --- 9. MONACO INITIALIZATION ---
+// --- 10. MONACO INITIALIZATION ---
 require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
 require(["vs/editor/editor.main"], function () {
   const savedPrefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
@@ -668,9 +1062,15 @@ require(["vs/editor/editor.main"], function () {
     padding: { top: 12, bottom: 12 }
   });
 
-  // Expose globally so Settings > Editor Settings can update options live
   window.editor = monacoEditor;
   window.monacoEditor = monacoEditor;
+
+  monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+    submitPatch();
+  });
+  monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Quote, () => {
+    runTestCode();
+  });
 
   monacoEditor.onDidFocusEditorText(() => {
     const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
@@ -686,73 +1086,72 @@ require(["vs/editor/editor.main"], function () {
     }
   });
 
+  const stdinEl = document.getElementById("custom-stdin");
+  if (stdinEl) {
+    stdinEl.addEventListener("input", updateStdinBadge);
+  }
+
   initAuth();
   updateMetrics();
   initCategoryCounts();
   loadNewProblem();
 });
 
-// --- 10. AI CHALLENGE GENERATOR & CATEGORY REFRESH ---
+// --- 11. INSTANT SHARED AI POOL GENERATOR & CATEGORY REFRESH ---
 async function generateAIChallenge() {
   const btn = document.getElementById("ai-generate-btn");
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "✨ Generating...";
+    btn.textContent = "✨ Loading AI Bug...";
   }
 
-  const outEl =
-    document.getElementById("console-output") ||
-    document.getElementById("sandbox-output") ||
-    document.getElementById("output-box");
+  const outEl = document.getElementById("console-output");
   if (outEl) {
-    outEl.textContent =
-      "🤖 Gemini AI is synthesizing a new buggy program and verifying 4 test assertions...";
+    outEl.textContent = "🤖 Fetching a verified unseen AI bug challenge...";
   }
 
   try {
     const params = new URLSearchParams();
-    if (typeof currentCategory !== "undefined" && currentCategory && currentCategory !== "All") {
-      params.set("category", currentCategory);
-    } else if (typeof selectedCategory !== "undefined" && selectedCategory && selectedCategory !== "All") {
+    if (selectedCategory && selectedCategory !== "All") {
       params.set("category", selectedCategory);
     }
-
-    if (typeof currentDifficulty !== "undefined" && currentDifficulty && currentDifficulty !== "All") {
-      params.set("difficulty", currentDifficulty);
-    } else if (typeof selectedDifficulty !== "undefined" && selectedDifficulty && selectedDifficulty !== "All") {
+    if (selectedDifficulty && selectedDifficulty !== "All") {
       params.set("difficulty", selectedDifficulty);
+    }
+    if (currentUser?.id) {
+      params.set("user_id", currentUser.id);
+    }
+
+    const seenIds = getLocalSeenAiIds();
+    if (seenIds.length > 0) {
+      params.set("exclude_ids", seenIds.slice(-80).join(","));
+    }
+
+    const headers = {};
+    if (currentSession?.access_token) {
+      headers["Authorization"] = `Bearer ${currentSession.access_token}`;
     }
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    const res = await fetch(`${API}/generate-ai-problem${query}`, { method: "POST" });
+    const res = await fetch(`${API}/generate-ai-problem${query}`, {
+      method: "POST",
+      headers
+    });
     const data = await res.json();
 
     if (!res.ok) {
       throw new Error(data.detail || "Failed to generate AI challenge");
     }
 
-    await refreshCategoryPillCounts();
-    if (typeof fetchCategories === "function") await fetchCategories();
-    if (typeof loadCategories === "function") await loadCategories();
+    recordLocalSeenAiId(data.id);
 
-    const nextBtn = Array.from(document.querySelectorAll("button")).find((b) =>
-      b.textContent.includes("Next Challenge")
+    const speedNote = data.source === "ai_pool" ? "Instant AI Pool" : "Freshly Synthesized";
+    renderProblem(
+      data,
+      `✨ AI Challenge #${data.id} (${data.title}) ready [${speedNote}]! Click inside the editor to hunt the bug.`
     );
-    if (nextBtn) {
-      nextBtn.click();
-    }
 
-    setTimeout(() => {
-      const idEl =
-        document.getElementById("problem-id") ||
-        document.getElementById("challenge-id");
-      if (idEl && data.id) {
-        idEl.textContent = `#${data.id}`;
-      }
-      if (outEl) {
-        outEl.textContent = `✨ New AI Challenge #${data.id} (${data.title}) loaded! Click inside the editor to hunt the bug.`;
-      }
-    }, 300);
+    refreshCategoryPillCounts();
   } catch (err) {
     if (outEl) {
       outEl.textContent = `❌ AI Generation Error: ${err.message}`;
@@ -772,68 +1171,19 @@ async function refreshCategoryPillCounts() {
     if (!res.ok) return;
     const data = await res.json();
 
-    const countsMap = {};
-    let total = 0;
-
-    const rawCats =
-      data && typeof data === "object" && !Array.isArray(data) && data.categories
-        ? data.categories
-        : data;
-
-    if (Array.isArray(rawCats)) {
-      rawCats.forEach((item) => {
-        if (item && typeof item === "object") {
-          const name = item.category || item.name || item.track;
-          const cnt = Number(item.count ?? item.total ?? 0);
-          if (name && Number.isFinite(cnt)) {
-            countsMap[String(name).toLowerCase()] = cnt;
-            total += cnt;
-          }
-        }
-      });
-    } else if (rawCats && typeof rawCats === "object") {
-      Object.entries(rawCats).forEach(([k, v]) => {
-        if (k.toLowerCase() === "total") return;
-        const cnt =
-          typeof v === "object" && v !== null
-            ? Number(v.count ?? v.total ?? 0)
-            : Number(v);
-        if (Number.isFinite(cnt)) {
-          countsMap[k.toLowerCase()] = cnt;
-          total += cnt;
-        }
-      });
-    }
-
-    let domSum = 0;
-    let allTracksBtn = null;
-
-    document.querySelectorAll("button").forEach((btn) => {
-      const txt = btn.textContent.trim();
-      if (txt.startsWith("All Tracks")) {
-        allTracksBtn = btn;
-      } else {
-        Object.entries(countsMap).forEach(([catLower, cnt]) => {
-          if (txt.toLowerCase().startsWith(catLower)) {
-            const cleanName = txt.replace(/\s*\([^)]*\)\s*$/, "").trim();
-            btn.innerHTML = `${cleanName} <span class="opacity-75">(${cnt})</span>`;
-          }
-        });
-        const match = btn.textContent.match(/\((\d+)\)/);
-        if (match) domSum += Number(match[1]);
-      }
+    const countMap = {};
+    (data.categories || []).forEach(c => {
+      countMap[c.name] = c.count;
     });
 
-    const finalTotal =
-      total > 0
-        ? total
-        : Number.isFinite(Number(data?.total)) && Number(data.total) > 0
-        ? Number(data.total)
-        : domSum;
-
-    if (allTracksBtn && Number.isFinite(finalTotal) && finalTotal > 0) {
-      allTracksBtn.innerHTML = `All Tracks <span class="opacity-75">(${finalTotal})</span>`;
-    }
+    document.querySelectorAll(".cat-pill").forEach(btn => {
+      const cat = btn.getAttribute("data-cat");
+      if (cat === "All") {
+        btn.innerHTML = `All Tracks <span class="ml-1 text-[10px] opacity-90">(${data.total || 0})</span>`;
+      } else if (countMap[cat] !== undefined) {
+        btn.innerHTML = `${cat} <span class="ml-1 text-[10px] opacity-80">(${countMap[cat]})</span>`;
+      }
+    });
   } catch (e) {
     console.warn("Could not refresh category counts:", e);
   }

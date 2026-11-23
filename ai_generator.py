@@ -1,13 +1,17 @@
 import os
 import re
-import sys
 import json
+import atexit
 import random
+import logging
 import sqlite3
-import subprocess
-import urllib.request
-import urllib.error
 from typing import Optional, Dict, Any, List
+
+import httpx
+from runner import verify_ai_problem_in_sandbox
+from database import insert_ai_problem_to_supabase
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "problems.db")
 
@@ -24,6 +28,22 @@ CATEGORIES = [
 DIFFICULTIES = ["Easy", "Medium", "Hard"]
 
 _RECENT_TITLES: List[str] = []
+
+# Persistent keep-alive HTTP client for Gemini REST calls
+_GEMINI_HTTP = httpx.Client(
+    timeout=httpx.Timeout(connect=4.0, read=18.0, write=4.0, pool=5.0),
+    limits=httpx.Limits(max_connections=10, max_keepalive_connections=5, keepalive_expiry=30.0),
+)
+atexit.register(_GEMINI_HTTP.close)
+
+_SPOILER_FULL_LINE_RE = re.compile(
+    r"^\s*#\s*(?:bug|fix|hint|spoiler|issue|error|broken)\b.*$",
+    re.IGNORECASE,
+)
+_SPOILER_INLINE_RE = re.compile(
+    r"\s+#\s*(?:bug|fix|hint|spoiler|issue|error|broken)\b.*$",
+    re.IGNORECASE,
+)
 
 
 def _load_env_key() -> str:
@@ -53,161 +73,120 @@ def _clean_tags(tags: List[Any]) -> List[str]:
         s = str(t).strip().lstrip("#").strip()
         if s:
             cleaned.append(s)
-    return cleaned or ["debugging", "logic", "python"]
+    return cleaned[:4] or ["debugging", "logic", "python"]
 
 
-def _run_code_once(code_str: str, stdin_str: str) -> Optional[str]:
+def _strip_spoiler_comments(code: str) -> str:
+    """Removes '# Bug: ...', '# Fix: ...', and '# Hint: ...' spoiler comments safely."""
+    if not code:
+        return code
+
+    out_lines: List[str] = []
+    for line in code.replace("\r\n", "\n").split("\n"):
+        if _SPOILER_FULL_LINE_RE.match(line):
+            continue
+        cleaned = _SPOILER_INLINE_RE.sub("", line).rstrip()
+        out_lines.append(cleaned)
+
+    candidate = "\n".join(out_lines).strip() + "\n"
     try:
-        proc = subprocess.run(
-            [sys.executable, "-c", code_str],
-            input=stdin_str,
-            text=True,
-            capture_output=True,
-            timeout=3,
-        )
-        if proc.returncode == 0:
-            return proc.stdout.strip()
-    except Exception:
-        pass
-    return None
+        compile(candidate, "solution.py", "exec")
+        return candidate
+    except SyntaxError:
+        return code
 
 
-def _save_to_sqlite(problem: Dict[str, Any]) -> int:
-    """Inserts into problems.db and returns the exact total problem count as the synced ID."""
+def _save_to_sqlite_fallback(problem: Dict[str, Any]) -> int:
+    """Local dev fallback if SUPABASE_SERVICE_ROLE_KEY is not configured yet."""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=10.0)
         cur = conn.cursor()
-        cur.execute("PRAGMA table_info(problems)")
-        columns_info = cur.fetchall()
-
-        if not columns_info:
-            conn.close()
-            return random.randint(100, 9999)
-
-        mapping = {
-            "title": problem["title"],
-            "difficulty": problem["difficulty"],
-            "category": problem["category"],
-            "tags": json.dumps(problem["tags"]),
-            "description": problem["description"],
-            "buggy_code": problem["buggy_code"],
-            "starter_code": problem["buggy_code"],
-            "code": problem["buggy_code"],
-            "solution_code": problem.get("fixed_code", problem["buggy_code"]),
-            "fixed_code": problem.get("fixed_code", problem["buggy_code"]),
-            "hint": problem["hint"],
-            "test_cases": json.dumps(problem["test_cases"]),
-            "language": "python",
-        }
-
-        insert_cols = []
-        insert_vals = []
-
-        for col in columns_info:
-            col_name = col[1]
-            col_type = (col[2] or "").upper()
-            not_null = col[3]
-            dflt_val = col[4]
-            is_pk = col[5]
-
-            if is_pk or col_name == "id":
-                continue
-
-            if col_name in mapping:
-                insert_cols.append(col_name)
-                insert_vals.append(mapping[col_name])
-            elif not_null and dflt_val is None:
-                insert_cols.append(col_name)
-                insert_vals.append(0 if "INT" in col_type else "")
-
-        placeholders = ", ".join(["?"] * len(insert_cols))
-        col_str = ", ".join(insert_cols)
-        cur.execute(
-            f"INSERT INTO problems ({col_str}) VALUES ({placeholders})",
-            tuple(insert_vals),
-        )
-        row_id = cur.lastrowid
-        cur.execute("SELECT COUNT(*) FROM problems")
-        total_count = cur.fetchone()[0]
+        cur.execute("""
+            INSERT INTO problems (title, description, difficulty, category, tags, language, buggy_code, test_cases, hint)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            problem["title"],
+            problem["description"],
+            problem["difficulty"],
+            problem["category"],
+            json.dumps(problem["tags"]),
+            problem.get("language", "python"),
+            problem["buggy_code"],
+            json.dumps(problem["test_cases"]),
+            problem["hint"],
+        ))
+        row_id = int(cur.lastrowid)
         conn.commit()
         conn.close()
-
-        # Also append to in-memory problems_data.PROBLEMS if database.py reads from it
-        try:
-            import problems_data
-            if hasattr(problems_data, "PROBLEMS") and isinstance(problems_data.PROBLEMS, list):
-                problems_data.PROBLEMS.append({**problem, "id": row_id or total_count})
-        except Exception:
-            pass
-
-        return int(total_count or row_id)
+        return row_id
     except Exception as exc:
-        print(f"[LintIQ DB Error] Insert failed: {exc}")
-        return random.randint(100, 9999)
+        logger.warning("SQLite fallback insert failed: %s", exc)
+        return random.randint(50000, 99999)
 
 
 def _call_gemini_api(api_key: str, prompt: str) -> Optional[Dict[str, Any]]:
-    """Calls Gemini with strict responseMimeType and control-character sanitization."""
-    models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+    """
+    Fast Gemini call (~2-4s): disables internal thinking on gemini-2.5-flash
+    and falls back to gemini-2.0-flash if needed.
+    """
+    models = ["gemini-2.5-flash", "gemini-2.0-flash"]
 
     for model_name in models:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model_name}:generateContent?key={api_key}"
         )
+
+        gen_config: Dict[str, Any] = {
+            "temperature": 0.85,
+            "responseMimeType": "application/json",
+        }
+        # Disabling thinking cuts gemini-2.5-flash latency from ~25s down to ~2-4s
+        if model_name.startswith("gemini-2.5"):
+            gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.9,
-                "responseMimeType": "application/json",
-            },
+            "generationConfig": gen_config,
         }
 
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-
         try:
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                raw_data = json.loads(resp.read().decode("utf-8"))
-                parts = raw_data["candidates"][0]["content"]["parts"]
-                text_content = ""
-                for part in parts:
-                    if "text" in part and not part.get("thought"):
-                        text_content += part["text"]
+            resp = _GEMINI_HTTP.post(
+                url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code != 200:
+                logger.warning("Gemini %s HTTP %s: %s", model_name, resp.status_code, resp.text[:200])
+                continue
 
-                text_content = text_content.strip()
-                match = re.search(r"\{[\s\S]*\}", text_content)
-                if match:
-                    json_str = match.group(0)
-                    return json.loads(json_str, strict=False)
-        except urllib.error.HTTPError as http_err:
-            err_body = http_err.read().decode("utf-8", errors="ignore")
-            print(f"[LintIQ Gemini {model_name} HTTP {http_err.code}]: {err_body}")
+            raw_data = resp.json()
+            parts = raw_data["candidates"][0]["content"]["parts"]
+            text_content = "".join(
+                part["text"] for part in parts if "text" in part and not part.get("thought")
+            ).strip()
+
+            match = re.search(r"\{[\s\S]*\}", text_content)
+            if match:
+                return json.loads(match.group(0), strict=False)
         except Exception as err:
-            print(f"[LintIQ Gemini {model_name} Error]: {err}")
+            logger.warning("Gemini %s error: %s", model_name, err)
 
     return None
 
 
 def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str, Any]:
     global _RECENT_TITLES
-    k = random.randint(2, 6)
-    shift = random.randint(1, 5)
 
     bank = [
         {
             "category": "Algorithms",
-            "title": f"Kadane Maximum Subarray Reset Bug",
+            "title": "Kadane Maximum Subarray Reset",
             "tags": ["dynamic-programming", "subarray", "greedy"],
             "description": "Read space-separated integers (which may all be negative) and print the maximum contiguous subarray sum.",
             "buggy_code": (
                 "import sys\n\ndef max_subarray():\n"
                 "    nums = list(map(int, sys.stdin.read().split()))\n"
-                "    # Bug: Initializing best = 0 fails when all numbers in the array are negative\n"
                 "    best = 0\n"
                 "    curr = 0\n"
                 "    for x in nums:\n"
@@ -226,11 +205,16 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    print(best)\n\nmax_subarray()\n"
             ),
             "hint": "Initialize `best = nums[0]` and `curr = nums[0]`, then iterate over `nums[1:]`.",
-            "inputs": ["-5 -2 -9 -4", "-2 1 -3 4 -1 2 1 -5 4", "5 4 -1 7 8", "-10 -3 -1 -8"],
+            "test_cases": [
+                {"input": "-5 -2 -9 -4", "expected_output": "-2"},
+                {"input": "-2 1 -3 4 -1 2 1 -5 4", "expected_output": "6"},
+                {"input": "5 4 -1 7 8", "expected_output": "23"},
+                {"input": "-10 -3 -1 -8", "expected_output": "-1"},
+            ],
         },
         {
             "category": "Data Structures",
-            "title": f"Valid Bracket Stack Underflow",
+            "title": "Valid Bracket Stack Underflow",
             "tags": ["stack", "strings", "validation"],
             "description": "Read a string of brackets '()', '[]', '{}' and print 'VALID' if properly balanced, or 'INVALID' otherwise.",
             "buggy_code": (
@@ -245,7 +229,6 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "            if not stack or stack.pop() != pairs[ch]:\n"
                 "                print('INVALID')\n"
                 "                return\n"
-                "    # Bug: Unconditionally prints VALID without checking if unclosed brackets remain\n"
                 "    print('VALID')\n\nis_valid()\n"
             ),
             "fixed_code": (
@@ -263,18 +246,22 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    print('VALID' if not stack else 'INVALID')\n\nis_valid()\n"
             ),
             "hint": "Verify that `stack` is empty at the end (`not stack`) before printing `'VALID'`.",
-            "inputs": ["(((", "()[]{}", "([)]", "{[]}"],
+            "test_cases": [
+                {"input": "(((", "expected_output": "INVALID"},
+                {"input": "()[]{}", "expected_output": "VALID"},
+                {"input": "([)]", "expected_output": "INVALID"},
+                {"input": "{[]}", "expected_output": "VALID"},
+            ],
         },
         {
             "category": "Off-by-One",
-            "title": f"Adjacent Variation Fencepost Bug",
+            "title": "Adjacent Variation Fencepost",
             "tags": ["intervals", "slicing", "loops"],
             "description": "Read N space-separated integers and print the sum of adjacent differences |arr[i+1] - arr[i]| for all valid adjacent pairs.",
             "buggy_code": (
                 "import sys\n\ndef total_variation():\n"
                 "    arr = list(map(int, sys.stdin.read().split()))\n"
                 "    total = 0\n"
-                "    # Bug: range(len(arr)) causes IndexError on arr[i + 1] at the last index\n"
                 "    for i in range(len(arr)):\n"
                 "        total += abs(arr[i + 1] - arr[i])\n"
                 "    print(total)\n\ntotal_variation()\n"
@@ -288,17 +275,21 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    print(total)\n\ntotal_variation()\n"
             ),
             "hint": "Stop the loop at `len(arr) - 1` so `arr[i + 1]` stays within list bounds.",
-            "inputs": ["1 5 2 8", "10 10 10", "3 -2 7 0", "42"],
+            "test_cases": [
+                {"input": "1 5 2 8", "expected_output": "13"},
+                {"input": "10 10 10", "expected_output": "0"},
+                {"input": "3 -2 7 0", "expected_output": "21"},
+                {"input": "42", "expected_output": "0"},
+            ],
         },
         {
             "category": "Edge Cases",
-            "title": f"Second Largest Unique Deduplication Bug",
+            "title": "Second Largest Unique Deduplication",
             "tags": ["sets", "sorting", "boundary"],
             "description": "Read space-separated integers and print the second largest unique integer, or 'NONE' if fewer than 2 unique integers exist.",
             "buggy_code": (
                 "import sys\n\ndef second_largest():\n"
                 "    nums = list(map(int, sys.stdin.read().split()))\n"
-                "    # Bug: Sorting raw nums without deduplicating returns a duplicate max\n"
                 "    nums.sort(reverse=True)\n"
                 "    print(nums[1] if len(nums) >= 2 else 'NONE')\n\nsecond_largest()\n"
             ),
@@ -308,11 +299,16 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    print(nums[1] if len(nums) >= 2 else 'NONE')\n\nsecond_largest()\n"
             ),
             "hint": "Convert the integers to a `set()` before sorting so duplicate maximum values don't occupy index 1.",
-            "inputs": ["10 10 10", "5 5 2 8 8", "42", "1 2 3 4"],
+            "test_cases": [
+                {"input": "10 10 10", "expected_output": "NONE"},
+                {"input": "5 5 2 8 8", "expected_output": "5"},
+                {"input": "42", "expected_output": "NONE"},
+                {"input": "1 2 3 4", "expected_output": "3"},
+            ],
         },
         {
             "category": "Type Coercion",
-            "title": f"String Digit Sum vs Type Concatenation",
+            "title": "String Digit Sum Type Mismatch",
             "tags": ["strings", "types", "casting"],
             "description": "Read a positive integer string and print the mathematical sum of its individual digits.",
             "buggy_code": (
@@ -320,7 +316,6 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    s = sys.stdin.read().strip()\n"
                 "    total = 0\n"
                 "    for ch in s:\n"
-                "        # Bug: Adding string character `ch` directly to int `total` raises TypeError\n"
                 "        total += ch\n"
                 "    print(total)\n\ndigit_sum()\n"
             ),
@@ -333,16 +328,20 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    print(total)\n\ndigit_sum()\n"
             ),
             "hint": "Cast each character `ch` to an integer with `int(ch)` before adding it to `total`.",
-            "inputs": ["9875", "100200", "42", "7"],
+            "test_cases": [
+                {"input": "9875", "expected_output": "29"},
+                {"input": "100200", "expected_output": "3"},
+                {"input": "42", "expected_output": "6"},
+                {"input": "7", "expected_output": "7"},
+            ],
         },
         {
             "category": "Memory & State",
-            "title": f"Mutable Default Accumulator Leak",
+            "title": "Mutable Default Accumulator Leak",
             "tags": ["default-args", "references", "functions"],
             "description": "Read space-separated words. For each word, compute a fresh list containing only that word's length and print all lengths space-separated.",
             "buggy_code": (
                 "import sys\n\n"
-                "# Bug: Mutable default list `bucket=[]` persists across function calls\n"
                 "def record_len(word, bucket=[]):\n"
                 "    bucket.append(len(word))\n"
                 "    return sum(bucket)\n\n"
@@ -360,11 +359,16 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "print(' '.join(str(record_len(w)) for w in words))\n"
             ),
             "hint": "Replace `bucket=[]` with `bucket=None` and initialize `bucket = []` inside the function.",
-            "inputs": ["hi code arcade", "a bb ccc dddd", "lint iq", "python"],
+            "test_cases": [
+                {"input": "hi code arcade", "expected_output": "2 4 6"},
+                {"input": "a bb ccc dddd", "expected_output": "1 2 3 4"},
+                {"input": "lint iq", "expected_output": "4 2"},
+                {"input": "python", "expected_output": "6"},
+            ],
         },
         {
             "category": "Concurrency",
-            "title": f"Thread Lock Release Deadlock Path",
+            "title": "Lock Release Deadlock Path",
             "tags": ["locks", "deadlock", "synchronization"],
             "description": "Simulate processing space-separated transaction amounts where negative values are rejected. Print the final balance after all valid transactions.",
             "buggy_code": (
@@ -376,7 +380,6 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "        if locked:\n"
                 "            break\n"
                 "        locked = True\n"
-                "        # Bug: Early `continue` on negative amount forgets to release `locked = False`\n"
                 "        if amt < 0:\n"
                 "            continue\n"
                 "        balance += amt\n"
@@ -398,7 +401,12 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
                 "    print(balance)\n\nprocess_tx()\n"
             ),
             "hint": "Ensure `locked = False` is always executed before continuing to the next transaction.",
-            "inputs": ["10 -5 20 30", "-1 50 50", "100 200 -10 50", "5 10 15"],
+            "test_cases": [
+                {"input": "10 -5 20 30", "expected_output": "60"},
+                {"input": "-1 50 50", "expected_output": "100"},
+                {"input": "100 200 -10 50", "expected_output": "350"},
+                {"input": "5 10 15", "expected_output": "30"},
+            ],
         },
     ]
 
@@ -414,21 +422,16 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
     if len(_RECENT_TITLES) > 5:
         _RECENT_TITLES.pop(0)
 
-    test_cases = []
-    for inp in tpl["inputs"]:
-        out = _run_code_once(tpl["fixed_code"], inp) or ""
-        test_cases.append({"input": inp, "expected_output": out})
-
     return {
         "title": tpl["title"],
         "difficulty": chosen_diff,
         "category": tpl["category"],
         "tags": _clean_tags(tpl["tags"]),
         "description": tpl["description"],
+        "language": "python",
         "buggy_code": tpl["buggy_code"],
-        "fixed_code": tpl["fixed_code"],
         "hint": tpl["hint"],
-        "test_cases": test_cases,
+        "test_cases": tpl["test_cases"],
     }
 
 
@@ -448,50 +451,69 @@ def generate_ai_bug_challenge(
     )
 
     api_key = _load_env_key()
-    problem_data: Optional[Dict[str, Any]] = None
+    verified_problem: Optional[Dict[str, Any]] = None
 
     if api_key:
-        seed_topic = random.choice([
+        topics = [
             "sliding window", "monotonic stack", "prefix sum", "hash map frequency",
-            "two pointers", "binary search", "interval merging",
-            "matrix traversal", "anagram grouping", "greedy scheduling"
-        ])
-        prompt = (
-            f"Generate ONE unique Python 3 bug-hunting coding challenge.\n"
-            f"- Category: {chosen_cat}\n"
-            f"- Difficulty: {chosen_diff}\n"
-            f"- Topic: {seed_topic}\n\n"
-            "Requirements:\n"
-            "1. Both `buggy_code` and `fixed_code` must be standalone Python 3 scripts starting with `import sys` "
-            "that read input from `sys.stdin.read().strip()` and `print()` the final result.\n"
-            "2. `buggy_code` must have a 1-line bug with a `# Bug: ...` comment above it.\n"
-            "3. `tags` must be a list of 3 short strings WITHOUT '#' prefixes.\n"
-            "4. Return ONLY valid JSON with keys: title, difficulty, category, tags, description, "
-            "buggy_code, fixed_code, hint, and test_cases (4 objects with 'input' and 'expected_output')."
-        )
-        problem_data = _call_gemini_api(api_key, prompt)
+            "two pointers", "binary search", "interval merging", "matrix traversal",
+            "anagram grouping", "greedy scheduling", "run-length encoding", "graph BFS",
+            "priority queue", "bit manipulation", "string parsing", "rate limiter",
+        ]
 
-    if not problem_data or "buggy_code" not in problem_data:
-        problem_data = _generate_procedural_fallback(chosen_cat, chosen_diff)
-    else:
-        problem_data["category"] = chosen_cat
-        problem_data["difficulty"] = chosen_diff
-        problem_data["tags"] = _clean_tags(problem_data.get("tags", []))
-
-        fixed_code = problem_data.get("fixed_code", "")
-        verified_tests: List[Dict[str, str]] = []
-        for tc in problem_data.get("test_cases", [])[:4]:
-            inp = str(tc.get("input", ""))
-            actual_fixed_out = _run_code_once(fixed_code, inp) if fixed_code else None
-            expected = (
-                actual_fixed_out
-                if actual_fixed_out is not None
-                else str(tc.get("expected_output", "")).strip()
+        for _attempt in range(2):
+            seed_topic = random.choice(topics)
+            prompt = (
+                f"Generate ONE unique Python 3 bug-hunting coding challenge.\n"
+                f"- Category: {chosen_cat}\n"
+                f"- Difficulty: {chosen_diff}\n"
+                f"- Topic: {seed_topic}\n\n"
+                "Strict Requirements:\n"
+                "1. Both `buggy_code` and `fixed_code` must be standalone Python 3 scripts starting with `import sys` "
+                "that read input from `sys.stdin.read().strip()` and `print()` the final result. Use ONLY standard library modules (no os, subprocess, open, eval, exec).\n"
+                "2. `buggy_code` must contain a subtle, realistic 1-to-2 line bug that fails at least one test case. "
+                "NEVER add any comments explaining, hinting at, or marking the bug (NO `# Bug:` comments!).\n"
+                "3. `description` must clearly specify input/output format without spoiling the exact bug.\n"
+                "4. `tags` must be a list of 3 short lowercase strings WITHOUT '#' prefixes.\n"
+                "5. Return ONLY valid JSON with keys: title, difficulty, category, tags, description, "
+                "buggy_code, fixed_code, hint, and test_cases (4 objects with 'input' and 'expected_output')."
             )
-            verified_tests.append({"input": inp, "expected_output": expected})
-        problem_data["test_cases"] = verified_tests
+            raw = _call_gemini_api(api_key, prompt)
+            if not raw or not raw.get("buggy_code") or not raw.get("fixed_code"):
+                continue
 
-    new_id = _save_to_sqlite(problem_data)
-    problem_data.pop("fixed_code", None)
-    problem_data["id"] = new_id
-    return problem_data
+            buggy_clean = _strip_spoiler_comments(str(raw["buggy_code"]))
+            fixed_clean = _strip_spoiler_comments(str(raw["fixed_code"]))
+            raw_tcs = raw.get("test_cases") or []
+            inputs = [str(tc.get("input", "")) for tc in raw_tcs[:4] if isinstance(tc, dict)]
+            if not inputs:
+                continue
+
+            # Single batched sandbox call verifies fixed_code outputs AND confirms buggy_code fails
+            check = verify_ai_problem_in_sandbox(buggy_clean, fixed_clean, inputs)
+            if check.get("valid") and check.get("test_cases"):
+                verified_problem = {
+                    "title": str(raw.get("title", "AI Bug Challenge")).strip(),
+                    "difficulty": chosen_diff,
+                    "category": chosen_cat,
+                    "tags": _clean_tags(raw.get("tags", [])),
+                    "description": str(raw.get("description", "")).strip(),
+                    "language": "python",
+                    "buggy_code": buggy_clean,
+                    "hint": str(raw.get("hint", "Inspect loop bounds and edge cases.")).strip(),
+                    "test_cases": check["test_cases"],
+                }
+                break
+            else:
+                logger.info("AI verification rejected candidate: %s", check.get("reason"))
+
+    if not verified_problem:
+        verified_problem = _generate_procedural_fallback(chosen_cat, chosen_diff)
+
+    # Persist permanently to Supabase shared pool (IDs >= 100001), fallback to SQLite if service key missing
+    new_id = insert_ai_problem_to_supabase(verified_problem)
+    if new_id is None:
+        new_id = _save_to_sqlite_fallback(verified_problem)
+
+    verified_problem["id"] = new_id
+    return verified_problem
