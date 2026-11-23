@@ -23,7 +23,50 @@ function toggleTheme() {
 }
 applyTheme();
 
+// --- 1.1 CURATED MULTI-LANGUAGE PROBLEMS ---
+const PROBLEMS = [
+  {
+    id: 1,
+    title: "Two Sum",
+    difficulty: "Easy",
+    category: "Algorithms",
+    tags: ["#hashmap", "#arrays"],
+    description: "Given an array of integers nums and an integer target, return indices of the two numbers that add up to target.",
+    starterCode: {
+      python: `def two_sum(nums, target):\n    # Fix the bug or implement solution\n    pass`,
+      cpp: `#include <vector>\nusing namespace std;\n\nvector<int> twoSum(vector<int>& nums, int target) {\n    // Write C++ solution\n    return {};\n}`,
+      java: `class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write Java solution\n        return new int[]{};\n    }\n}`,
+      javascript: `function twoSum(nums, target) {\n    // Write JS solution\n    return [];\n}`
+    }
+  },
+  {
+    id: 2,
+    title: "Valid Parentheses",
+    difficulty: "Easy",
+    category: "Data Structures",
+    tags: ["#stack", "#strings"],
+    description: "Given a string s containing '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
+    starterCode: {
+      python: `def is_valid(s: str) -> bool:\n    pass`,
+      cpp: `#include <string>\nusing namespace std;\n\nbool isValid(string s) {\n    return false;\n}`,
+      java: `class Solution {\n    public boolean isValid(String s) {\n        return false;\n    }\n}`,
+      javascript: `function isValid(s) {\n    return false;\n}`
+    }
+  }
+];
+window.PROBLEMS = PROBLEMS;
+
 // Game & Filter State
+let currentProblemIndex = 0;
+let currentLanguage = "python";
+
+const FILE_NAMES = {
+  python: "solution.py",
+  cpp: "solution.cpp",
+  java: "Solution.java",
+  javascript: "solution.js"
+};
+
 let currentUser = null;
 let currentSession = null;
 let monacoEditor = null;
@@ -266,11 +309,115 @@ function selectDifficulty(difficulty) {
   loadNewProblem();
 }
 
+function getProblemCode(problem, lang) {
+  if (!problem) return "";
+  if (problem.starterCode && problem.starterCode[lang]) {
+    return problem.starterCode[lang];
+  }
+  if (problem.starterCode && problem.starterCode.python) {
+    return problem.starterCode.python;
+  }
+  return problem.buggy_code || "";
+}
+
+function renderProblemSequence() {
+  const container = document.getElementById("problem-sequence-list");
+  if (!container) return;
+
+  container.innerHTML = PROBLEMS.map((p, idx) => {
+    const active = idx === currentProblemIndex
+      ? "bg-emerald-500/15 border-emerald-500/40 text-white"
+      : "bg-[#0d1117] border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/70";
+
+    const diffColor = p.difficulty === "Easy" ? "text-emerald-400"
+      : p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
+
+    return `
+      <button type="button" onclick="selectProblem(${idx})"
+        class="w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition cursor-pointer ${active}">
+        <span class="truncate font-medium">${p.id}. ${p.title}</span>
+        <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
+      </button>
+    `;
+  }).join("");
+
+  const progEl = document.getElementById("seq-progress");
+  if (progEl) {
+    progEl.textContent = `${currentProblemIndex + 1} / ${PROBLEMS.length}`;
+  }
+}
+window.renderProblemSequence = renderProblemSequence;
+window.renderProblemSequenceList = renderProblemSequence;
+
+function selectProblem(index) {
+  currentProblemIndex = index;
+  const problem = PROBLEMS[index];
+  if (!problem) return;
+  currentProblem = problem;
+
+  const idEl = document.getElementById("problem-id");
+  if (idEl) idEl.textContent = `#${problem.id}`;
+  const titleEl = document.getElementById("problem-title");
+  if (titleEl) titleEl.textContent = problem.title;
+  const diffEl = document.getElementById("problem-difficulty");
+  if (diffEl) diffEl.textContent = problem.difficulty;
+  const catEl = document.getElementById("problem-category");
+  if (catEl) catEl.textContent = problem.category;
+  const descEl = document.getElementById("problem-desc");
+  if (descEl) descEl.textContent = problem.description;
+
+  const tagsContainer = document.getElementById("problem-tags");
+  if (tagsContainer) {
+    tagsContainer.innerHTML = (problem.tags || []).map(t => {
+      const cleanTag = String(t).startsWith("#") ? t : `#${t}`;
+      return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
+    }).join("");
+  }
+  const hintBox = document.getElementById("hint-box");
+  if (hintBox) hintBox.classList.add("hidden");
+
+  loadStarterCodeForLanguage(currentLanguage);
+  renderProblemSequence();
+}
+window.selectProblem = selectProblem;
+window.selectSequenceProblem = function(id) {
+  const idx = PROBLEMS.findIndex(p => p.id === id);
+  if (idx !== -1) selectProblem(idx);
+};
+
+function switchLanguage(lang) {
+  currentLanguage = lang;
+  const langSelect = document.getElementById("language-select");
+  if (langSelect && langSelect.value !== lang) {
+    langSelect.value = lang;
+  }
+  loadStarterCodeForLanguage(lang);
+}
+window.switchLanguage = switchLanguage;
+
+function loadStarterCodeForLanguage(lang) {
+  const problem = PROBLEMS[currentProblemIndex] || currentProblem;
+  if (!problem) return;
+  const code = (problem.starterCode && problem.starterCode[lang]) || problem.buggy_code || "// Starter code coming soon";
+
+  const filenameEl = document.getElementById("editor-filename");
+  if (filenameEl) {
+    filenameEl.textContent = FILE_NAMES[lang] || "solution.py";
+  }
+
+  // Update Monaco Editor language & value
+  const ed = window.editor || window.monacoEditor || monacoEditor;
+  if (ed && window.monaco) {
+    isInjectingCode = true;
+    monaco.editor.setModelLanguage(ed.getModel(), lang);
+    ed.setValue(code);
+    isInjectingCode = false;
+  }
+}
+window.loadStarterCodeForLanguage = loadStarterCodeForLanguage;
+
 function resetStarterCode() {
-  if (!currentProblem || !monacoEditor) return;
-  isInjectingCode = true;
-  monacoEditor.setValue(currentProblem.buggy_code);
-  isInjectingCode = false;
+  loadStarterCodeForLanguage(currentLanguage);
   resetTimer();
 }
 
@@ -424,15 +571,21 @@ function resetTimer() {
   timerSeconds = 0;
   timerRunning = false;
   updateTimerDisplay();
-  document.getElementById("timer-status").textContent = "(Ready)";
-  document.getElementById("timer-status").className = "text-[10px] uppercase tracking-wider text-zinc-400 ml-1";
+  const status = document.getElementById("timer-status");
+  if (status) {
+    status.textContent = "(Ready)";
+    status.className = "timer-status";
+  }
 }
 
 function startTimer() {
   if (timerRunning) return;
   timerRunning = true;
-  document.getElementById("timer-status").textContent = "(Running)";
-  document.getElementById("timer-status").className = "text-[10px] uppercase tracking-wider text-emerald-400 ml-1";
+  const status = document.getElementById("timer-status");
+  if (status) {
+    status.textContent = "(Running)";
+    status.className = "timer-status text-emerald-400";
+  }
 
   timerInterval = setInterval(() => {
     timerSeconds++;
@@ -444,8 +597,11 @@ function stopTimer() {
   clearInterval(timerInterval);
   timerInterval = null;
   timerRunning = false;
-  document.getElementById("timer-status").textContent = "(Solved)";
-  document.getElementById("timer-status").className = "text-[10px] uppercase tracking-wider text-sky-400 ml-1";
+  const status = document.getElementById("timer-status");
+  if (status) {
+    status.textContent = "(Solved)";
+    status.className = "timer-status text-sky-400";
+  }
 }
 
 function updateTimerDisplay() {
@@ -510,12 +666,43 @@ async function loadNewProblem() {
 
     if (monacoEditor) {
       isInjectingCode = true;
-      monacoEditor.setValue(currentProblem.buggy_code);
+      monacoEditor.setValue(getProblemCode(currentProblem, selectedLanguage));
       isInjectingCode = false;
     }
 
     resetTimer();
+    renderProblemSequenceList();
   } catch (err) {
+    console.warn("Backend load failed, falling back to local PROBLEMS:", err);
+    const candidate = PROBLEMS.find(p => p.id !== currentProblem?.id) || PROBLEMS[0];
+    if (candidate) {
+      currentProblem = candidate;
+      document.getElementById("problem-id").textContent = `#${candidate.id}`;
+      document.getElementById("problem-title").textContent = candidate.title;
+      document.getElementById("problem-desc").textContent = candidate.description;
+      document.getElementById("problem-category").textContent = candidate.category || "General";
+
+      const tagsContainer = document.getElementById("problem-tags");
+      if (tagsContainer) {
+        tagsContainer.innerHTML = (candidate.tags || []).map(tag => {
+          const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
+          return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
+        }).join("");
+      }
+
+      const diffBadge = document.getElementById("problem-difficulty");
+      if (diffBadge) diffBadge.textContent = candidate.difficulty;
+      document.getElementById("hint-box").classList.add("hidden");
+
+      if (monacoEditor) {
+        isInjectingCode = true;
+        monacoEditor.setValue(getProblemCode(candidate, selectedLanguage));
+        isInjectingCode = false;
+      }
+      resetTimer();
+      renderProblemSequenceList();
+      return;
+    }
     document.getElementById("problem-title").textContent = "Failed to load challenge";
     document.getElementById("problem-desc").textContent = "Make sure your FastAPI backend is running on port 8000.";
     console.error(err);
@@ -689,7 +876,11 @@ require(["vs/editor/editor.main"], function () {
   initAuth();
   updateMetrics();
   initCategoryCounts();
-  loadNewProblem();
+  if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
+    selectProblem(0);
+  } else {
+    loadNewProblem();
+  }
 });
 
 // --- 10. AI CHALLENGE GENERATOR & CATEGORY REFRESH ---

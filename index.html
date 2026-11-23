@@ -35,16 +35,16 @@
       </div>
 
       <!-- Center Stats: Streak, Timer -->
-      <div class="flex items-center gap-3 font-mono text-sm flex-wrap">
-        <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
-          <span class="text-amber-400">⚡ Streak:</span>
-          <span id="streak-count" class="text-white font-bold">0</span>
+      <div class="stats-group">
+        <div class="streak-badge">
+          <span class="text-amber-400">🔥 Streak:</span>
+          <span id="streak-count" class="text-white font-bold font-mono">0</span>
         </div>
 
-        <div class="flex items-center gap-1.5 bg-[#161b22] border border-zinc-800 px-3 py-1 rounded-md">
+        <div id="timer-hud" class="timer-badge">
           <span class="text-sky-400">⏱ Time:</span>
-          <span id="timer-display" class="text-white font-bold">00:00</span>
-          <span id="timer-status" class="text-[10px] uppercase tracking-wider text-zinc-400 ml-1">(Ready)</span>
+          <span id="timer-display" class="text-white font-bold font-mono">00:00</span>
+          <span id="timer-status" class="timer-status">(Ready)</span>
         </div>
       </div>
 
@@ -239,6 +239,17 @@
         </div>
       </div>
 
+      <!-- Sequential Question List -->
+      <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-3 shadow-lg">
+        <div class="flex items-center justify-between mb-2 px-1">
+          <span class="text-xs font-mono uppercase tracking-wider text-zinc-400">Problem Sequence</span>
+          <span class="text-[11px] font-mono text-zinc-500" id="seq-progress">1 / 2</span>
+        </div>
+        <div id="problem-sequence-list" class="max-h-40 overflow-y-auto space-y-1 pr-1">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
       <!-- Execution Console / Verdict -->
       <div class="bg-[#090d13] border border-zinc-800 rounded-xl p-4 font-mono text-xs shadow-lg">
         <div class="text-zinc-400 mb-2 font-bold uppercase tracking-wider flex items-center justify-between">
@@ -254,15 +265,18 @@
       <div class="bg-[#161b22] border border-zinc-800 rounded-xl p-4 flex flex-col h-full shadow-lg">
         <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <div class="flex items-center gap-2">
-            <span class="text-xs font-mono text-white font-semibold">solution.py</span>
+            <span id="editor-filename" class="text-xs font-mono text-white font-semibold">solution.py</span>
             <span class="text-[11px] font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded">Editable Patch</span>
           </div>
 
-          <!-- Language Track Indicator -->
+          <!-- Interactive Language Switcher -->
           <div class="flex items-center gap-1.5 text-xs font-mono">
-            <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">Python 3.11</span>
-            <span class="px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="JavaScript Node.js track coming soon">JS (Soon)</span>
-            <span class="px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed" title="Go track coming soon">Go (Soon)</span>
+            <select id="language-select" onchange="switchLanguage(this.value)" class="bg-[#0d1117] border border-zinc-700 text-emerald-300 text-xs rounded-lg px-2.5 py-1 font-mono focus:outline-none focus:border-emerald-500">
+              <option value="python">Python 3.11</option>
+              <option value="cpp">C++20</option>
+              <option value="java">Java 17</option>
+              <option value="javascript">JavaScript (Node)</option>
+            </select>
           </div>
         </div>
 
