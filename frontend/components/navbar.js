@@ -45,6 +45,30 @@
     const navStyle = document.createElement("style");
     navStyle.id = "lintiq-navbar-responsive-style";
     navStyle.textContent = `
+      html, body {
+        max-width: 100%;
+        overflow-x: clip;
+      }
+      #lintiq-top-header {
+        max-width: 100%;
+      }
+      #lintiq-primary-nav {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex-shrink: 0;
+      }
+      #settings-mobile-nav-group {
+        display: none;
+      }
+      #lintiq-top-header .lintiq-nav-pill,
+      #lintiq-top-header .lintiq-nav-action,
+      #lintiq-top-header #btn-hint,
+      #lintiq-top-header #open-settings-btn,
+      #lintiq-top-header #btn-signout {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
       #user-display-name {
         max-width: 110px;
         overflow: hidden;
@@ -52,34 +76,32 @@
         white-space: nowrap;
         display: inline-block;
       }
-      #btn-signout {
-        white-space: nowrap;
-        flex-shrink: 0;
-      }
-      @media (max-width: 1440px) {
+
+      /* Standard Laptops (1081px - 1439px): keep Leaderboard & Profile Stats visible, tighten gaps */
+      @media (max-width: 1439px) {
         #lintiq-top-header {
-          padding-left: 0.6rem;
-          padding-right: 0.6rem;
+          padding-left: 0.625rem;
+          padding-right: 0.625rem;
           gap: 0.3rem;
         }
         #lintiq-top-header .lintiq-nav-left,
         #lintiq-top-header .lintiq-nav-center,
         #lintiq-top-header .lintiq-nav-right,
-        #lintiq-top-header nav {
+        #lintiq-top-header #lintiq-primary-nav {
           gap: 0.3rem;
         }
         #lintiq-top-header .lintiq-nav-pill,
         #lintiq-top-header .lintiq-nav-action {
           padding-left: 0.45rem;
           padding-right: 0.45rem;
-          gap: 0.3rem;
+          gap: 0.25rem;
         }
         #lintiq-top-header #lintiq-streak-pill,
         #lintiq-top-header #timer-hud,
         #lintiq-top-header #btn-hint,
         #lintiq-top-header #open-settings-btn {
-          padding-left: 0.4rem;
-          padding-right: 0.4rem;
+          padding-left: 0.42rem;
+          padding-right: 0.42rem;
         }
         #lintiq-top-header #btn-prev-problem,
         #lintiq-top-header #btn-next-problem {
@@ -98,8 +120,119 @@
         #lintiq-top-header #user-profile {
           gap: 0.35rem;
         }
+      }
+
+      /* Hide full text username below 1380px while preserving avatar + Sign Out */
+      @media (max-width: 1379px) {
         #user-display-name {
-          max-width: 88px;
+          display: none !important;
+        }
+      }
+
+      /* Compact center HUD labels slightly at 1081px - 1220px so Leaderboard & Profile Stats fit cleanly */
+      @media (max-width: 1220px) {
+        #lintiq-top-header .lintiq-nav-pill,
+        #lintiq-top-header .lintiq-nav-action {
+          padding-left: 0.38rem;
+          padding-right: 0.38rem;
+          font-size: 11px;
+        }
+        #lintiq-top-header #timer-status {
+          display: none;
+        }
+      }
+
+      /* Tablets & Narrow Viewports (<= 1080px): move Leaderboard & Profile Stats into Settings dropdown */
+      @media (max-width: 1080px) {
+        #lintiq-primary-nav {
+          display: none !important;
+        }
+        #settings-mobile-nav-group {
+          display: block;
+        }
+      }
+
+      /* Mobile (<= 768px, down to 360px): compact single-row controls & viewport-anchored dropdown */
+      @media (max-width: 768px) {
+        #lintiq-top-header {
+          padding-left: 0.5rem;
+          padding-right: 0.5rem;
+          gap: 0.25rem;
+        }
+        #lintiq-top-header .lintiq-nav-left,
+        #lintiq-top-header .lintiq-nav-right {
+          gap: 0.25rem;
+        }
+        #lintiq-top-header .lintiq-nav-workspace-tab {
+          display: none !important;
+        }
+        #settings-dropdown-wrapper {
+          position: static;
+        }
+        #settings-popover-menu {
+          position: absolute;
+          top: 100%;
+          right: 8px;
+          margin-top: 6px;
+          width: min(14rem, calc(100vw - 16px));
+          max-width: calc(100vw - 16px);
+        }
+      }
+
+      @media (max-width: 480px) {
+        #lintiq-top-header {
+          padding-left: 0.4rem;
+          padding-right: 0.4rem;
+          gap: 0.2rem;
+        }
+        #lintiq-top-header .lintiq-brand-dot {
+          width: 0.5rem;
+          height: 0.5rem;
+        }
+        #lintiq-top-header .lintiq-brand-name {
+          font-size: 0.9rem;
+        }
+        #lintiq-top-header .lintiq-nav-pill {
+          padding: 0.22rem 0.4rem;
+          font-size: 11px;
+        }
+        #lintiq-top-header #btn-prev-problem,
+        #lintiq-top-header #btn-next-problem {
+          padding: 0.22rem 0.25rem;
+        }
+        #lintiq-top-header #btn-drawer-toggle {
+          padding: 0.22rem 0.35rem;
+          gap: 0.2rem;
+        }
+        #lintiq-top-header #btn-drawer-toggle svg {
+          display: none;
+        }
+        #lintiq-top-header #seq-progress {
+          font-size: 10px;
+        }
+        #lintiq-top-header #btn-hint,
+        #lintiq-top-header #btn-ai-bug,
+        #lintiq-top-header #open-settings-btn {
+          padding: 0.25rem 0.35rem;
+        }
+        #lintiq-top-header #auth-section {
+          padding-left: 0.3rem;
+          gap: 0.25rem;
+        }
+        #lintiq-top-header #user-profile {
+          gap: 0.25rem;
+        }
+        #lintiq-top-header #header-user-avatar {
+          width: 1.5rem;
+          height: 1.5rem;
+          font-size: 10px;
+        }
+        #lintiq-top-header #btn-login {
+          padding: 0.25rem 0.5rem;
+          font-size: 11px;
+        }
+        #lintiq-top-header #btn-signout {
+          font-size: 10px;
         }
       }
     `;
@@ -110,25 +243,25 @@
   <header id="lintiq-top-header" class="h-12 bg-surface border-b border-surface-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 ${page === 'workspace' ? 'relative z-40' : 'sticky top-0 z-40'} select-none">
     <!-- Left: Brand + Page Tabs -->
     <div class="lintiq-nav-left flex items-center gap-2 sm:gap-2.5 shrink-0">
-      <a href="${brandHref}" class="flex items-center gap-2 text-white font-bold tracking-tight shrink-0" title="Back to Problem Directory">
-        <span class="w-2.5 h-2.5 rounded-full bg-accent inline-block animate-pulse"></span>
-        <span class="text-base sm:text-lg">Lint<span class="text-accent">IQ</span></span>
+      <a href="${brandHref}" class="flex items-center gap-1.5 sm:gap-2 text-white font-bold tracking-tight shrink-0" title="Back to Problem Directory">
+        <span class="lintiq-brand-dot w-2.5 h-2.5 rounded-full bg-accent inline-block animate-pulse"></span>
+        <span class="lintiq-brand-name text-base sm:text-lg">Lint<span class="text-accent">IQ</span></span>
       </a>
-      <span class="hidden ${page === 'workspace' ? '2xl' : 'lg'}:inline-block px-2 py-0.5 text-[10px] font-semibold bg-surface-border text-emerald-400 rounded-md tracking-wider font-mono shrink-0">
+      <span class="hidden ${page === 'workspace' ? '2xl' : 'xl'}:inline-block px-2 py-0.5 text-[10px] font-semibold bg-surface-border text-emerald-400 rounded-md tracking-wider font-mono shrink-0">
         ARCADE V1.6
       </span>
 
-      <div class="flex items-center gap-1 ml-1 text-xs shrink-0">
+      <div class="flex items-center gap-1 ml-0.5 sm:ml-1 text-xs shrink-0">
         ${page === 'workspace' ? `
           <a href="problem-directory.html"
             class="lintiq-nav-pill px-2.5 py-1 rounded-md font-medium bg-surface-container hover:bg-surface-hover border border-surface-border hover:border-accent/50 text-gray-200 hover:text-emerald-400 transition flex items-center gap-1 whitespace-nowrap"
             title="Back to Full Problem List">
             <span>←</span><span class="hidden sm:inline">Problem List</span>
           </a>
-          <a href="index.html" class="lintiq-nav-pill hidden md:inline-block ${pill(true)}">Workspace</a>
+          <a href="index.html" class="lintiq-nav-pill lintiq-nav-workspace-tab hidden md:inline-block ${pill(true)}">Workspace</a>
         ` : `
           <a href="problem-directory.html" class="lintiq-nav-pill ${pill(page === 'directory')}">Problem List</a>
-          <a href="index.html" class="lintiq-nav-pill ${pill(false)}">Workspace</a>
+          <a href="index.html" class="lintiq-nav-pill lintiq-nav-workspace-tab hidden md:inline-block ${pill(false)}">Workspace</a>
         `}
       </div>
 
@@ -184,7 +317,7 @@
         </div>
       ` : ''}
 
-      <nav class="hidden ${page === 'workspace' ? 'xl' : 'md'}:flex items-center gap-1.5 shrink-0">
+      <nav id="lintiq-primary-nav">
         <a id="nav-leaderboard-link" href="leaderboard.html" class="lintiq-nav-action ${navActionClass(page === 'leaderboard')}">
           <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4zM7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3" />
@@ -207,7 +340,7 @@
       ` : ''}
 
       ${page === 'directory' ? `
-        <a href="index.html?ai=1" class="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-2.5 py-1 rounded-md hover:bg-emerald-500/20 transition font-medium whitespace-nowrap">
+        <a id="btn-ai-bug" href="index.html?ai=1" class="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-2.5 py-1 rounded-md hover:bg-emerald-500/20 transition font-medium whitespace-nowrap" title="Generate Instant AI Bug">
           <span>✨</span><span class="hidden sm:inline">Instant AI Bug</span>
         </a>
       ` : ''}
@@ -226,9 +359,12 @@
 
         <div id="settings-popover-menu" role="menu"
           class="hidden absolute right-0 mt-2 w-56 bg-[#141822] border border-surface-border rounded-xl py-2 px-1.5 shadow-2xl shadow-black/80 z-50 select-none">
-          <div class="${page === 'workspace' ? 'xl:hidden' : 'md:hidden'}">
+          <div id="settings-mobile-nav-group">
             <a href="problem-directory.html" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-emerald-400 hover:bg-surface-hover transition text-left">
               <span>📋</span><span>Problem List</span>
+            </a>
+            <a href="index.html" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left md:hidden">
+              <span>💻</span><span>Workspace</span>
             </a>
             <a href="leaderboard.html" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left">
               <span>🏆</span><span>Leaderboard</span>
@@ -268,7 +404,7 @@
 
         <div id="user-profile" class="hidden flex items-center gap-2 shrink-0 min-w-0">
           <a href="profile.html" class="flex items-center gap-1.5 hover:opacity-85 transition min-w-0" title="View Profile Stats">
-            <span id="user-display-name" class="hidden sm:inline-block text-[11px] font-medium text-gray-200 max-w-[110px] truncate whitespace-nowrap overflow-hidden"></span>
+            <span id="user-display-name" class="inline-block text-[11px] font-medium text-gray-200 max-w-[110px] truncate whitespace-nowrap overflow-hidden"></span>
             <span id="header-user-avatar" class="w-7 h-7 rounded-full bg-accent/20 border border-accent flex items-center justify-center text-accent text-[11px] font-bold shrink-0">LQ</span>
           </a>
           <button id="btn-signout" onclick="logout()" class="text-[11px] text-gray-400 hover:text-rose-400 transition whitespace-nowrap shrink-0 cursor-pointer" title="Sign Out">
