@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LintIQ — Code Solver Workspace</title>
+  <title>LintIQ â€” Code Solver Workspace</title>
   <meta name="description" content="LintIQ is an interactive, gamified AI code review and bug-hunting arcade for developers." />
 
   <!-- Tailwind CSS CDN -->
@@ -101,7 +101,7 @@
           class="px-2.5 py-1 rounded-md font-medium bg-surface-container hover:bg-surface-hover border border-surface-border hover:border-accent/50 text-gray-200 hover:text-emerald-400 transition flex items-center gap-1 whitespace-nowrap"
           title="Back to Full Problem List"
         >
-          <span>←</span>
+          <span>â†</span>
           <span>Problem List</span>
         </a>
         <a
@@ -138,7 +138,7 @@
     <!-- Center: Streak & Timer HUD -->
     <div class="hidden lg:flex items-center gap-2 text-xs font-mono shrink-0">
       <div class="flex items-center gap-1.5 bg-surface-container border border-surface-border px-2.5 py-1 rounded-md text-amber-400 font-medium whitespace-nowrap">
-        <span>⚡ Streak:</span>
+        <span>âš¡ Streak:</span>
         <span id="streak-count" class="text-white font-bold">0</span>
       </div>
 
@@ -165,7 +165,7 @@
         class="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2.5 py-1 rounded-md hover:bg-amber-500/20 transition whitespace-nowrap cursor-pointer"
         title="Reveal AI Hint"
       >
-        <span>💡</span>
+        <span>ðŸ’¡</span>
         <span class="hidden sm:inline">AI Hint</span>
       </button>
 
@@ -189,26 +189,26 @@
           class="hidden absolute right-0 mt-2 w-56 bg-[#141822] border border-surface-border rounded-xl py-2 px-1.5 shadow-2xl shadow-black/80 z-50 select-none"
         >
           <a href="problem-directory.html" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-emerald-400 hover:bg-surface-hover transition text-left">
-            <span>📋</span><span>Problem List</span>
+            <span>ðŸ“‹</span><span>Problem List</span>
           </a>
           <a href="leaderboard.html" class="w-full xl:hidden flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left">
-            <span>🏆</span><span>Leaderboard</span>
+            <span>ðŸ†</span><span>Leaderboard</span>
           </a>
           <a href="profile.html" class="w-full xl:hidden flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left">
-            <span>📈</span><span>Profile Stats</span>
+            <span>ðŸ“ˆ</span><span>Profile Stats</span>
           </a>
           <div class="my-1 border-t border-surface-border"></div>
           <button onclick="openSettingsAtTab('profile')" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>👤</span><span>Profile & Bio</span>
+            <span>ðŸ‘¤</span><span>Profile & Bio</span>
           </button>
           <button onclick="openSettingsAtTab('analytics')" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>📊</span><span>Dashboard & Graph</span>
+            <span>ðŸ“Š</span><span>Dashboard & Graph</span>
           </button>
           <button onclick="openSettingsAtTab('editor')" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>🖥</span><span>Editor Settings</span>
+            <span>ðŸ–¥</span><span>Editor Settings</span>
           </button>
           <button onclick="closeSettingsDropdown(); exportLintIQData();" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>⬇</span><span>Export Stats (JSON)</span>
+            <span>â¬‡</span><span>Export Stats (JSON)</span>
           </button>
 
           <div id="settings-logout-divider" class="hidden my-1.5 border-t border-surface-border"></div>
@@ -218,7 +218,7 @@
             onclick="closeSettingsDropdown(); if (typeof logout === 'function') logout();"
             class="hidden w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left cursor-pointer"
           >
-            <span>↪</span><span>Logout</span>
+            <span>â†ª</span><span>Logout</span>
           </button>
         </div>
       </div>
@@ -266,13 +266,13 @@
             onclick="switchLeftTab('notes')"
             class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-t-md border-t-2 border-transparent transition flex items-center gap-1.5 cursor-pointer"
           >
-            <span>📝 Scratchpad</span>
+            <span>ðŸ“ Scratchpad</span>
           </button>
         </div>
 
         <!-- Mobile-only compact Streak -->
         <div class="flex lg:hidden items-center gap-2 text-[11px] font-mono text-gray-400 pr-1">
-          <span class="text-amber-400">⚡<span id="mobile-streak-mirror">0</span></span>
+          <span class="text-amber-400">âš¡<span id="mobile-streak-mirror">0</span></span>
         </div>
       </div>
 
@@ -301,7 +301,7 @@
         <!-- Dynamic Hint Box (populated by requestHint() in app.js) -->
         <div id="hint-box" class="hidden p-3.5 bg-amber-500/10 border border-amber-500/35 rounded-lg text-xs text-amber-200 leading-relaxed break-words">
           <div class="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
-            <span>💡 AI Diagnostic Hint</span>
+            <span>ðŸ’¡ AI Diagnostic Hint</span>
           </div>
           <span id="hint-text"></span>
         </div>
@@ -322,13 +322,13 @@
 
       <!-- Left Panel Footer: Assertion Count & Instant AI Bug -->
       <div class="h-10 bg-surface-container border-t border-surface-border px-4 flex items-center justify-between gap-2 shrink-0 text-xs text-gray-400 select-none">
-        <span id="test-case-count" class="font-mono text-emerald-400 font-medium whitespace-nowrap">🧪 0 Test Assertions</span>
+        <span id="test-case-count" class="font-mono text-emerald-400 font-medium whitespace-nowrap">ðŸ§ª 0 Test Assertions</span>
         <button
           id="ai-generate-btn"
           onclick="generateAIChallenge()"
           class="flex items-center gap-1.5 bg-surface-card border border-emerald-500/30 hover:bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer whitespace-nowrap"
         >
-          <span>✨ Generate AI Bug</span>
+          <span>âœ¨ Generate AI Bug</span>
         </button>
       </div>
     </section>
@@ -362,10 +362,10 @@
               { }
             </button>
             <button onclick="resetStarterCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Reset Starter Code">
-              ↺
+              â†º
             </button>
             <button id="btn-fullscreen-editor" onclick="toggleEditorFullscreen()" class="hidden lg:inline-flex px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Toggle Focus Mode">
-              ⛶
+              â›¶
             </button>
           </div>
         </div>
@@ -384,7 +384,7 @@
               onclick="switchTrayTab('testcase')"
               class="text-xs font-semibold text-white border-b-2 border-accent py-2 flex items-center gap-1.5 cursor-pointer"
             >
-              <span>☑ Testcase</span>
+              <span>â˜‘ Testcase</span>
               <span id="stdin-mode-badge" class="text-[10px] font-mono bg-surface border border-surface-border text-sky-400 px-1.5 py-0.2 rounded">Sample #1</span>
             </button>
 
@@ -393,13 +393,13 @@
               onclick="switchTrayTab('output')"
               class="text-xs text-gray-400 hover:text-gray-200 border-b-2 border-transparent py-2 flex items-center gap-1.5 transition cursor-pointer"
             >
-              <span>💻 Sandbox Output</span>
+              <span>ðŸ’» Sandbox Output</span>
               <span id="status-tag" class="text-[10px] font-mono bg-surface-border text-gray-300 px-1.5 py-0.2 rounded">Idle</span>
             </button>
 
             <!-- Compatibility hidden trigger for app.js toggleCustomInput() -->
             <button type="button" id="btn-toggle-stdin" onclick="toggleCustomInput()" class="hidden">
-              <span id="stdin-caret">▾</span>
+              <span id="stdin-caret">â–¾</span>
             </button>
           </div>
 
@@ -407,12 +407,12 @@
             <button type="button" onclick="switchTrayTab('testcase'); fillSampleInput();" class="text-emerald-400 hover:underline cursor-pointer" title="Load first sample test input">
               Use Sample
             </button>
-            <span class="text-gray-600">•</span>
+            <span class="text-gray-600">â€¢</span>
             <button type="button" onclick="switchTrayTab('testcase'); clearCustomInput();" class="text-gray-400 hover:text-rose-400 transition cursor-pointer" title="Clear custom input">
               Clear
             </button>
             <button type="button" id="btn-collapse-tray" onclick="toggleTrayCollapse()" class="ml-1 px-1.5 py-0.5 text-gray-400 hover:text-white hover:bg-surface-hover rounded transition cursor-pointer" title="Collapse / Expand Console">
-              ▾
+              â–¾
             </button>
           </div>
         </div>
@@ -423,7 +423,7 @@
           <div id="tray-panel-testcase" class="flex-1 p-3 overflow-y-auto min-h-0">
             <div id="custom-stdin-wrapper" class="h-full flex flex-col gap-1.5">
               <label for="custom-stdin" class="text-[10px] uppercase font-mono tracking-wider text-gray-400">
-                Custom Input (stdin) — Safe Test Run does not affect your streak
+                Custom Input (stdin) â€” Safe Test Run does not affect your streak
               </label>
               <textarea
                 id="custom-stdin"
@@ -436,7 +436,7 @@
 
           <!-- TAB 2: Sandbox Execution Output -->
           <div id="tray-panel-output" class="hidden flex-1 p-3 overflow-y-auto min-h-0 bg-[#090d13]">
-            <pre id="console-output" class="font-mono text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed">Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.</pre>
+            <pre id="console-output" class="font-mono text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed">Click inside the code editor to start timing and solve the bug. Use â–¶ Test Run anytime without risking your streak.</pre>
           </div>
         </div>
 
@@ -446,7 +446,7 @@
             onclick="resetStarterCode()"
             class="px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white border border-surface-border rounded-md hover:bg-surface-hover transition cursor-pointer whitespace-nowrap"
           >
-            ↺ Reset
+            â†º Reset
           </button>
 
           <div class="flex items-center gap-2">
@@ -456,7 +456,7 @@
               title="Run code safely in cloud sandbox without affecting your streak (Ctrl + ')"
               class="px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 rounded-md transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
-              <span>▶</span>
+              <span>â–¶</span>
               <span>Test Run</span>
             </button>
             <button
@@ -475,8 +475,8 @@
 
   <!-- STATUS FOOTER -->
   <footer class="h-6 bg-surface-dim border-t border-surface-border/60 px-3 flex items-center justify-between text-[11px] text-gray-500 shrink-0 select-none">
-    <div>LintIQ IDE • ARCADE V1.6</div>
-    <div class="hidden sm:block font-mono">Ctrl+' Test Run • Ctrl+Enter Submit</div>
+    <div>LintIQ IDE â€¢ ARCADE V1.6</div>
+    <div class="hidden sm:block font-mono">Ctrl+' Test Run â€¢ Ctrl+Enter Submit</div>
   </footer>
 
   <!-- Hidden fallback container so app.js inline sequence updates never error -->
@@ -488,12 +488,12 @@
     <div class="relative ml-auto w-full max-w-md h-full bg-[#0d1117] border-l border-surface-border flex flex-col shadow-2xl">
       <div class="px-5 py-4 border-b border-surface-border bg-surface flex items-center justify-between shrink-0">
         <div>
-          <h3 class="text-sm font-bold text-white">📋 Problem Sequence</h3>
+          <h3 class="text-sm font-bold text-white">ðŸ“‹ Problem Sequence</h3>
           <span id="drawer-count" class="text-[11px] font-mono text-gray-400">Loading...</span>
         </div>
         <div class="flex items-center gap-2">
-          <a href="problem-directory.html" class="text-[11px] font-mono text-emerald-400 hover:underline">Full List ↗</a>
-          <button onclick="closeProblemListDrawer()" class="text-gray-400 hover:text-white text-lg px-2 py-0.5 rounded transition cursor-pointer">✕</button>
+          <a href="problem-directory.html" class="text-[11px] font-mono text-emerald-400 hover:underline">Full List â†—</a>
+          <button onclick="closeProblemListDrawer()" class="text-gray-400 hover:text-white text-lg px-2 py-0.5 rounded transition cursor-pointer">âœ•</button>
         </div>
       </div>
 
@@ -541,21 +541,21 @@
       <div class="px-5 sm:px-6 pt-4 bg-surface-dim border-b border-surface-border shrink-0">
         <div class="flex items-center justify-between pb-3">
           <div class="flex items-center gap-2">
-            <span class="text-emerald-400 font-mono text-sm">⚙</span>
+            <span class="text-emerald-400 font-mono text-sm">âš™</span>
             <h2 id="settings-title" class="text-base font-bold text-white tracking-wide">LintIQ Control Center</h2>
           </div>
-          <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">✕</button>
+          <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">âœ•</button>
         </div>
 
         <div class="flex items-center gap-2 text-xs font-mono overflow-x-auto">
           <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold transition whitespace-nowrap cursor-pointer">
-            👤 Profile & Bio
+            ðŸ‘¤ Profile & Bio
           </button>
           <button onclick="switchSettingsTab('editor')" id="tab-btn-editor" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap cursor-pointer">
-            🖥 Editor & Sandbox
+            ðŸ–¥ Editor & Sandbox
           </button>
           <button onclick="switchSettingsTab('analytics')" id="tab-btn-analytics" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap cursor-pointer">
-            📊 Dashboard & Graph
+            ðŸ“Š Dashboard & Graph
           </button>
         </div>
       </div>
@@ -704,7 +704,7 @@
       <!-- TAB 3: Analytics -->
       <div id="settings-panel-analytics" class="settings-tab-panel hidden p-5 sm:p-6">
         <div id="analytics-logged-out" class="hidden py-14 px-6 text-center bg-surface-dim border border-surface-border rounded-xl">
-          <div class="text-3xl mb-3">🔒</div>
+          <div class="text-3xl mb-3">ðŸ”’</div>
           <h3 class="text-base font-bold text-white mb-1">Sign in to view your Dashboard</h3>
           <p class="text-xs text-gray-400 max-w-md mx-auto mb-5">
             Your 7-day bug-hunt telemetry, pass rate, runtime latency, and personal streak history are tracked per account.
@@ -738,7 +738,7 @@
             <div class="md:col-span-8 bg-surface-dim border border-surface-border rounded-xl p-4 min-w-0">
               <div class="flex items-center justify-between mb-2 gap-2">
                 <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400">7-Day Bug-Hunt & Latency Graph</h3>
-                <span class="text-[11px] font-mono text-emerald-400 whitespace-nowrap">● Live Telemetry</span>
+                <span class="text-[11px] font-mono text-emerald-400 whitespace-nowrap">â— Live Telemetry</span>
               </div>
               <div class="relative h-56 w-full">
                 <canvas id="lintiq-activity-chart"></canvas>
@@ -755,10 +755,10 @@
               </div>
               <div class="pt-4 mt-4 border-t border-surface-border flex flex-col gap-2">
                 <button onclick="exportLintIQData()" class="w-full py-1.5 bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-mono text-gray-200 rounded-lg transition cursor-pointer">
-                  ⬇ Export Profile & Stats (JSON)
+                  â¬‡ Export Profile & Stats (JSON)
                 </button>
                 <button onclick="resetLintIQMetrics()" class="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-mono text-rose-400 rounded-lg transition cursor-pointer">
-                  ↺ Reset Local Telemetry
+                  â†º Reset Local Telemetry
                 </button>
               </div>
             </div>
@@ -774,10 +774,10 @@
     <div class="bg-surface border border-surface-border w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-xl p-5 sm:p-6 shadow-2xl relative">
       <div class="flex items-center justify-between pb-4 border-b border-surface-border">
         <div class="flex items-center gap-2">
-          <span class="text-xl">🏆</span>
+          <span class="text-xl">ðŸ†</span>
           <h3 class="text-lg font-bold text-white tracking-wide">Global Cloud Leaderboard</h3>
         </div>
-        <button onclick="closeLeaderboardModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">✕</button>
+        <button onclick="closeLeaderboardModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">âœ•</button>
       </div>
 
       <div class="mt-4 overflow-x-auto">
@@ -800,9 +800,9 @@
       </div>
 
       <div class="mt-5 pt-3 border-t border-surface-border flex justify-between items-center text-[11px] text-gray-400 gap-2">
-        <span id="leaderboard-sync-status">☁️ Permanent Cloud Leaderboard</span>
+        <span id="leaderboard-sync-status">â˜ï¸ Permanent Cloud Leaderboard</span>
         <div class="flex items-center gap-3">
-          <a href="leaderboard.html" class="text-gray-300 hover:text-white font-mono">Full Page ↗</a>
+          <a href="leaderboard.html" class="text-gray-300 hover:text-white font-mono">Full Page â†—</a>
           <button onclick="fetchLeaderboard()" class="text-emerald-400 hover:underline font-mono cursor-pointer">Refresh</button>
         </div>
       </div>
@@ -812,7 +812,7 @@
   <!-- AUTH MODAL -->
   <div id="auth-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
     <div class="bg-surface border border-surface-border w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
-      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm cursor-pointer">✕</button>
+      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm cursor-pointer">âœ•</button>
       <h3 class="text-lg font-bold text-white mb-1">Enter the Bug Arcade</h3>
       <p class="text-xs text-gray-400 mb-5">Sign in to save streaks, claim score points, and climb the cloud leaderboard.</p>
 
@@ -848,7 +848,7 @@
   </div>
 
   <!-- External Application Logic -->
-  <script src="app.js"></script>
+  <script src="js/workspace.js"></script>
 
   <!-- Workspace UI, Settings Popover, Profile, Editor Prefs & Analytics Controller -->
   <script>
@@ -929,12 +929,12 @@
         body?.classList.add("hidden");
         tray?.classList.remove("h-52");
         tray?.classList.add("h-20");
-        if (btn) btn.textContent = "▴";
+        if (btn) btn.textContent = "â–´";
       } else {
         body?.classList.remove("hidden");
         tray?.classList.remove("h-20");
         tray?.classList.add("h-52");
-        if (btn) btn.textContent = "▾";
+        if (btn) btn.textContent = "â–¾";
       }
       requestAnimationFrame(() => window.editor?.layout?.());
     }
