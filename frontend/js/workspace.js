@@ -1,29 +1,4 @@
-// --- 1. CONFIGURATION ---
-const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-  ? "http://127.0.0.1:8000"
-  : "https://lintiq.onrender.com";
-
-const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
-const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Theme handling (day/night)
-let userTheme = localStorage.getItem("lintiq_theme") || "dark";
-function applyTheme() {
-  if (userTheme === "dark") {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
-}
-function toggleTheme() {
-  userTheme = userTheme === "dark" ? "light" : "dark";
-  localStorage.setItem("lintiq_theme", userTheme);
-  applyTheme();
-}
-applyTheme();
-
-// --- 1.1 CURATED MULTI-LANGUAGE FALLBACK PROBLEMS ---
+// --- 1. CURATED MULTI-LANGUAGE FALLBACK PROBLEMS ---
 const PROBLEMS = [
   {
     id: 1,
@@ -36,7 +11,6 @@ const PROBLEMS = [
     starterCode: {
       python: `def two_sum(nums, target):\n    # Fix the bug or implement solution\n    pass`,
       cpp: `#include <vector>\nusing namespace std;\n\nvector<int> twoSum(vector<int>& nums, int target) {\n    // Write C++ solution\n    return {};\n}`,
-      java: `class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write Java solution\n        return new int[]{};\n    }\n}`,
       javascript: `function twoSum(nums, target) {\n    // Write JS solution\n    return [];\n}`
     }
   },
@@ -51,7 +25,6 @@ const PROBLEMS = [
     starterCode: {
       python: `def is_valid(s: str) -> bool:\n    pass`,
       cpp: `#include <string>\nusing namespace std;\n\nbool isValid(string s) {\n    return false;\n}`,
-      java: `class Solution {\n    public boolean isValid(String s) {\n        return false;\n    }\n}`,
       javascript: `function isValid(s) {\n    return false;\n}`
     }
   }
@@ -70,17 +43,41 @@ const API_BASE = API;
 const FILE_NAMES = {
   python: "solution.py",
   cpp: "solution.cpp",
-  java: "Solution.java",
   javascript: "solution.js"
 };
 
-let currentUser = null;
-let currentSession = null;
+/**
+ * Safely parses a fetch Response without throwing raw JSON SyntaxError on
+ * HTML 502/503 cold-start pages from Render/proxies.
+ */
+async function parseJsonResponse(res) {
+  const rawText = await res.text();
+  let data = null;
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (_) {
+      data = null;
+    }
+  }
+  if (!res.ok) {
+    const serverMsg = data && typeof data === "object" ? (data.detail || data.message) : "";
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(serverMsg || `Backend sandbox is waking up or temporarily unavailable (HTTP ${res.status}). Please retry in a moment.`);
+    }
+    throw new Error(serverMsg || `Server error (HTTP ${res.status})`);
+  }
+  if (!data || typeof data !== "object") {
+    throw new Error("Unexpected non-JSON response from server. Please retry.");
+  }
+  return data;
+}
+
 let monacoEditor = null;
 let currentProblem = null;
 let selectedCategory = "All";
 let selectedDifficulty = "All";
-let streak = parseInt(localStorage.getItem("lintiq_streak") || "0", 10);
+let streak = typeof getEffectiveLocalStreak === "function" ? getEffectiveLocalStreak() : 0;
 let score = parseInt(localStorage.getItem("lintiq_score") || "0", 10);
 let solves = parseInt(localStorage.getItem("lintiq_solves") || "0", 10);
 let timerSeconds = 0;
@@ -90,212 +87,146 @@ let isInjectingCode = false;
 let isExecutionBusy = false;
 let testRunCooldownUntil = 0;
 let lastDiffCardText = "";
+let currentProblemSolved = false;
+let lastSolveDurationSeconds = null;
+let lastPatchLinesChanged = null;
+let canAnalyzeCurrentPatch = false;
+let lastPassingPatchCode = "";
+const patchReviewCache = new Map();
+let dailyChallengeId = null;
+let dailyChallengeDateUtc = null;
 
-// --- 2. AUTHENTICATION & CLOUD PROFILE SYNC ---
-function getDisplayUsername(user) {
-  if (!user) return "Engineer";
-  return (
-    user.user_metadata?.full_name ||
-    user.user_metadata?.user_name ||
-    user.email?.split("@")[0] ||
-    "Engineer"
-  );
-}
-
-function openAuthModal() {
-  document.getElementById("auth-modal")?.classList.remove("hidden");
-  const msg = document.getElementById("auth-msg");
-  if (msg) msg.textContent = "";
-}
-
-function closeAuthModal() {
-  document.getElementById("auth-modal")?.classList.add("hidden");
-}
-
-async function loginWithOAuth(provider) {
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider: provider,
-    options: {
-      redirectTo: window.location.origin
-    }
-  });
-  if (error) alert(`${provider} error: ` + error.message);
-}
-
-async function handleEmailAuth(event) {
-  event.preventDefault();
-  const email = document.getElementById("auth-email").value.trim();
-  const msgEl = document.getElementById("auth-msg");
-  const btn = document.getElementById("btn-email-submit");
-
-  btn.disabled = true;
-  btn.textContent = "Sending link...";
-  msgEl.className = "text-[11px] text-center text-zinc-400";
-  msgEl.textContent = "";
-
-  const { error } = await supabaseClient.auth.signInWithOtp({
-    email: email,
-    options: {
-      emailRedirectTo: window.location.origin
-    }
-  });
-
-  btn.disabled = false;
-  btn.textContent = "Send Magic Sign-In Link";
-
-  if (error) {
-    msgEl.className = "text-[11px] text-center text-rose-400";
-    msgEl.textContent = error.message;
-  } else {
-    msgEl.className = "text-[11px] text-center text-emerald-400";
-    msgEl.textContent = "Check your email inbox for your magic link!";
-  }
-}
-
-async function logout() {
-  if (!currentUser) return;
-  await supabaseClient.auth.signOut();
-  window.location.reload();
-}
-
+// --- 2. CLOUD PROFILE SYNC (Auth UI/modals/state provided by shared.js) ---
 async function syncUserProfileWithCloud(user) {
   if (!user || !user.id || String(user.id).startsWith("mock_") || String(user.id).startsWith("test_")) {
     return;
   }
 
-  const username = getDisplayUsername(user);
-
   try {
-    const { data: cloudProfile, error } = await supabaseClient
-      .from("user_profiles")
-      .select("id, username, score, streak, solves, tier")
-      .eq("id", user.id)
-      .maybeSingle();
+    // 1. Prefer authoritative FastAPI profile endpoint (handles server-side IST streak + profile creation)
+    if (currentSession?.access_token) {
+      const res = await fetch(`${API}/profile/${encodeURIComponent(user.id)}`, {
+        headers: { Authorization: `Bearer ${currentSession.access_token}` }
+      });
+      if (res.ok) {
+        const backendProfile = await res.json();
+        score = backendProfile.score || 0;
+        streak = Number(backendProfile.current_streak ?? backendProfile.streak ?? 0);
+        solves = backendProfile.solves || 0;
+        if (backendProfile.last_streak_date) {
+          localStorage.setItem("lintiq_last_streak_date", String(backendProfile.last_streak_date));
+        } else if (streak === 0) {
+          localStorage.removeItem("lintiq_last_streak_date");
+        }
+        updateMetrics();
+        if (typeof window.syncSettingsModalAuth === "function") {
+          window.syncSettingsModalAuth();
+        }
+        return;
+      }
+    }
+
+    // 2. Fallback to read-only Supabase SELECT (derive IST active streak from user_solves)
+    const [{ data: cloudProfile, error }, { data: cloudSolves }] = await Promise.all([
+      supabaseClient
+        .from("user_profiles")
+        .select("id, username, score, streak, solves, tier")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabaseClient
+        .from("user_solves")
+        .select("solved_at")
+        .eq("user_id", user.id)
+        .order("solved_at", { ascending: false })
+        .limit(500),
+    ]);
 
     if (!error && cloudProfile) {
-      if (score > (cloudProfile.score || 0)) {
-        const mergedSolves = Math.max(solves, cloudProfile.solves || 0, streak, 1);
-        await supabaseClient.from("user_profiles").upsert({
-          id: user.id,
-          username: username,
-          score: score,
-          streak: streak,
-          solves: mergedSolves,
-          tier: cloudProfile.tier || "free",
-          last_active: new Date().toISOString()
-        }, { onConflict: "id" });
-        solves = mergedSolves;
+      score = cloudProfile.score || 0;
+      solves = cloudProfile.solves || 0;
+      if (Array.isArray(cloudSolves) && typeof computeIstStreakFromSolveDates === "function") {
+        const istInfo = computeIstStreakFromSolveDates(cloudSolves.map(r => r.solved_at));
+        streak = istInfo.currentStreak;
+        if (istInfo.lastStreakDate) {
+          localStorage.setItem("lintiq_last_streak_date", istInfo.lastStreakDate);
+        }
       } else {
-        score = cloudProfile.score || 0;
-        streak = cloudProfile.streak || 0;
-        solves = cloudProfile.solves || 0;
+        streak = 0;
       }
       updateMetrics();
       if (typeof window.syncSettingsModalAuth === "function") {
         window.syncSettingsModalAuth();
       }
-      return;
-    }
-
-    const headers = {};
-    if (currentSession?.access_token) {
-      headers["Authorization"] = `Bearer ${currentSession.access_token}`;
-    }
-    const res = await fetch(`${API}/profile/${encodeURIComponent(user.id)}`, { headers });
-    if (res.ok) {
-      const backendProfile = await res.json();
-      score = Math.max(score, backendProfile.score || 0);
-      streak = Math.max(streak, backendProfile.streak || 0);
-      solves = Math.max(solves, backendProfile.solves || 0);
-      updateMetrics();
-    }
-
-    if (score > 0 || solves > 0) {
-      await supabaseClient.from("user_profiles").upsert({
-        id: user.id,
-        username: username,
-        score: score,
-        streak: streak,
-        solves: Math.max(solves, 1),
-        tier: "free",
-        last_active: new Date().toISOString()
-      }, { onConflict: "id" });
     }
   } catch (err) {
     console.warn("Cloud profile sync fallback active:", err);
   }
 }
 
-async function initAuth() {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  currentSession = session || null;
-  currentUser = session?.user || null;
-  updateAuthUI(currentUser);
-  if (currentUser) {
-    syncUserProfileWithCloud(currentUser);
-  }
+// --- 3. CATEGORY & DIFFICULTY FILTERING ---
+function applyCategoryPillCounts(data) {
+  const countMap = {};
+  (data?.categories || []).forEach(c => {
+    countMap[c.name] = c.count;
+  });
 
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
-    currentSession = session || null;
-    currentUser = session?.user || null;
-    updateAuthUI(currentUser);
-    if (currentUser) {
-      syncUserProfileWithCloud(currentUser);
+  document.querySelectorAll(".cat-pill").forEach(btn => {
+    const cat = btn.getAttribute("data-cat") || "";
+    if (cat === "All") {
+      btn.innerHTML = `All Tracks <span class="ml-1 text-[10px] opacity-90">(${Number(data?.total || 0)})</span>`;
+    } else if (countMap[cat] !== undefined) {
+      btn.innerHTML = `${escapeHtml(cat)} <span class="ml-1 text-[10px] opacity-80">(${Number(countMap[cat])})</span>`;
     }
   });
 }
 
-function updateAuthUI(user) {
-  const loginBtn = document.getElementById("btn-login");
-  const userProfile = document.getElementById("user-profile");
-  const userDisplayName = document.getElementById("user-display-name");
-  const settingsLogoutBtn = document.getElementById("settings-logout-btn");
-  const settingsLogoutDivider = document.getElementById("settings-logout-divider");
+function updateDailyBugBadge() {
+  const badge = document.getElementById("daily-bug-badge");
+  if (!badge) return;
+  const isDaily = Boolean(
+    dailyChallengeId !== null &&
+    currentProblem &&
+    Number(currentProblem.id) === Number(dailyChallengeId)
+  );
+  badge.classList.toggle("hidden", !isDaily);
+}
 
-  if (user) {
-    closeAuthModal();
-    loginBtn?.classList.add("hidden");
-    userProfile?.classList.remove("hidden");
-    settingsLogoutBtn?.classList.remove("hidden");
-    settingsLogoutDivider?.classList.remove("hidden");
-
-    const name = getDisplayUsername(user);
-    if (userDisplayName) {
-      userDisplayName.textContent = name;
-      userDisplayName.title = name;
+async function loadDailyChallengeInfo() {
+  try {
+    const res = await fetch(`${API}/daily-challenge`);
+    if (!res.ok) return;
+    const rawText = await res.text();
+    const data = rawText ? JSON.parse(rawText) : null;
+    if (data && data.problem && data.problem.id !== undefined) {
+      dailyChallengeId = Number(data.problem.id);
+      dailyChallengeDateUtc = data.date_ist || data.date_utc || null;
+      const badge = document.getElementById("daily-bug-badge");
+      if (badge) {
+        const resetsAt = data.resets_at_utc || data.resets_at;
+        let tip = "Resets daily at 12:00 AM IST (UTC+05:30)";
+        if (resetsAt) {
+          const diffSec = Math.max(0, Math.floor((new Date(resetsAt).getTime() - Date.now()) / 1000));
+          if (Number.isFinite(diffSec)) {
+            const h = Math.floor(diffSec / 3600);
+            const m = Math.floor((diffSec % 3600) / 60);
+            tip = `Bug of the Day (2x XP) • Resets in ${h}h ${m}m at 12:00 AM IST`;
+          }
+        }
+        badge.title = tip;
+      }
+      updateDailyBugBadge();
     }
-  } else {
-    loginBtn?.classList.remove("hidden");
-    userProfile?.classList.add("hidden");
-    settingsLogoutBtn?.classList.add("hidden");
-    settingsLogoutDivider?.classList.add("hidden");
-  }
-
-  if (typeof window.syncSettingsModalAuth === "function") {
-    window.syncSettingsModalAuth();
+  } catch (err) {
+    console.warn("Could not fetch daily challenge info:", err);
   }
 }
 
-// --- 3. CATEGORY & DIFFICULTY FILTERING ---
 async function initCategoryCounts() {
   try {
     const res = await fetch(`${API}/categories`);
     if (!res.ok) return;
     const data = await res.json();
-
-    const countMap = {};
-    (data.categories || []).forEach(c => {
-      countMap[c.name] = c.count;
-    });
-
-    document.querySelectorAll(".cat-pill").forEach(btn => {
-      const cat = btn.getAttribute("data-cat");
-      if (cat === "All") {
-        btn.innerHTML = `All Tracks <span class="ml-1 text-[10px] opacity-90">(${data.total || 0})</span>`;
-      } else if (countMap[cat] !== undefined) {
-        btn.innerHTML = `${cat} <span class="ml-1 text-[10px] opacity-80">(${countMap[cat]})</span>`;
-      }
-    });
+    applyCategoryPillCounts(data);
   } catch (e) {
     console.error("Could not load category counts:", e);
   }
@@ -305,9 +236,9 @@ function selectCategory(category) {
   selectedCategory = category;
   document.querySelectorAll(".cat-pill").forEach(btn => {
     if (btn.getAttribute("data-cat") === category) {
-      btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-emerald-600 text-white shadow-sm whitespace-nowrap shrink-0 cursor-pointer";
+      btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-semibold transition bg-emerald-500 text-black shadow-sm whitespace-nowrap shrink-0 cursor-pointer";
     } else {
-      btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0 cursor-pointer";
+      btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-surface-container border border-surface-border text-gray-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer";
     }
   });
   currentSeqIndex = 0;
@@ -349,33 +280,44 @@ function renderProblemSequence() {
       const diffColor = p.difficulty === "Easy" ? "text-emerald-400"
         : p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
 
+      const safeTitle = escapeHtml(p.title);
+      const safeDiff = escapeHtml(p.difficulty);
       if (problemSequence.length > 0) {
         return `
-          <button type="button" onclick="jumpToProblemById(${p.id})"
+          <button type="button" onclick="jumpToProblemById(${Number(p.id)})"
             class="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs transition cursor-pointer ${active}">
             <span class="flex items-center gap-1.5 truncate font-medium">
               <span class="w-4 text-center">${p.solved ? "✅" : "○"}</span>
-              ${idx + 1}. ${p.title}
+              ${idx + 1}. ${safeTitle}
             </span>
-            <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
+            <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${safeDiff}</span>
           </button>
         `;
       }
       return `
         <button type="button" onclick="selectProblem(${idx})"
           class="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs transition cursor-pointer ${active}">
-          <span class="truncate font-medium">${p.id}. ${p.title}</span>
-          <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
+          <span class="truncate font-medium">${Number(p.id)}. ${safeTitle}</span>
+          <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${safeDiff}</span>
         </button>
       `;
     }).join("");
   }
 
   const progEl = document.getElementById("seq-progress");
+  const idx = problemSequence.length > 0 ? currentSeqIndex : currentProblemIndex;
+  const total = list.length;
   if (progEl) {
-    const idx = problemSequence.length > 0 ? currentSeqIndex : currentProblemIndex;
-    const total = list.length;
     progEl.textContent = total > 0 ? `${idx + 1} / ${total}` : "0 / 0";
+  }
+
+  const prevBtn = document.getElementById("btn-prev-problem");
+  const nextBtn = document.getElementById("btn-next-problem");
+  if (prevBtn) {
+    prevBtn.disabled = total <= 1 || idx <= 0;
+  }
+  if (nextBtn) {
+    nextBtn.disabled = total <= 1 || idx >= total - 1;
   }
 }
 window.renderProblemSequence = renderProblemSequence;
@@ -404,11 +346,43 @@ function switchLanguage(lang) {
 }
 window.switchLanguage = switchLanguage;
 
+function getDraftStorageKey(problemId, lang) {
+  const safeId = problemId || "default";
+  const safeLang = (lang || "python").toLowerCase();
+  return `lintiq_draft_${safeId}_${safeLang}`;
+}
+
+let draftSaveTimer = null;
+function saveEditorDraftDebounced() {
+  if (!currentProblem || !monacoEditor || isInjectingCode) return;
+  const pid = currentProblem.id;
+  const lang = currentLanguage || currentProblem.language || "python";
+  const code = monacoEditor.getValue();
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(getDraftStorageKey(pid, lang), code);
+    } catch (_) {}
+  }, 500);
+}
+
+function clearEditorDraft(problemId, lang) {
+  clearTimeout(draftSaveTimer);
+  try {
+    localStorage.removeItem(getDraftStorageKey(problemId, lang));
+  } catch (_) {}
+}
+
 function loadStarterCodeForLanguage(lang) {
   const problem = currentProblem || PROBLEMS[currentProblemIndex];
   if (!problem) return;
 
-  const code = getProblemCode(problem, lang) || "// Starter code coming soon";
+  const starter = getProblemCode(problem, lang) || "// Starter code coming soon";
+  let savedDraft = null;
+  try {
+    savedDraft = localStorage.getItem(getDraftStorageKey(problem.id, lang));
+  } catch (_) {}
+  const code = (savedDraft !== null && savedDraft !== "") ? savedDraft : starter;
 
   const filenameEl = document.getElementById("editor-filename");
   if (filenameEl) {
@@ -430,9 +404,13 @@ window.loadStarterCodeForLanguage = loadStarterCodeForLanguage;
 
 function resetStarterCode() {
   if (!currentProblem) return;
+  clearEditorDraft(currentProblem.id, currentLanguage);
   loadStarterCodeForLanguage(currentLanguage);
   hideCopyDiffButton();
   resetTimer();
+  if (typeof showToast === "function") {
+    showToast("Draft cleared. Starter code restored.", "info");
+  }
 }
 
 // --- SEQUENTIAL PROBLEM NAVIGATION (API-Backed) ---
@@ -464,7 +442,9 @@ async function fetchProblemSequence(category, difficulty, autoLoadFirst = true) 
     renderProblemSequence();
 
     if (autoLoadFirst && problemSequence.length > 0) {
-      loadSequentialProblem(0);
+      const firstUnsolvedIdx = problemSequence.findIndex(p => !p.solved);
+      const startIdx = firstUnsolvedIdx !== -1 ? firstUnsolvedIdx : 0;
+      loadSequentialProblem(startIdx);
     } else if (autoLoadFirst && problemSequence.length === 0) {
       document.getElementById("problem-title").textContent = "No challenges match this filter";
       document.getElementById("problem-desc").textContent = `No ${difficulty !== "All" ? difficulty : ""} challenges found in "${category}". Switch difficulty to "All Levels" or select another category.`;
@@ -476,31 +456,56 @@ async function fetchProblemSequence(category, difficulty, autoLoadFirst = true) 
 }
 window.fetchProblemSequence = fetchProblemSequence;
 
+let drawerSearchQuery = "";
+
+function getFilteredDrawerList() {
+  const q = drawerSearchQuery.trim().toLowerCase().replace(/^#/, "");
+  if (!q) return problemSequence;
+  return problemSequence.filter(
+    (p, idx) =>
+      String(p.title || "").toLowerCase().includes(q) ||
+      String(idx + 1) === q ||
+      String(p.id) === q
+  );
+}
+
 function renderDrawerRows(list) {
   const container = document.getElementById("problem-sequence-rows");
   if (!container) return;
 
+  const sourceList = Array.isArray(list) ? list : getFilteredDrawerList();
   // Cap rendered DOM rows to 250 for smooth drawer scrolling; search narrows across all 1,600+
-  const visible = list.slice(0, 250);
-  const moreCount = Math.max(0, list.length - visible.length);
+  const visible = sourceList.slice(0, 250);
+  const moreCount = Math.max(0, sourceList.length - visible.length);
+  const activeId = currentProblem?.id ?? problemSequence[currentSeqIndex]?.id;
+
+  if (visible.length === 0) {
+    container.innerHTML = `<div class="px-5 py-10 text-center text-xs font-mono text-gray-500">No matching challenges found.</div>`;
+    return;
+  }
 
   container.innerHTML = visible.map((p) => {
-    const isActive = problemSequence[currentSeqIndex]?.id === p.id;
+    const isActive = activeId !== undefined && Number(activeId) === Number(p.id);
     const diffClass =
       p.difficulty === "Easy" ? "text-emerald-400" :
       p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
+    const statusDot = p.solved
+      ? `<span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Solved"></span>`
+      : `<span class="w-2 h-2 rounded-full border border-gray-500 shrink-0" title="Unsolved"></span>`;
+    const safeTitle = typeof escapeHtml === "function" ? escapeHtml(p.title) : p.title;
 
     return `
       <button
+        type="button"
         onclick="jumpToProblemById(${p.id})"
         class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition cursor-pointer ${
           isActive ? "bg-emerald-500/15 border-l-2 border-emerald-400" : "hover:bg-[#161b22]"
         }"
       >
         <div class="flex items-center gap-2.5 min-w-0">
-          <span class="w-4 text-center text-xs">${p.solved ? "✅" : "○"}</span>
+          ${statusDot}
           <span class="text-xs font-mono text-zinc-500 shrink-0">#${p.id}</span>
-          <span class="text-xs font-medium text-zinc-200 truncate">${p.title}</span>
+          <span class="text-xs font-medium text-zinc-200 truncate">${safeTitle}</span>
         </div>
         <span class="text-[11px] font-mono font-semibold shrink-0 ${diffClass}">${p.difficulty}</span>
       </button>
@@ -512,11 +517,8 @@ function renderDrawerRows(list) {
 window.renderDrawerRows = renderDrawerRows;
 
 function filterDrawerList(query) {
-  const q = query.trim().toLowerCase().replace(/^#/, "");
-  const filtered = problemSequence.filter(
-    (p, idx) => p.title.toLowerCase().includes(q) || String(idx + 1) === q || String(p.id) === q
-  );
-  renderDrawerRows(filtered);
+  drawerSearchQuery = String(query || "");
+  renderDrawerRows(getFilteredDrawerList());
 }
 window.filterDrawerList = filterDrawerList;
 
@@ -613,7 +615,12 @@ function loadPrevProblem() {
 window.loadPrevProblem = loadPrevProblem;
 
 function openProblemListDrawer() {
-  document.getElementById("problem-list-drawer")?.classList.remove("hidden");
+  const drawer = document.getElementById("problem-list-drawer");
+  if (!drawer) return;
+  drawer.classList.remove("hidden");
+  renderDrawerRows(getFilteredDrawerList());
+  const searchEl = document.getElementById("drawer-search-input");
+  if (searchEl) setTimeout(() => searchEl.focus(), 30);
 }
 window.openProblemListDrawer = openProblemListDrawer;
 
@@ -621,6 +628,111 @@ function closeProblemListDrawer() {
   document.getElementById("problem-list-drawer")?.classList.add("hidden");
 }
 window.closeProblemListDrawer = closeProblemListDrawer;
+
+const WORKSPACE_SHORTCUTS = [
+  { action: "Run Tests", desc: "Execute safe Test Run against sample / stdin", keys: ["Ctrl / Cmd", "'"] },
+  { action: "Submit Patch", desc: "Grade solution against all hidden assertions", keys: ["Ctrl / Cmd", "Enter"] },
+  { action: "Shortcuts Help", desc: "Open or close this shortcuts reference", keys: ["?"] },
+  { action: "Close Modal", desc: "Dismiss open modal or problem drawer", keys: ["Esc"] },
+];
+
+function renderShortcutsModalRows() {
+  const container = document.getElementById("shortcuts-list-rows");
+  if (!container) return;
+  container.innerHTML = WORKSPACE_SHORTCUTS.map(item => {
+    const keysHtml = item.keys
+      .map(k => `<kbd class="px-2 py-0.5 rounded bg-surface-container border border-surface-border text-[11px] font-mono text-emerald-300 whitespace-nowrap">${escapeHtml(k)}</kbd>`)
+      .join(`<span class="text-gray-500 text-[10px] mx-0.5">+</span>`);
+    return `
+      <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-surface-dim border border-surface-border/70">
+        <div class="min-w-0">
+          <div class="font-semibold text-gray-100">${escapeHtml(item.action)}</div>
+          <div class="text-[11px] text-gray-400">${escapeHtml(item.desc)}</div>
+        </div>
+        <div class="flex items-center shrink-0">${keysHtml}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function openShortcutsModal() {
+  const modal = document.getElementById("shortcuts-modal");
+  if (!modal) return;
+  renderShortcutsModalRows();
+  modal.classList.remove("hidden");
+}
+window.openShortcutsModal = openShortcutsModal;
+
+function closeShortcutsModal() {
+  document.getElementById("shortcuts-modal")?.classList.add("hidden");
+}
+window.closeShortcutsModal = closeShortcutsModal;
+
+function toggleShortcutsModal() {
+  const modal = document.getElementById("shortcuts-modal");
+  if (!modal) return;
+  if (modal.classList.contains("hidden")) {
+    openShortcutsModal();
+  } else {
+    closeShortcutsModal();
+  }
+}
+window.toggleShortcutsModal = toggleShortcutsModal;
+
+function isEditableShortcutTarget(target) {
+  const candidates = [target, document.activeElement].filter(Boolean);
+  for (const el of candidates) {
+    const tag = (el.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) {
+      return true;
+    }
+    if (
+      typeof el.closest === "function" &&
+      el.closest("#editor-container, .monaco-editor, .CodeMirror, [contenteditable='true']")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeShortcutsModal();
+    closePatchReviewModal();
+    closeProblemListDrawer();
+    if (typeof closeAuthModal === "function") closeAuthModal();
+    return;
+  }
+
+  if (e.defaultPrevented || e.repeat) return;
+
+  const hasPrimaryMod = (e.ctrlKey || e.metaKey) && !e.altKey;
+
+  if (hasPrimaryMod && e.key === "'") {
+    const testBtn = document.getElementById("btn-test-run");
+    if (isExecutionBusy || (testBtn && testBtn.disabled)) return;
+    e.preventDefault();
+    if (typeof switchTrayTab === "function") switchTrayTab("output");
+    runTestCode();
+    return;
+  }
+
+  if (hasPrimaryMod && e.key === "Enter") {
+    const submitBtn = document.getElementById("btn-submit");
+    if (isExecutionBusy || (submitBtn && submitBtn.disabled)) return;
+    e.preventDefault();
+    if (typeof switchTrayTab === "function") switchTrayTab("output");
+    submitPatch();
+    return;
+  }
+
+  if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (isEditableShortcutTarget(e.target)) return;
+    e.preventDefault();
+    toggleShortcutsModal();
+  }
+});
 
 // --- 4. PERMANENT CLOUD LEADERBOARD MODAL LOGIC ---
 function openLeaderboardModal() {
@@ -698,11 +810,12 @@ async function fetchLeaderboard() {
         ? "bg-emerald-950/40 border-l-2 border-emerald-500 text-white font-bold"
         : "hover:bg-zinc-800/40 text-zinc-300";
 
+      const safeUsername = escapeHtml(player.username || "Engineer");
       return `
         <tr class="${rowHighlight} transition">
           <td class="py-2.5 px-3 text-zinc-400 font-bold">${rankBadge}</td>
           <td class="py-2.5 px-3 flex items-center gap-1.5">
-            <span class="truncate max-w-[140px]" title="${player.username}">${player.username}</span>
+            <span class="truncate max-w-[140px]" title="${safeUsername}">${safeUsername}</span>
             ${isCurrentUser ? '<span class="text-[9px] px-1 bg-emerald-500/20 text-emerald-400 rounded uppercase">You</span>' : ''}
             ${player.tier === 'pro' ? '<span class="text-[9px] px-1 bg-amber-500/20 text-amber-300 rounded uppercase font-semibold">Pro</span>' : ''}
           </td>
@@ -891,6 +1004,271 @@ function hideCopyDiffButton() {
   }
 }
 
+function isProblemCurrentlySolved(problem) {
+  if (!problem || !problem.id) return false;
+  const pidNum = Number(problem.id);
+  const seqMatch = problemSequence.find(p => Number(p.id) === pidNum);
+  if (seqMatch && seqMatch.solved) return true;
+  const solvedMap = getSolvedMap();
+  return Boolean(solvedMap[String(problem.id)]);
+}
+
+function computeSimpleLineDiffCount(originalCode, patchedCode) {
+  const origLines = String(originalCode ?? "").replace(/\r\n/g, "\n").split("\n");
+  const nextLines = String(patchedCode ?? "").replace(/\r\n/g, "\n").split("\n");
+  const maxLen = Math.max(origLines.length, nextLines.length);
+  let changed = 0;
+  for (let i = 0; i < maxLen; i++) {
+    if ((origLines[i] ?? "") !== (nextLines[i] ?? "")) {
+      changed += 1;
+    }
+  }
+  return Math.max(1, changed);
+}
+
+function formatShareDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total}s`;
+  const mins = Math.floor(total / 60);
+  const rem = total % 60;
+  return rem > 0 ? `${mins}m ${rem}s` : `${mins}m`;
+}
+
+function updateSharePatchButtonState() {
+  const btn = document.getElementById("share-patch-btn");
+  if (!btn) return;
+  if (currentProblemSolved) {
+    btn.disabled = false;
+    btn.title = "Copy Share Patch summary to clipboard";
+    btn.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-mono font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/45 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.28)] cursor-pointer transition whitespace-nowrap";
+  } else {
+    btn.disabled = true;
+    btn.title = "Solve this bug to unlock Share Patch";
+    btn.className = "inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-medium bg-surface border border-surface-border text-gray-400 opacity-45 cursor-not-allowed transition whitespace-nowrap";
+  }
+  btn.innerHTML = `<span>🔗</span><span>Share Patch</span>`;
+}
+
+function buildSharePatchSummary() {
+  if (!currentProblem) return "";
+  const rawDiff = String(currentProblem.difficulty || "Medium").trim();
+  const difficulty = rawDiff ? rawDiff.charAt(0).toUpperCase() + rawDiff.slice(1).toLowerCase() : "Medium";
+  const article = /^[aeiou]/i.test(difficulty) ? "an" : "a";
+  const rawLang = (currentLanguage || currentProblem.language || "python").toLowerCase();
+  const langNames = { python: "Python", cpp: "C++20", javascript: "JavaScript" };
+  const language = langNames[rawLang] || rawLang;
+  const category = currentProblem.category || "Debugging";
+  const starterCode = getProblemCode(currentProblem, rawLang);
+  const currentCode = monacoEditor ? monacoEditor.getValue() : (lastPassingPatchCode || starterCode);
+  const computedDiff = computeSimpleLineDiffCount(starterCode, currentCode);
+  const linesChanged = Math.max(1, lastPatchLinesChanged ?? computedDiff);
+  const formattedTime = (typeof lastSolveDurationSeconds === "number" && lastSolveDurationSeconds > 0)
+    ? formatShareDuration(lastSolveDurationSeconds)
+    : "";
+  const timePart = formattedTime ? ` in ${formattedTime}` : "";
+  return `🛠️ Fixed ${article} ${difficulty} ${language} bug (${category})${timePart} on LintIQ — ${linesChanged} ${linesChanged === 1 ? "line" : "lines"} changed. Can you beat it? https://thelintiq.com/?id=${currentProblem.id}`;
+}
+
+const COPY_LINK_DEFAULT_HTML = `<svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg><span>Copy Link</span>`;
+let copyChallengeLinkTimer = null;
+
+async function writeTextToClipboard(text) {
+  let copied = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch (_) {
+      copied = false;
+    }
+  }
+  if (!copied) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    copied = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (!copied) {
+      throw new Error("Clipboard write blocked");
+    }
+  }
+}
+
+function resetCopyChallengeLinkButton(problem = currentProblem) {
+  if (copyChallengeLinkTimer) {
+    clearTimeout(copyChallengeLinkTimer);
+    copyChallengeLinkTimer = null;
+  }
+  const btn = document.getElementById("copy-challenge-link-btn");
+  if (!btn) return;
+  const hasValidId = Boolean(problem && problem.id !== undefined && problem.id !== null);
+  btn.disabled = !hasValidId;
+  btn.classList.remove("text-emerald-300", "border-emerald-500/45", "bg-emerald-500/15");
+  btn.innerHTML = COPY_LINK_DEFAULT_HTML;
+}
+
+async function copyChallengeLink() {
+  if (!currentProblem || currentProblem.id === undefined || currentProblem.id === null) return;
+  const url = `https://thelintiq.com/?id=${encodeURIComponent(currentProblem.id)}`;
+  const btn = document.getElementById("copy-challenge-link-btn");
+  try {
+    await writeTextToClipboard(url);
+    if (typeof showToast === "function") {
+      showToast("Challenge link copied!", "success");
+    }
+    if (btn) {
+      if (copyChallengeLinkTimer) clearTimeout(copyChallengeLinkTimer);
+      btn.classList.add("text-emerald-300", "border-emerald-500/45", "bg-emerald-500/15");
+      btn.innerHTML = `<span>✓</span><span>Copied</span>`;
+      copyChallengeLinkTimer = setTimeout(() => {
+        copyChallengeLinkTimer = null;
+        resetCopyChallengeLinkButton(currentProblem);
+      }, 2000);
+    }
+  } catch (err) {
+    console.warn("Challenge link copy failed:", err);
+    if (typeof showToast === "function") {
+      showToast("Could not copy challenge link.", "error");
+    }
+  }
+}
+window.copyChallengeLink = copyChallengeLink;
+
+async function copySharePatchSummary() {
+  if (!currentProblemSolved || !currentProblem) return;
+  const summary = buildSharePatchSummary();
+  if (!summary) return;
+  const btn = document.getElementById("share-patch-btn");
+  try {
+    await writeTextToClipboard(summary);
+    if (typeof showToast === "function") {
+      showToast("Patch summary copied to clipboard!", "success");
+    }
+    if (btn) {
+      btn.innerHTML = `<span>✓</span><span>Copied!</span>`;
+      setTimeout(() => {
+        if (btn && currentProblemSolved) {
+          btn.innerHTML = `<span>🔗</span><span>Share Patch</span>`;
+        }
+      }, 2000);
+    }
+  } catch (err) {
+    console.warn("Clipboard copy failed:", err);
+    if (typeof showToast === "function") {
+      showToast("Could not copy patch summary.", "error");
+    }
+  }
+}
+window.copySharePatchSummary = copySharePatchSummary;
+
+function updateAnalyzePatchButtonState() {
+  const btn = document.getElementById("analyze-patch-btn");
+  if (!btn) return;
+  if (canAnalyzeCurrentPatch) {
+    btn.disabled = false;
+    btn.title = "Open Senior Engineer Code Review";
+    btn.className = "flex items-center gap-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/45 text-cyan-200 shadow-[0_0_12px_rgba(34,211,238,0.22)] px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer whitespace-nowrap";
+  } else {
+    btn.disabled = true;
+    btn.title = "Submit a passing patch to unlock Senior Engineer Review";
+    btn.className = "flex items-center gap-1.5 bg-surface-card border border-surface-border text-gray-400 opacity-45 cursor-not-allowed px-2.5 py-1 rounded-md transition text-xs font-semibold whitespace-nowrap";
+  }
+}
+
+function renderPatchReviewCards(review) {
+  const cardsEl = document.getElementById("review-cards");
+  if (!cardsEl) return;
+  const sections = [
+    {
+      label: "Root Cause",
+      icon: "🐞",
+      accent: "border-rose-500/30 bg-rose-500/5 text-rose-300",
+      text: review?.root_cause || "Original logic failed on edge-case inputs.",
+    },
+    {
+      label: "Patch Quality",
+      icon: "✅",
+      accent: "border-emerald-500/30 bg-emerald-500/5 text-emerald-300",
+      text: review?.patch_quality || "Fix passes all assertions cleanly.",
+    },
+    {
+      label: "Production Tip",
+      icon: "🛡️",
+      accent: "border-cyan-500/30 bg-cyan-500/5 text-cyan-300",
+      text: review?.production_tip || "Guard boundary conditions with explicit tests in CI.",
+    },
+  ];
+  cardsEl.innerHTML = sections.map(s => `
+    <div class="rounded-lg border p-3.5 ${s.accent}">
+      <div class="text-[11px] font-mono uppercase tracking-wider font-bold mb-1.5 flex items-center gap-1.5">
+        <span>${s.icon}</span><span>${escapeHtml(s.label)}</span>
+      </div>
+      <p class="text-xs sm:text-sm text-gray-200 leading-relaxed">${escapeHtml(s.text)}</p>
+    </div>
+  `).join("");
+  cardsEl.classList.remove("hidden");
+}
+
+function closePatchReviewModal() {
+  document.getElementById("patch-review-modal")?.classList.add("hidden");
+}
+window.closePatchReviewModal = closePatchReviewModal;
+
+async function openPatchReviewModal() {
+  if (!canAnalyzeCurrentPatch || !currentProblem) return;
+  const modal = document.getElementById("patch-review-modal");
+  const badgeEl = document.getElementById("review-problem-badge");
+  const loadingEl = document.getElementById("review-loading");
+  const errorEl = document.getElementById("review-error");
+  const cardsEl = document.getElementById("review-cards");
+  if (!modal) return;
+
+  if (badgeEl) {
+    badgeEl.textContent = `#${currentProblem.id} ${currentProblem.title || "Challenge"}`;
+  }
+  errorEl?.classList.add("hidden");
+  cardsEl?.classList.add("hidden");
+  modal.classList.remove("hidden");
+
+  const userCode = monacoEditor ? monacoEditor.getValue() : lastPassingPatchCode;
+  const language = currentLanguage || currentProblem.language || "python";
+  const cacheKey = `${currentProblem.id}::${language}::${userCode}`;
+
+  if (patchReviewCache.has(cacheKey)) {
+    loadingEl?.classList.add("hidden");
+    renderPatchReviewCards(patchReviewCache.get(cacheKey));
+    return;
+  }
+
+  loadingEl?.classList.remove("hidden");
+  try {
+    const res = await fetch(`${API}/review-patch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        problem_id: Number(currentProblem.id),
+        user_code: userCode,
+        language,
+      }),
+    });
+    const review = await parseJsonResponse(res);
+    patchReviewCache.set(cacheKey, review);
+    renderPatchReviewCards(review);
+  } catch (err) {
+    if (errorEl) {
+      errorEl.textContent = `Could not generate Senior Engineer review: ${err.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  } finally {
+    loadingEl?.classList.add("hidden");
+  }
+}
+window.openPatchReviewModal = openPatchReviewModal;
+
 function buildDiffCardMarkdown(problem, metrics, pointsEarned, solveSecs) {
   const fence = String.fromCharCode(96).repeat(3);
   const icon = getGradeIcon(metrics.grade);
@@ -1052,10 +1430,10 @@ function renderProblem(problem, customConsoleMsg = null) {
   const tagsList = Array.isArray(problem.tags) ? problem.tags : [];
   tagsContainer.innerHTML = tagsList.map(tag => {
     const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
-    return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-container text-gray-400 border border-surface-border">${cleanTag}</span>`;
+    return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-container text-gray-400 border border-surface-border">${escapeHtml(cleanTag)}</span>`;
   }).join("");
 
-  const tcCount = Array.isArray(problem.test_cases) ? problem.test_cases.length : 0;
+  const tcCount = problem.test_count ?? (Array.isArray(problem.test_cases) ? problem.test_cases.length : 0);
   document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
 
   const diffBadge = document.getElementById("problem-difficulty");
@@ -1094,9 +1472,24 @@ function renderProblem(problem, customConsoleMsg = null) {
   loadStarterCodeForLanguage(targetLang);
 
   resetTimer();
+  lastSolveDurationSeconds = null;
+  lastPatchLinesChanged = null;
+  currentProblemSolved = isProblemCurrentlySolved(problem);
+  canAnalyzeCurrentPatch = false;
+  lastPassingPatchCode = "";
+  updateSharePatchButtonState();
+  updateAnalyzePatchButtonState();
+  updateDailyBugBadge();
+  resetCopyChallengeLinkButton(problem);
 }
 
 async function loadNewProblem() {
+  const slowLoadTimer = setTimeout(() => {
+    const titleEl = document.getElementById("problem-title");
+    if (titleEl && titleEl.textContent.includes("Fetching")) {
+      titleEl.textContent = "Waking up backend sandbox...";
+    }
+  }, 3000);
   try {
     resetTimer();
     hideCopyDiffButton();
@@ -1140,6 +1533,8 @@ async function loadNewProblem() {
     document.getElementById("problem-title").textContent = "Failed to load challenge";
     document.getElementById("problem-desc").textContent = "Make sure your FastAPI backend is running on port 8000.";
     console.error(err);
+  } finally {
+    clearTimeout(slowLoadTimer);
   }
 }
 
@@ -1188,6 +1583,13 @@ async function runTestCode() {
   statusTag.textContent = "Testing...";
   statusTag.className = "text-[10px] font-mono bg-sky-500/15 text-sky-400 px-1.5 py-0.2 rounded";
 
+  const slowRunTimer = setTimeout(() => {
+    if (isExecutionBusy) {
+      statusTag.textContent = "Waking sandbox...";
+      if (consoleEl) consoleEl.textContent = "⏳ Waking up backend sandbox & running assertions...";
+    }
+  }, 3000);
+
   try {
     const res = await fetch(`${API}/run-code`, {
       method: "POST",
@@ -1200,10 +1602,7 @@ async function runTestCode() {
       })
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || `Server error (${res.status})`);
-    }
+    const data = await parseJsonResponse(res);
 
     const msText = data.runtime_ms ? `${data.runtime_ms}ms` : "<1ms";
     const stdoutRaw = String(data.stdout || "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
@@ -1277,6 +1676,7 @@ async function runTestCode() {
     consoleEl.textContent = `✖ Test Run failed: ${err.message}`;
     console.error(err);
   } finally {
+    clearTimeout(slowRunTimer);
     isExecutionBusy = false;
     if (submitBtn) submitBtn.disabled = false;
     const waitLeft = Math.max(0, testRunCooldownUntil - Date.now());
@@ -1308,6 +1708,13 @@ async function submitPatch() {
   statusTag.textContent = "Running...";
   statusTag.className = "text-[10px] font-mono bg-amber-500/15 text-amber-400 px-1.5 py-0.2 rounded";
 
+  const slowSubmitTimer = setTimeout(() => {
+    if (isExecutionBusy) {
+      statusTag.textContent = "Waking sandbox...";
+      if (consoleEl) consoleEl.textContent = "⏳ Waking up backend sandbox & grading hidden assertions...";
+    }
+  }, 3000);
+
   const userId = currentUser?.id || null;
   const username = currentUser ? getDisplayUsername(currentUser) : null;
   const accessToken = currentSession?.access_token || null;
@@ -1333,12 +1740,21 @@ async function submitPatch() {
       })
     });
 
-    const result = await res.json();
-    if (!res.ok) {
-      throw new Error(result.detail || `Server error (${res.status})`);
+    if (res.status === 401) {
+      statusTag.textContent = "Sign In Required";
+      statusTag.className = "text-[10px] font-mono bg-amber-500/15 text-amber-400 px-1.5 py-0.2 rounded";
+      consoleEl.textContent = "🔒 Please sign in (or refresh an expired session) to submit & grade patches.";
+      if (typeof showToast === "function") {
+        showToast("Session expired or sign-in required. Please sign in to submit.", "warn");
+      }
+      if (typeof openAuthModal === "function") openAuthModal();
+      return;
     }
 
+    const result = await parseJsonResponse(res);
+
     if (result.passed) {
+      const solveDurationSnapshot = timerSeconds;
       stopTimer();
       statusTag.textContent = "Passed";
       statusTag.className = "text-[10px] font-mono bg-emerald-500/15 text-emerald-400 px-1.5 py-0.2 rounded";
@@ -1352,6 +1768,15 @@ async function submitPatch() {
       }
 
       const pm = result.patch_metrics || null;
+      const starterForDiff = getProblemCode(currentProblem, currentLanguage || currentProblem.language || "python");
+      const pmDiffCount = pm ? ((pm.lines_added || 0) + (pm.lines_removed || 0)) : 0;
+      lastPatchLinesChanged = Math.max(1, pmDiffCount || computeSimpleLineDiffCount(starterForDiff, userCode));
+      lastSolveDurationSeconds = solveDurationSnapshot > 0 ? solveDurationSnapshot : null;
+      currentProblemSolved = true;
+      canAnalyzeCurrentPatch = true;
+      lastPassingPatchCode = userCode;
+      updateSharePatchButtonState();
+      updateAnalyzePatchButtonState();
       const multiplier = pm ? Number(pm.multiplier || 1.0) : 1.0;
       const grade = pm ? pm.grade : "Refactor";
       const runtimeMs = pm ? pm.runtime_ms : (result.runtime_ms || null);
@@ -1364,13 +1789,34 @@ async function submitPatch() {
       let solveNote = "";
 
       if (result.profile) {
-        streak = result.profile.streak;
+        streak = Number(result.profile.current_streak ?? result.profile.streak ?? 0);
         score = result.profile.score;
         solves = result.profile.solves;
         pointsEarned = result.profile.points_earned;
+        const { todayStr } = typeof getIstDateKeys === "function" ? getIstDateKeys() : { todayStr: "" };
+        if (result.profile.last_streak_date || todayStr) {
+          localStorage.setItem("lintiq_last_streak_date", String(result.profile.last_streak_date || todayStr));
+        }
+        if (result.profile.max_streak !== undefined) {
+          localStorage.setItem("lintiq_max_streak", String(result.profile.max_streak));
+        }
         solvedMap[pidKey] = { bestPoints: Math.max(prevRecord?.bestPoints || 0, pointsEarned), bestGrade: grade };
         saveSolvedMap(solvedMap);
       } else {
+        const { todayStr, yesterdayStr } = typeof getIstDateKeys === "function"
+          ? getIstDateKeys()
+          : { todayStr: "", yesterdayStr: "" };
+        const lastDate = (localStorage.getItem("lintiq_last_streak_date") || "").trim();
+        const effectivePrev = (lastDate === todayStr || lastDate === yesterdayStr) ? Math.max(0, streak) : 0;
+        if (lastDate === todayStr) {
+          streak = Math.max(1, effectivePrev);
+        } else if (lastDate === yesterdayStr) {
+          streak = effectivePrev + 1;
+        } else {
+          streak = 1;
+        }
+        if (todayStr) localStorage.setItem("lintiq_last_streak_date", todayStr);
+
         const timeBonus = Math.max(0, 60 - timerSeconds);
         if (prevRecord) {
           const candidatePoints = Math.round((100 + (Math.max(1, streak) * 10) + timeBonus) * multiplier);
@@ -1385,7 +1831,6 @@ async function submitPatch() {
             solveNote = " (Already solved)";
           }
         } else {
-          streak += 1;
           solves += 1;
           pointsEarned = Math.round((100 + (streak * 10) + timeBonus) * multiplier);
           score += pointsEarned;
@@ -1394,10 +1839,18 @@ async function submitPatch() {
         }
       }
 
+      const hasDailyBonus = Number(result.xp_multiplier || 1) === 2 || Boolean(result.daily_bonus);
+      const dailyBonusNote = hasDailyBonus ? " | 🔥 2x Daily XP Applied!" : "";
+      if (hasDailyBonus && dailyChallengeDateUtc) {
+        try {
+          localStorage.setItem(`lintiq_daily_done_${dailyChallengeDateUtc}`, String(currentProblem.id));
+        } catch (_) {}
+      }
+
       if (pm) {
         const icon = getGradeIcon(pm.grade);
         const multLabel = pm.multiplier > 1 ? ` (${pm.multiplier}x)` : "";
-        const summaryLine = `✓ PASSED | ${icon} ${pm.grade} Patch (+${pm.lines_added} -${pm.lines_removed} lines) | ⚡ ${pm.runtime_ms}ms | +${pointsEarned} pts${multLabel}${solveNote}`;
+        const summaryLine = `✓ PASSED | ${icon} ${pm.grade} Patch (+${pm.lines_added} -${pm.lines_removed} lines) | ⚡ ${pm.runtime_ms}ms | +${pointsEarned} pts${multLabel}${solveNote}${dailyBonusNote}`;
         consoleEl.textContent = `${summaryLine}\nCleared in ${timerSeconds}s — ${result.message || ''}`;
 
         lastDiffCardText = buildDiffCardMarkdown(currentProblem, pm, pointsEarned, timerSeconds);
@@ -1406,7 +1859,11 @@ async function submitPatch() {
           copyBtn.classList.remove("hidden");
         }
       } else {
-        consoleEl.textContent = `✔ Cleared in ${timerSeconds}s! (+${pointsEarned} Points${solveNote})\n${result.message || ''}`;
+        consoleEl.textContent = `✔ Cleared in ${timerSeconds}s! (+${pointsEarned} Points${solveNote}${dailyBonusNote})\n${result.message || ''}`;
+      }
+
+      if (hasDailyBonus && typeof showToast === "function") {
+        showToast("🔥 2x Daily XP Applied!", "success");
       }
 
       updateMetrics();
@@ -1415,7 +1872,6 @@ async function submitPatch() {
       statusTag.textContent = "Failed";
       statusTag.className = "text-[10px] font-mono bg-rose-500/15 text-rose-400 px-1.5 py-0.2 rounded";
       consoleEl.textContent = `✖ Patch Failed:\n${result.message || 'Logic or assertion error.'}`;
-      streak = 0;
       updateMetrics();
       recordLintIQSolve(timerSeconds, false);
     }
@@ -1425,6 +1881,7 @@ async function submitPatch() {
     consoleEl.textContent = `Failed to communicate with test runner: ${err.message}`;
     console.error(err);
   } finally {
+    clearTimeout(slowSubmitTimer);
     isExecutionBusy = false;
     submitBtn.disabled = false;
     submitBtn.textContent = "Submit Patch";
@@ -1450,10 +1907,12 @@ async function requestHint() {
         user_code: monacoEditor.getValue()
       })
     });
-    const data = await res.json();
+    const data = await parseJsonResponse(res);
     hintText.textContent = data.hint || "Inspect how the loop handles edge bounds.";
   } catch (e) {
-    hintText.textContent = "Examine variable boundaries and off-by-one offsets.";
+    hintText.textContent = e?.message && !String(e.message).startsWith("Server error")
+      ? e.message
+      : "Examine variable boundaries and off-by-one offsets.";
   }
 }
 
@@ -1480,9 +1939,13 @@ require(["vs/editor/editor.main"], function () {
   window.monacoEditor = monacoEditor;
 
   monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+    if (isExecutionBusy) return;
+    if (typeof switchTrayTab === "function") switchTrayTab("output");
     submitPatch();
   });
   monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Quote, () => {
+    if (isExecutionBusy) return;
+    if (typeof switchTrayTab === "function") switchTrayTab("output");
     runTestCode();
   });
 
@@ -1494,6 +1957,9 @@ require(["vs/editor/editor.main"], function () {
   });
 
   monacoEditor.onDidChangeModelContent(() => {
+    if (!isInjectingCode && currentProblem) {
+      saveEditorDraftDebounced();
+    }
     const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
     if (prefs.autoTimer !== false && !isInjectingCode && !timerRunning && currentProblem) {
       startTimer();
@@ -1512,18 +1978,35 @@ require(["vs/editor/editor.main"], function () {
   const requestedCat = urlParams.get("category");
   const requestedDiff = urlParams.get("difficulty");
 
-  if (requestedCat) selectedCategory = requestedCat;
+  if (requestedCat) {
+    selectedCategory = requestedCat;
+    document.querySelectorAll(".cat-pill").forEach(btn => {
+      if (btn.getAttribute("data-cat") === requestedCat) {
+        btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-semibold transition bg-emerald-500 text-black shadow-sm whitespace-nowrap shrink-0 cursor-pointer";
+      } else {
+        btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-surface-container border border-surface-border text-gray-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer";
+      }
+    });
+  }
   if (requestedDiff) {
     selectedDifficulty = requestedDiff;
     const diffEl = document.getElementById("difficulty-select");
     if (diffEl) diffEl.value = requestedDiff;
   }
 
-  initAuth().then(() => {
+  initAuth().then(({ user }) => {
+    if (user) {
+      syncUserProfileWithCloud(user);
+    }
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        syncUserProfileWithCloud(session.user);
+      }
+    });
     const autoLoadFirst = !Number.isFinite(requestedId) && !requestedAi;
     fetchProblemSequence(selectedCategory, selectedDifficulty, autoLoadFirst).then(() => {
       if (requestedAi) {
-        generateAIChallenge();
+        generateAIChallenge({ fallbackOnError: true });
         return;
       }
 
@@ -1557,10 +2040,12 @@ require(["vs/editor/editor.main"], function () {
 
   updateMetrics();
   initCategoryCounts();
+  loadDailyChallengeInfo();
 });
 
 // --- 11. INSTANT SHARED AI POOL GENERATOR & CATEGORY REFRESH ---
-async function generateAIChallenge() {
+async function generateAIChallenge(options = {}) {
+  const shouldFallbackToCatalog = Boolean(options?.fallbackOnError) || !currentProblem;
   const btn = document.getElementById("ai-generate-btn");
   if (btn) {
     btn.disabled = true;
@@ -1577,9 +2062,10 @@ async function generateAIChallenge() {
     if (selectedCategory && selectedCategory !== "All") {
       params.set("category", selectedCategory);
     }
-    if (selectedDifficulty && selectedDifficulty !== "All") {
-      params.set("difficulty", selectedDifficulty);
-    }
+    const targetDiff = (selectedDifficulty && selectedDifficulty !== "All")
+      ? selectedDifficulty
+      : "Medium";
+    params.set("difficulty", targetDiff);
     if (currentUser?.id) {
       params.set("user_id", currentUser.id);
     }
@@ -1599,11 +2085,7 @@ async function generateAIChallenge() {
       method: "POST",
       headers
     });
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.detail || "Failed to generate AI challenge");
-    }
+    const data = await parseJsonResponse(res);
 
     recordLocalSeenAiId(data.id);
 
@@ -1612,9 +2094,27 @@ async function generateAIChallenge() {
       data,
       `✨ AI Challenge #${data.id} (${data.title}) ready [${speedNote}]! Click inside the editor to hunt the bug.`
     );
+    renderProblemSequence();
+    renderDrawerRows(getFilteredDrawerList());
 
     refreshCategoryPillCounts();
   } catch (err) {
+    if (shouldFallbackToCatalog) {
+      const unsolvedIdx = problemSequence.findIndex(p => !p.solved);
+      const fallbackIdx = unsolvedIdx !== -1 ? unsolvedIdx : 0;
+      if (problemSequence.length > 0) {
+        if (typeof showToast === "function") {
+          showToast(`AI pool busy (${err.message}). Loaded a ${selectedCategory} catalog challenge instead.`, "warn");
+        }
+        await loadSequentialProblem(fallbackIdx);
+        if (outEl) {
+          outEl.textContent = `⚠ AI unavailable (${err.message}). Loaded ${selectedCategory} catalog challenge #${problemSequence[fallbackIdx].id} instead.`;
+        }
+        return;
+      }
+      await loadNewProblem();
+      return;
+    }
     if (outEl) {
       outEl.textContent = `❌ AI Generation Error: ${err.message}`;
     }
@@ -1632,20 +2132,7 @@ async function refreshCategoryPillCounts() {
     const res = await fetch(`${API}/categories`);
     if (!res.ok) return;
     const data = await res.json();
-
-    const countMap = {};
-    (data.categories || []).forEach(c => {
-      countMap[c.name] = c.count;
-    });
-
-    document.querySelectorAll(".cat-pill").forEach(btn => {
-      const cat = btn.getAttribute("data-cat");
-      if (cat === "All") {
-        btn.innerHTML = `All Tracks <span class="ml-1 text-[10px] opacity-90">(${data.total || 0})</span>`;
-      } else if (countMap[cat] !== undefined) {
-        btn.innerHTML = `${cat} <span class="ml-1 text-[10px] opacity-80">(${countMap[cat]})</span>`;
-      }
-    });
+    applyCategoryPillCounts(data);
   } catch (e) {
     console.warn("Could not refresh category counts:", e);
   }

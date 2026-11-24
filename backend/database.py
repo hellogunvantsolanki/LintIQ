@@ -10,7 +10,7 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple, Set
 
 import httpx
@@ -405,6 +405,19 @@ def insert_ai_problem_to_supabase(problem: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+_AI_TABLE_MISSING_WARNED = False
+
+
+def _warn_missing_ai_table_once(status_code: int) -> None:
+    global _AI_TABLE_MISSING_WARNED
+    if status_code == 404 and not _AI_TABLE_MISSING_WARNED:
+        _AI_TABLE_MISSING_WARNED = True
+        logger.warning(
+            "Supabase 'ai_problems' table returned 404 Not Found; falling back to local SQLite catalog. "
+            "Run backend/supabase_rls_hardening.sql in Supabase SQL Editor to create it."
+        )
+
+
 def _fetch_seen_ai_problem_ids(
     user_id: Optional[str],
     access_token: Optional[str] = None,
@@ -491,14 +504,22 @@ def fetch_unseen_ai_problem(
             params=params,
             headers=_supabase_headers(),
         )
+        if resp.status_code == 404:
+            _warn_missing_ai_table_once(404)
+            return None, 0
         if resp.status_code != 200:
+            logger.warning("Supabase ai_problems query returned HTTP %s", resp.status_code)
             return None, 0
 
         rows = resp.json()
         if not isinstance(rows, list) or not rows:
             return None, 0
 
-        unseen = [r for r in rows if int(r["id"]) not in seen_ids]
+        unseen = [
+            r for r in rows
+            if int(r["id"]) not in seen_ids
+            and (not safe_cat or str(r.get("category") or "").strip().lower() == safe_cat.lower())
+        ]
         if not unseen:
             return None, 0
 
@@ -567,35 +588,25 @@ def _fetch_supabase_ai_problem_by_id(problem_id: int) -> Optional[Dict[str, Any]
 # ---------------------------------------------------------------------------
 
 def fetch_categories_summary() -> Dict[str, Any]:
+    """
+    Returns deduplicated track counts from the static problems.db catalog
+    (matching GET /problems COUNT(DISTINCT title) so counts are 100% identical
+    across problem-directory.html, index.html, and profile.html).
+    """
     counts: Dict[str, int] = {}
     conn = get_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT category, COUNT(*) as count
+            SELECT category, COUNT(DISTINCT title) as count
             FROM problems
             GROUP BY category
         """)
         for cat_name, cnt in cursor.fetchall():
-            counts[cat_name] = int(cnt)
+            if cat_name:
+                counts[cat_name] = int(cnt)
     finally:
         conn.close()
-
-    try:
-        resp = _SUPABASE_HTTP.get(
-            "/rest/v1/ai_problems",
-            params={"select": "category", "limit": "5000"},
-            headers=_supabase_headers(),
-        )
-        if resp.status_code == 200:
-            rows = resp.json()
-            if isinstance(rows, list):
-                for r in rows:
-                    c = r.get("category")
-                    if c:
-                        counts[c] = counts.get(c, 0) + 1
-    except Exception as exc:
-        logger.warning("Could not merge Supabase ai_problems into category counts: %s", exc)
 
     categories = [{"name": k, "count": counts[k]} for k in sorted(counts.keys())]
     return {"total": sum(counts.values()), "categories": categories}
@@ -775,6 +786,502 @@ def fetch_user_profile(user_id: str, access_token: Optional[str] = None) -> Opti
     return None
 
 
+def ensure_user_profile(user_id: str, username: Optional[str] = None) -> Dict[str, Any]:
+    """Creates a default user_profiles row server-side (via service role) if one does not exist."""
+    clean_name = _sanitize_username(username)
+    profile = {
+        "id": user_id,
+        "username": clean_name,
+        "streak": 0,
+        "score": 0,
+        "solves": 0,
+        "tier": "free",
+    }
+    if is_valid_user_id(user_id):
+        _upsert_supabase_profile(profile, access_token=None)
+        _upsert_sqlite_profile(profile)
+    return profile
+
+
+def _normalize_iso_utc(raw_ts: Any) -> Optional[str]:
+    if not raw_ts:
+        return None
+    s = str(raw_ts).strip()
+    if not s:
+        return None
+    try:
+        # Handle SQLite "YYYY-MM-DD HH:MM:SS" or ISO strings
+        cleaned = s.replace(" ", "T")
+        if cleaned.endswith("Z"):
+            dt = datetime.fromisoformat(cleaned[:-1] + "+00:00")
+        elif "+" in cleaned[10:] or "-" in cleaned[10:]:
+            dt = datetime.fromisoformat(cleaned)
+        else:
+            dt = datetime.fromisoformat(cleaned).replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        return s
+
+
+def fetch_user_solve_history(
+    user_id: str,
+    access_token: Optional[str] = None,
+    limit: int = 1000,
+) -> List[Dict[str, Any]]:
+    """Fetches real solve timestamps & grades from Supabase user_solves (with SQLite fallback)."""
+    if not is_valid_user_id(user_id):
+        return []
+
+    rows_out: List[Dict[str, Any]] = []
+    use_srv = has_supabase_service_key()
+    try:
+        resp = _SUPABASE_HTTP.get(
+            "/rest/v1/user_solves",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "problem_id,best_points,best_grade,solved_at",
+                "order": "solved_at.desc",
+                "limit": str(min(2000, max(1, int(limit)))),
+            },
+            headers=_supabase_headers(
+                access_token=None if use_srv else access_token,
+                use_service_role=use_srv or not bool(access_token),
+            ),
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list):
+                for r in data:
+                    if r.get("problem_id") is None:
+                        continue
+                    rows_out.append({
+                        "problem_id": int(r["problem_id"]),
+                        "best_points": int(r.get("best_points") or 0),
+                        "best_grade": str(r.get("best_grade") or "Refactor"),
+                        "solved_at": _normalize_iso_utc(r.get("solved_at")),
+                    })
+                return rows_out
+    except Exception as exc:
+        logger.warning("Supabase fetch_user_solve_history failed: %s", exc)
+
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT problem_id, best_points, best_grade, solved_at
+            FROM user_solves
+            WHERE user_id = ?
+            ORDER BY solved_at DESC
+            LIMIT ?
+            """,
+            (user_id, min(2000, max(1, int(limit)))),
+        )
+        for pid, pts, grade, ts in cursor.fetchall():
+            rows_out.append({
+                "problem_id": int(pid),
+                "best_points": int(pts or 0),
+                "best_grade": str(grade or "Refactor"),
+                "solved_at": _normalize_iso_utc(ts),
+            })
+    except Exception as exc:
+        logger.warning("SQLite fetch_user_solve_history failed: %s", exc)
+    finally:
+        if conn:
+            conn.close()
+
+    return rows_out
+
+
+def compute_activity_summary(solve_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Computes solve_dates, 365-day daily_activity, total_active_days, current_streak, and max_streak."""
+    solve_dates: List[str] = []
+    day_counts: Dict[str, int] = {}
+
+    for r in solve_rows:
+        ts = r.get("solved_at")
+        if not ts:
+            continue
+        solve_dates.append(ts)
+        day_str = str(ts)[:10]
+        if len(day_str) == 10:
+            day_counts[day_str] = day_counts.get(day_str, 0) + 1
+
+    today_utc = datetime.now(timezone.utc).date()
+    cutoff_utc = today_utc - timedelta(days=364)
+
+    daily_activity = [
+        {"date": d_str, "count": cnt}
+        for d_str, cnt in sorted(day_counts.items())
+        if d_str >= cutoff_utc.isoformat()
+    ]
+
+    sorted_days = sorted(datetime.strptime(d, "%Y-%m-%d").date() for d in day_counts.keys())
+    total_active_days = len(sorted_days)
+
+    max_streak = 0
+    run = 0
+    prev_day = None
+    for d in sorted_days:
+        if prev_day is not None and (d - prev_day).days == 1:
+            run += 1
+        else:
+            run = 1
+        if run > max_streak:
+            max_streak = run
+        prev_day = d
+
+    current_streak = 0
+    if sorted_days:
+        day_set = set(sorted_days)
+        cursor_day = today_utc if today_utc in day_set else (today_utc - timedelta(days=1))
+        while cursor_day in day_set:
+            current_streak += 1
+            cursor_day -= timedelta(days=1)
+
+    return {
+        "solve_dates": solve_dates,
+        "daily_activity": daily_activity,
+        "total_active_days": total_active_days,
+        "current_streak": current_streak,
+        "max_streak": max_streak,
+    }
+
+
+_IST_TZ = timezone(timedelta(hours=5, minutes=30))
+
+
+def get_ist_today_yesterday() -> Tuple[str, str]:
+    """Returns (today_ist, yesterday_ist) as 'YYYY-MM-DD' strings in IST (UTC+05:30)."""
+    now_ist = datetime.now(_IST_TZ)
+    today_str = now_ist.strftime("%Y-%m-%d")
+    yesterday_str = (now_ist - timedelta(days=1)).strftime("%Y-%m-%d")
+    return today_str, yesterday_str
+
+
+def _to_ist_date_from_ts(raw_ts: Any) -> Optional[str]:
+    if not raw_ts:
+        return None
+    s = str(raw_ts).strip()
+    if not s:
+        return None
+    try:
+        cleaned = s.replace(" ", "T")
+        if cleaned.endswith("Z"):
+            cleaned = cleaned[:-1] + "+00:00"
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(_IST_TZ).strftime("%Y-%m-%d")
+    except Exception:
+        return s[:10] if len(s) >= 10 else None
+
+
+def get_effective_streak(
+    stored_streak: int,
+    last_streak_date: Optional[str],
+    today_str: Optional[str] = None,
+    yesterday_str: Optional[str] = None,
+) -> int:
+    """Returns active streak if last solve was today or yesterday (IST), else 0."""
+    if today_str is None or yesterday_str is None:
+        today_str, yesterday_str = get_ist_today_yesterday()
+    clean_last = str(last_streak_date or "").strip()
+    if clean_last not in (today_str, yesterday_str):
+        return 0
+    return max(0, int(stored_streak or 0))
+
+
+def compute_ist_streak_summary(
+    solve_rows: List[Dict[str, Any]],
+    today_str: Optional[str] = None,
+    yesterday_str: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Computes day-based IST current_streak, max_streak, and last_streak_date from solve history."""
+    if today_str is None or yesterday_str is None:
+        today_str, yesterday_str = get_ist_today_yesterday()
+
+    ist_days = set()
+    for r in solve_rows or []:
+        day_ist = _to_ist_date_from_ts(r.get("solved_at"))
+        if day_ist and len(day_ist) == 10:
+            try:
+                ist_days.add(datetime.strptime(day_ist, "%Y-%m-%d").date())
+            except ValueError:
+                pass
+
+    if not ist_days:
+        return {"current_streak": 0, "max_streak": 0, "last_streak_date": None}
+
+    sorted_days = sorted(ist_days)
+    last_streak_date = sorted_days[-1].isoformat()
+
+    max_streak = 0
+    run = 0
+    prev_day = None
+    for d in sorted_days:
+        if prev_day is not None and (d - prev_day).days == 1:
+            run += 1
+        else:
+            run = 1
+        if run > max_streak:
+            max_streak = run
+        prev_day = d
+
+    today_date = datetime.strptime(today_str, "%Y-%m-%d").date()
+    yesterday_date = datetime.strptime(yesterday_str, "%Y-%m-%d").date()
+
+    current_streak = 0
+    if today_date in ist_days:
+        cursor = today_date
+    elif yesterday_date in ist_days:
+        cursor = yesterday_date
+    else:
+        cursor = None
+
+    while cursor is not None and cursor in ist_days:
+        current_streak += 1
+        cursor -= timedelta(days=1)
+
+    return {
+        "current_streak": current_streak,
+        "max_streak": max_streak,
+        "last_streak_date": last_streak_date,
+    }
+
+
+def compute_next_daily_streak(
+    stored_streak: int,
+    last_streak_date: Optional[str],
+    max_streak: int = 0,
+    today_str: Optional[str] = None,
+    yesterday_str: Optional[str] = None,
+) -> Tuple[int, int, str]:
+    """Applies LeetCode-style once-per-day IST streak increment with missed-day reset."""
+    if today_str is None or yesterday_str is None:
+        today_str, yesterday_str = get_ist_today_yesterday()
+
+    clean_last = str(last_streak_date or "").strip()
+    effective_prev = get_effective_streak(
+        stored_streak=stored_streak,
+        last_streak_date=clean_last,
+        today_str=today_str,
+        yesterday_str=yesterday_str,
+    )
+
+    if clean_last == today_str:
+        new_streak = max(1, effective_prev)
+    elif clean_last == yesterday_str:
+        new_streak = effective_prev + 1
+    else:
+        new_streak = 1
+
+    new_max = max(int(max_streak or 0), new_streak)
+    return new_streak, new_max, today_str
+
+
+def compute_rank_tier(score: int, raw_tier: Optional[str] = None) -> str:
+    clean = str(raw_tier or "").strip()
+    if clean and clean.lower() not in ("free", "default", "none"):
+        return clean
+    if score >= 5000:
+        return "Principal Auditor"
+    if score >= 2500:
+        return "Staff Bug Hunter"
+    if score >= 1000:
+        return "Bug Hunter III"
+    if score >= 300:
+        return "Bug Hunter II"
+    return "Bug Hunter I"
+
+
+def _enrich_recent_solves_metadata(solve_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not solve_rows:
+        return []
+    pids = sorted({int(r["problem_id"]) for r in solve_rows if r.get("problem_id") is not None})
+    meta_map: Dict[int, Dict[str, str]] = {}
+
+    if pids:
+        conn = None
+        try:
+            conn = get_connection()
+            placeholders = ",".join("?" for _ in pids)
+            rows = conn.execute(
+                f"SELECT id, title, difficulty, category FROM problems WHERE id IN ({placeholders})",
+                pids,
+            ).fetchall()
+            for r_id, title, diff, cat in rows:
+                meta_map[int(r_id)] = {
+                    "title": str(title or f"Challenge #{r_id}"),
+                    "difficulty": str(diff or "Medium").capitalize(),
+                    "category": str(cat or "General"),
+                }
+        except Exception as exc:
+            logger.warning("SQLite metadata enrichment failed: %s", exc)
+        finally:
+            if conn:
+                conn.close()
+
+    enriched: List[Dict[str, Any]] = []
+    for r in solve_rows:
+        pid = int(r["problem_id"])
+        meta = meta_map.get(pid)
+        if not meta and pid >= AI_PROBLEM_ID_THRESHOLD:
+            ai_prob = _fetch_supabase_ai_problem_by_id(pid)
+            if ai_prob:
+                meta = {
+                    "title": str(ai_prob.get("title") or f"Challenge #{pid}"),
+                    "difficulty": str(ai_prob.get("difficulty") or "Medium").capitalize(),
+                    "category": str(ai_prob.get("category") or "General"),
+                }
+        enriched.append({
+            "problem_id": pid,
+            "title": meta["title"] if meta else f"Challenge #{pid}",
+            "difficulty": meta["difficulty"] if meta else "",
+            "category": meta["category"] if meta else "",
+            "best_points": int(r.get("best_points") or 0),
+            "best_grade": str(r.get("best_grade") or "Refactor"),
+            "solved_at": r.get("solved_at"),
+        })
+    return enriched
+
+
+def fetch_public_profile_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """
+    Safely looks up a public developer profile by username (PostgREST-injection safe)
+    and returns strictly non-PII public stats, heatmap activity, and recent solves.
+    """
+    clean_name = re.sub(r"[\x00-\x1f\x7f,*()%\"'\\;]", "", str(username or "")).strip()[:64]
+    if not clean_name:
+        return None
+
+    matched_row: Optional[Dict[str, Any]] = None
+    use_srv = has_supabase_service_key()
+
+    try:
+        # 1. Exact equality match first (safe eq. filter)
+        resp = _SUPABASE_HTTP.get(
+            "/rest/v1/user_profiles",
+            params={
+                "username": f"eq.{clean_name}",
+                "select": "id,username,score,streak,solves,tier",
+                "order": "score.desc",
+                "limit": "5",
+            },
+            headers=_supabase_headers(use_service_role=use_srv),
+        )
+        if resp.status_code == 200:
+            rows = resp.json()
+            if isinstance(rows, list):
+                for r in rows:
+                    rid = str(r.get("id") or "")
+                    if rid and not rid.startswith(("mock_", "test_")):
+                        matched_row = r
+                        break
+
+        # 2. Case-insensitive fallback matched in Python (zero wildcard injection risk)
+        if not matched_row:
+            resp_all = _SUPABASE_HTTP.get(
+                "/rest/v1/user_profiles",
+                params={
+                    "select": "id,username,score,streak,solves,tier",
+                    "order": "score.desc",
+                    "limit": "500",
+                },
+                headers=_supabase_headers(use_service_role=use_srv),
+            )
+            if resp_all.status_code == 200:
+                rows = resp_all.json()
+                target_lower = clean_name.lower()
+                if isinstance(rows, list):
+                    for r in rows:
+                        rid = str(r.get("id") or "")
+                        uname = str(r.get("username") or "").strip()
+                        if rid and not rid.startswith(("mock_", "test_")) and uname.lower() == target_lower:
+                            matched_row = r
+                            break
+    except Exception as exc:
+        logger.warning("Supabase fetch_public_profile_by_username failed: %s", exc)
+
+    # 3. Local SQLite fallback
+    if not matched_row:
+        conn = None
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, username, score, streak, solves, tier
+                FROM user_profiles
+                WHERE LOWER(TRIM(username)) = LOWER(?)
+                  AND id NOT LIKE 'mock_%'
+                  AND id NOT LIKE 'test_%'
+                ORDER BY score DESC
+                LIMIT 1
+                """,
+                (clean_name,),
+            )
+            row = cursor.fetchone()
+            if row:
+                matched_row = {
+                    "id": row[0],
+                    "username": row[1],
+                    "score": row[2],
+                    "streak": row[3],
+                    "solves": row[4],
+                    "tier": row[5],
+                }
+        except Exception as exc:
+            logger.warning("SQLite fetch_public_profile_by_username failed: %s", exc)
+        finally:
+            if conn:
+                conn.close()
+
+    if not matched_row:
+        return None
+
+    uid = str(matched_row.get("id") or "")
+    score_val = int(matched_row.get("score") or 0)
+    solves_val = int(matched_row.get("solves") or 0)
+    streak_val = int(matched_row.get("streak") or 0)
+    tier_label = compute_rank_tier(score_val, matched_row.get("tier"))
+
+    solve_rows = fetch_user_solve_history(uid, limit=1000) if is_valid_user_id(uid) else []
+    activity = compute_activity_summary(solve_rows)
+    ist_streak = compute_ist_streak_summary(solve_rows)
+    recent_enriched = _enrich_recent_solves_metadata(solve_rows[:20])
+
+    if matched_row.get("last_streak_date") is not None:
+        effective_streak = get_effective_streak(streak_val, matched_row.get("last_streak_date"))
+    elif solve_rows:
+        effective_streak = int(ist_streak["current_streak"] or 0)
+    else:
+        effective_streak = 0
+
+    unified_max = max(
+        int(activity["max_streak"] or 0),
+        int(ist_streak["max_streak"] or 0),
+        int(matched_row.get("max_streak") or 0),
+        effective_streak,
+    )
+
+    # Strictly return non-PII public fields (NEVER id, user_id, or email)
+    return {
+        "username": str(matched_row.get("username") or clean_name),
+        "tier": tier_label,
+        "score": score_val,
+        "solves": max(solves_val, len(solve_rows)),
+        "streak": effective_streak,
+        "current_streak": effective_streak,
+        "max_streak": unified_max,
+        "total_active_days": activity["total_active_days"],
+        "daily_activity": activity["daily_activity"],
+        "solve_dates": activity["solve_dates"],
+        "recent_solves": recent_enriched,
+    }
+
+
 def _upsert_supabase_profile(profile: Dict[str, Any], access_token: Optional[str] = None) -> bool:
     try:
         payload = {
@@ -786,14 +1293,15 @@ def _upsert_supabase_profile(profile: Dict[str, Any], access_token: Optional[str
             "tier": profile.get("tier", "free"),
             "last_active": datetime.now(timezone.utc).isoformat(),
         }
+        use_srv = has_supabase_service_key()
         resp = _SUPABASE_HTTP.post(
             "/rest/v1/user_profiles",
             params={"on_conflict": "id"},
             json=payload,
             headers=_supabase_headers(
-                access_token=access_token,
+                access_token=None if use_srv else access_token,
                 prefer="resolution=merge-duplicates,return=minimal",
-                use_service_role=not bool(access_token),
+                use_service_role=use_srv or not bool(access_token),
             ),
         )
         return resp.status_code in (200, 201, 204)
@@ -944,6 +1452,7 @@ def record_user_solve(
     multiplier: float = 1.0,
     problem_id: Optional[int] = None,
     patch_grade: Optional[str] = None,
+    daily_multiplier: int = 1,
 ) -> Optional[Dict[str, Any]]:
     if not is_valid_user_id(user_id):
         return None
@@ -955,6 +1464,24 @@ def record_user_solve(
     curr_score = existing["score"] if existing else 0
     curr_solves = existing["solves"] if existing else 0
     curr_tier = existing["tier"] if existing else "free"
+    curr_max_streak = int(existing.get("max_streak") or 0) if existing else 0
+
+    # Derive authoritative IST last_streak_date & active streak from solve history unless explicitly provided
+    if existing and "last_streak_date" in existing:
+        prev_last_date = existing.get("last_streak_date")
+        prev_effective_streak = get_effective_streak(curr_streak, prev_last_date)
+    else:
+        hist_rows = fetch_user_solve_history(user_id, access_token=access_token, limit=500)
+        ist_info = compute_ist_streak_summary(hist_rows)
+        prev_last_date = ist_info["last_streak_date"]
+        prev_effective_streak = ist_info["current_streak"]
+        curr_max_streak = max(curr_max_streak, int(ist_info["max_streak"] or 0))
+
+    new_streak, new_max_streak, new_last_streak_date = compute_next_daily_streak(
+        stored_streak=prev_effective_streak,
+        last_streak_date=prev_last_date,
+        max_streak=curr_max_streak,
+    )
 
     grade_label = patch_grade or "Refactor"
     prev_solve = (
@@ -966,13 +1493,15 @@ def record_user_solve(
     already_solved = prev_solve is not None
     upgraded_grade = False
 
+    safe_daily_mult = 2 if int(daily_multiplier or 1) == 2 else 1
+
     if prev_solve is not None:
         prev_best_points, _ = prev_solve
         candidate_points = calculate_solve_points(
-            next_streak=max(1, curr_streak),
+            next_streak=max(1, new_streak),
             time_seconds=time_seconds,
             multiplier=multiplier,
-        )
+        ) * safe_daily_mult
         if candidate_points > prev_best_points:
             points_earned = candidate_points - prev_best_points
             upgraded_grade = True
@@ -980,17 +1509,15 @@ def record_user_solve(
         else:
             points_earned = 0
 
-        new_streak = curr_streak
         new_solves = curr_solves
         new_score = curr_score + points_earned
     else:
-        new_streak = curr_streak + 1
         new_solves = curr_solves + 1
         points_earned = calculate_solve_points(
             next_streak=new_streak,
             time_seconds=time_seconds,
             multiplier=multiplier,
-        )
+        ) * safe_daily_mult
         new_score = curr_score + points_earned
         if problem_id is not None:
             _save_problem_solve(user_id, problem_id, points_earned, grade_label, access_token=access_token)
@@ -999,6 +1526,9 @@ def record_user_solve(
         "id": user_id,
         "username": clean_name,
         "streak": new_streak,
+        "current_streak": new_streak,
+        "max_streak": new_max_streak,
+        "last_streak_date": new_last_streak_date,
         "score": new_score,
         "solves": new_solves,
         "tier": curr_tier,
@@ -1007,7 +1537,7 @@ def record_user_solve(
         "upgraded_grade": upgraded_grade,
     }
 
-    if points_earned > 0 or not already_solved:
+    if points_earned > 0 or not already_solved or new_streak != curr_streak:
         _upsert_sqlite_profile(updated_profile)
         cloud_ok = _upsert_supabase_profile(updated_profile, access_token=access_token)
         updated_profile["cloud_synced"] = cloud_ok

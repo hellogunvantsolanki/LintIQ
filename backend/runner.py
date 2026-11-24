@@ -90,6 +90,17 @@ LANGUAGE_MAP: Dict[str, Dict[str, str]] = {
     "cpp": {"language": "c++", "version": "*", "ext": "cpp", "monaco": "cpp"},
 }
 
+
+def _resolve_language_config(language: Optional[str]) -> Tuple[str, Dict[str, str]]:
+    """Resolves a requested language to LANGUAGE_MAP or raises ValueError when unsupported."""
+    norm_lang = (language or "python").lower().strip() or "python"
+    lang_config = LANGUAGE_MAP.get(norm_lang)
+    if lang_config is None:
+        raise ValueError(
+            f"Unsupported language '{norm_lang}'. Supported languages: python, javascript, cpp, go."
+        )
+    return norm_lang, lang_config
+
 # Defense-in-depth AST deny-list (real OS isolation is enforced by remote container + fail-closed fallback)
 BANNED_MODULES = {
     "os", "subprocess", "socket", "requests", "urllib",
@@ -824,8 +835,7 @@ def run_custom_code(
             "execution_mode": "blocked",
         }
 
-    norm_lang = (language or "python").lower().strip()
-    lang_config = LANGUAGE_MAP.get(norm_lang, LANGUAGE_MAP["python"])
+    norm_lang, lang_config = _resolve_language_config(language)
 
     if lang_config["language"] == "python":
         syntax_err = _check_python_syntax(code_str)
@@ -1225,8 +1235,7 @@ def evaluate_patch(
     if len(user_code or "") > _MAX_CODE_CHARS:
         return {"passed": False, "message": "Code exceeds maximum size limit (64KB)."}
 
-    norm_lang = (language or "python").lower().strip()
-    lang_config = LANGUAGE_MAP.get(norm_lang, LANGUAGE_MAP["python"])
+    norm_lang, lang_config = _resolve_language_config(language)
 
     if lang_config["language"] == "python":
         syntax_err = _check_python_syntax(user_code)

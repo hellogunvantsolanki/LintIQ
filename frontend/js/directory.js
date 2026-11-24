@@ -1,18 +1,8 @@
-// --- 1. CONFIGURATION (Matches app.js) ---
-const API = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-  ? "http://127.0.0.1:8000"
-  : "https://lintiq.onrender.com";
-
-const SUPABASE_URL = "https://rqkymtiatlkrndsqmoys.supabase.co";
-const SUPABASE_KEY = "sb_publishable_Re4QdRQd83O7RAAAAJBx4g_jc6l23_P";
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Directory State
-let dirSession = null;
-let dirUser = null;
+// --- 1. DIRECTORY STATE (API, supabaseClient, auth & helpers provided by shared.js) ---
 let allProblems = [];
 let filteredProblems = [];
 let solvedIdSet = new Set();
+let dailyCountdownInterval = null;
 
 let activeCategory = "All";
 let activeDifficulty = "All";
@@ -22,36 +12,6 @@ let currentPage = 1;
 let pageSize = 25;
 
 // --- 2. UTILITIES ---
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function getDirDisplayName(user) {
-  if (!user) return "Engineer";
-  return (
-    user.user_metadata?.full_name ||
-    user.user_metadata?.user_name ||
-    user.email?.split("@")[0] ||
-    "Engineer"
-  );
-}
-
-function getInitials(name) {
-  return String(name || "LQ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(p => p[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "LQ";
-}
-
 function formatTimeAgo(timestampMs) {
   if (!timestampMs) return "Ready";
   const diffSec = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
@@ -73,7 +33,7 @@ function getLastActiveProblem() {
 }
 
 function getLocalSolvedIds() {
-  const uid = dirUser?.id || "guest";
+  const uid = currentUser?.id || "guest";
   const ids = new Set();
   try {
     const map = JSON.parse(localStorage.getItem(`lintiq_solved_map_${uid}`) || "{}") || {};
@@ -85,122 +45,63 @@ function getLocalSolvedIds() {
   return ids;
 }
 
-// --- 3. AUTHENTICATION & USER STATS ---
-function openDirAuthModal() {
-  document.getElementById("dir-auth-modal")?.classList.remove("hidden");
-  const msg = document.getElementById("dir-auth-msg");
-  if (msg) msg.textContent = "";
-}
-window.openDirAuthModal = openDirAuthModal;
-
-function closeDirAuthModal() {
-  document.getElementById("dir-auth-modal")?.classList.add("hidden");
-}
-window.closeDirAuthModal = closeDirAuthModal;
-
-async function dirLoginWithOAuth(provider) {
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo: window.location.origin }
-  });
-  if (error) alert(`${provider} error: ` + error.message);
-}
-window.dirLoginWithOAuth = dirLoginWithOAuth;
-
-async function dirHandleEmailAuth(event) {
-  event.preventDefault();
-  const email = document.getElementById("dir-auth-email").value.trim();
-  const msgEl = document.getElementById("dir-auth-msg");
-  const btn = document.getElementById("dir-btn-email-submit");
-
-  btn.disabled = true;
-  btn.textContent = "Sending link...";
-  msgEl.className = "text-[11px] text-center text-gray-400";
-  msgEl.textContent = "";
-
-  const { error } = await supabaseClient.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin }
-  });
-
-  btn.disabled = false;
-  btn.textContent = "Send Magic Sign-In Link";
-
-  if (error) {
-    msgEl.className = "text-[11px] text-center text-rose-400";
-    msgEl.textContent = error.message;
-  } else {
-    msgEl.className = "text-[11px] text-center text-emerald-400";
-    msgEl.textContent = "Check your email inbox for your magic link!";
-  }
-}
-window.dirHandleEmailAuth = dirHandleEmailAuth;
-
-async function dirLogout() {
-  await supabaseClient.auth.signOut();
-  window.location.reload();
-}
-window.dirLogout = dirLogout;
-
-function updateDirAuthUI(user) {
-  const loginBtn = document.getElementById("dir-btn-login");
-  const profileBox = document.getElementById("dir-user-profile");
-  const nameEl = document.getElementById("dir-user-name");
-  const avatarEl = document.getElementById("dir-user-avatar");
-
-  if (user) {
-    closeDirAuthModal();
-    loginBtn?.classList.add("hidden");
-    profileBox?.classList.remove("hidden");
-    const displayName = getDirDisplayName(user);
-    if (nameEl) {
-      nameEl.textContent = displayName.toUpperCase();
-      nameEl.title = displayName;
-    }
-    if (avatarEl) avatarEl.textContent = getInitials(displayName);
-  } else {
-    loginBtn?.classList.remove("hidden");
-    profileBox?.classList.add("hidden");
-  }
-}
-
+// --- 3. USER STATS (Auth modals & navbar state handled by shared.js) ---
 async function syncDirUserStats() {
-  let streak = parseInt(localStorage.getItem("lintiq_streak") || "0", 10);
+  let streak = typeof getEffectiveLocalStreak === "function" ? getEffectiveLocalStreak() : 0;
   let score = parseInt(localStorage.getItem("lintiq_score") || "0", 10);
   let solves = parseInt(localStorage.getItem("lintiq_solves") || "0", 10);
 
-  if (dirUser?.id) {
+  if (currentUser?.id) {
+    let usedBackendProfile = false;
     try {
-      const { data: profile } = await supabaseClient
-        .from("user_profiles")
-        .select("score, streak, solves")
-        .eq("id", dirUser.id)
-        .maybeSingle();
-
-      if (profile) {
-        score = Math.max(score, profile.score || 0);
-        streak = Math.max(streak, profile.streak || 0);
-        solves = Math.max(solves, profile.solves || 0);
+      if (currentSession?.access_token) {
+        const res = await fetch(`${API}/profile/${encodeURIComponent(currentUser.id)}`, {
+          headers: { Authorization: `Bearer ${currentSession.access_token}` }
+        });
+        if (res.ok) {
+          const backendProfile = await res.json();
+          score = Math.max(score, backendProfile.score || 0);
+          streak = Number(backendProfile.current_streak ?? backendProfile.streak ?? 0);
+          solves = Math.max(solves, backendProfile.solves || 0);
+          usedBackendProfile = true;
+        }
       }
 
-      // Also pull cloud solved problem IDs if user_solves is readable
+      if (!usedBackendProfile) {
+        const { data: profile } = await supabaseClient
+          .from("user_profiles")
+          .select("score, streak, solves")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        if (profile) {
+          score = Math.max(score, profile.score || 0);
+          solves = Math.max(solves, profile.solves || 0);
+        }
+      }
+
+      // Also pull cloud solved problem IDs & fallback IST streak if backend wasn't reached
       const { data: cloudSolves } = await supabaseClient
         .from("user_solves")
-        .select("problem_id")
-        .eq("user_id", dirUser.id);
+        .select("problem_id, solved_at")
+        .eq("user_id", currentUser.id);
 
       if (Array.isArray(cloudSolves)) {
         cloudSolves.forEach(row => {
           const n = Number(row.problem_id);
           if (Number.isFinite(n)) solvedIdSet.add(n);
         });
+        if (!usedBackendProfile && typeof computeIstStreakFromSolveDates === "function") {
+          streak = computeIstStreakFromSolveDates(cloudSolves.map(r => r.solved_at)).currentStreak;
+        }
       }
     } catch (err) {
       console.warn("Cloud stats read fallback:", err);
     }
   }
 
-  document.getElementById("dir-streak").textContent = streak;
+  const dirStreakEl = document.getElementById("dir-streak");
+  if (dirStreakEl) dirStreakEl.textContent = streak;
   document.getElementById("stat-streak").textContent = `${streak} ${streak === 1 ? "Day" : "Days"}`;
   document.getElementById("stat-score").textContent = `${score.toLocaleString()} pts`;
   document.getElementById("stat-solves").textContent = `${Math.max(solves, solvedIdSet.size)} Bugs`;
@@ -231,8 +132,8 @@ async function loadAllProblems() {
 
   try {
     const headers = {};
-    if (dirSession?.access_token) {
-      headers["Authorization"] = `Bearer ${dirSession.access_token}`;
+    if (currentSession?.access_token) {
+      headers["Authorization"] = `Bearer ${currentSession.access_token}`;
     }
 
     const res = await fetch(`${API}/problems?category=All&difficulty=All&limit=5000`, { headers });
@@ -580,7 +481,7 @@ function jumpToProblemNumber(event) {
   if (exists) {
     window.location.href = `index.html?id=${exists.id}`;
   } else {
-    alert(`Problem #${id} was not found in the catalog.`);
+    showToast(`Problem #${id} was not found in the catalog.`, "warn");
   }
 }
 window.jumpToProblemNumber = jumpToProblemNumber;
@@ -598,27 +499,137 @@ function pickRandomProblem() {
 }
 window.pickRandomProblem = pickRandomProblem;
 
-// --- 7. BOOTSTRAP ---
-async function initDirectory() {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  dirSession = session || null;
-  dirUser = session?.user || null;
-  updateDirAuthUI(dirUser);
+// --- 7. BUG OF THE DAY BANNER & COUNTDOWN ---
+function stopDailyCountdown() {
+  if (dailyCountdownInterval !== null) {
+    clearInterval(dailyCountdownInterval);
+    dailyCountdownInterval = null;
+  }
+}
 
-  supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-    dirSession = session || null;
-    dirUser = session?.user || null;
-    updateDirAuthUI(dirUser);
-    await syncDirUserStats();
+function startDailyCountdown(resetsAt) {
+  stopDailyCountdown();
+  const countdownEl = document.getElementById("daily-bug-countdown");
+  if (!countdownEl || !resetsAt) return;
+
+  const targetMs = new Date(resetsAt).getTime();
+  if (Number.isNaN(targetMs)) return;
+
+  countdownEl.title = "Resets daily at 12:00 AM IST (UTC+05:30)";
+
+  let refreshed = false;
+  const tick = () => {
+    const diffSec = Math.max(0, Math.floor((targetMs - Date.now()) / 1000));
+    if (diffSec <= 0) {
+      countdownEl.textContent = "Resetting...";
+      stopDailyCountdown();
+      if (!refreshed) {
+        refreshed = true;
+        setTimeout(() => loadDailyChallenge(), 1200);
+      }
+      return;
+    }
+    const hrs = Math.floor(diffSec / 3600);
+    const mins = Math.floor((diffSec % 3600) / 60);
+    const secs = diffSec % 60;
+    countdownEl.textContent = `Resets in ${hrs}h ${String(mins).padStart(2, "0")}m ${String(secs).padStart(2, "0")}s (IST)`;
+  };
+
+  tick();
+  dailyCountdownInterval = setInterval(tick, 1000);
+}
+
+async function loadDailyChallenge() {
+  const banner = document.getElementById("daily-bug-banner");
+  if (!banner) return;
+
+  try {
+    const headers = {};
+    if (currentSession?.access_token) {
+      headers["Authorization"] = `Bearer ${currentSession.access_token}`;
+    }
+    const res = await fetch(`${API}/daily-challenge`, { headers });
+    if (!res.ok) return;
+    const rawText = await res.text();
+    const data = rawText ? JSON.parse(rawText) : null;
+    if (!data || !data.problem) {
+      banner.classList.add("hidden");
+      return;
+    }
+
+    const prob = data.problem;
+    const pid = Number(prob.id);
+    const titleLink = document.getElementById("daily-bug-title-link");
+    const diffEl = document.getElementById("daily-bug-diff");
+    const catEl = document.getElementById("daily-bug-category");
+    const actionEl = document.getElementById("daily-bug-action");
+
+    if (titleLink) {
+      titleLink.href = `index.html?id=${encodeURIComponent(pid)}`;
+      titleLink.innerHTML = `<span class="text-amber-300 font-mono mr-1.5">#${escapeHtml(pid)}</span>${escapeHtml(prob.title || "Daily Challenge")}`;
+    }
+
+    const diffLabel = String(prob.difficulty || "Hard");
+    const diffLower = diffLabel.toLowerCase();
+    if (diffEl) {
+      diffEl.textContent = diffLabel.toUpperCase();
+      diffEl.className = diffLower === "easy"
+        ? "px-2 py-0.5 text-[10px] font-bold uppercase rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+        : diffLower === "medium"
+          ? "px-2 py-0.5 text-[10px] font-bold uppercase rounded border bg-amber-500/10 text-amber-400 border-amber-500/25"
+          : "px-2 py-0.5 text-[10px] font-bold uppercase rounded border bg-rose-500/10 text-rose-400 border-rose-500/25";
+    }
+
+    if (catEl) {
+      catEl.textContent = prob.category || "General";
+    }
+
+    const dailyDateKey = data.date_ist || data.date_utc;
+    const localDone = dailyDateKey
+      ? localStorage.getItem(`lintiq_daily_done_${dailyDateKey}`) === String(pid)
+      : false;
+    const isCompletedToday = Boolean(data.completed_today) || localDone;
+
+    if (actionEl) {
+      if (isCompletedToday) {
+        actionEl.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold whitespace-nowrap">✓ Completed Today</span>
+            <a href="index.html?id=${encodeURIComponent(pid)}" class="px-3 py-2 rounded-lg bg-surface-container hover:bg-surface-hover border border-surface-border text-xs text-gray-300 hover:text-white transition whitespace-nowrap">Review →</a>
+          </div>
+        `;
+      } else {
+        actionEl.innerHTML = `
+          <a id="daily-bug-cta" href="index.html?id=${encodeURIComponent(pid)}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-black text-xs font-bold transition shadow-lg shadow-accent/20 whitespace-nowrap">Solve Daily Bug →</a>
+        `;
+      }
+    }
+
+    banner.classList.remove("hidden");
+    startDailyCountdown(data.resets_at_utc || data.resets_at);
+  } catch (err) {
+    console.warn("Could not load daily challenge banner:", err);
+  }
+}
+
+// --- 8. BOOTSTRAP ---
+async function initDirectory() {
+  await initAuth();
+
+  supabaseClient.auth.onAuthStateChange(async () => {
+    await Promise.all([syncDirUserStats(), loadDailyChallenge()]);
     applyFiltersAndRender();
   });
 
   await Promise.all([
     loadCategories(),
-    syncDirUserStats()
+    syncDirUserStats(),
+    loadDailyChallenge(),
   ]);
 
   await loadAllProblems();
 }
 
+window.addEventListener("beforeunload", stopDailyCountdown);
+window.addEventListener("pagehide", stopDailyCountdown);
 window.addEventListener("DOMContentLoaded", initDirectory);

@@ -124,21 +124,27 @@ def _save_to_sqlite_fallback(problem: Dict[str, Any]) -> int:
         return random.randint(50000, 99999)
 
 
-def _call_gemini_api(api_key: str, prompt: str) -> Optional[Dict[str, Any]]:
+def _call_gemini_api(
+    api_key: str,
+    prompt: str,
+    temperature: float = 0.85,
+) -> Optional[Dict[str, Any]]:
     """
-    Fast Gemini call (~2-4s): disables internal thinking on gemini-2.5-flash
-    and falls back to gemini-2.0-flash if needed.
+    Fast Gemini call (~2-4s) using x-goog-api-key header (avoids logging keys in URLs).
+    Tries active Flash / Flash-Lite models in order and logs HTTP or parse errors clearly.
     """
-    models = ["gemini-2.5-flash", "gemini-2.0-flash"]
+    models = [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-2.5-flash",
+    ]
 
     for model_name in models:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{model_name}:generateContent?key={api_key}"
-        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
 
         gen_config: Dict[str, Any] = {
-            "temperature": 0.85,
+            "temperature": temperature,
             "responseMimeType": "application/json",
         }
         # Disabling thinking cuts gemini-2.5-flash latency from ~25s down to ~2-4s
@@ -154,23 +160,33 @@ def _call_gemini_api(api_key: str, prompt: str) -> Optional[Dict[str, Any]]:
             resp = _GEMINI_HTTP.post(
                 url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": api_key,
+                },
             )
             if resp.status_code != 200:
-                logger.warning("Gemini %s HTTP %s: %s", model_name, resp.status_code, resp.text[:200])
+                logger.warning("Gemini %s HTTP %s: %s", model_name, resp.status_code, resp.text[:250])
                 continue
 
             raw_data = resp.json()
-            parts = raw_data["candidates"][0]["content"]["parts"]
+            candidates = raw_data.get("candidates") or []
+            if not candidates:
+                logger.warning("Gemini %s returned empty candidates: %s", model_name, str(raw_data)[:250])
+                continue
+            parts = candidates[0].get("content", {}).get("parts") or []
             text_content = "".join(
                 part["text"] for part in parts if "text" in part and not part.get("thought")
             ).strip()
 
-            match = re.search(r"\{[\s\S]*\}", text_content)
-            if match:
-                return json.loads(match.group(0), strict=False)
+            cleaned_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text_content, flags=re.IGNORECASE).strip()
+            match = re.search(r"\{[\s\S]*\}", cleaned_text)
+            if not match:
+                logger.warning("Gemini %s returned non-JSON response: %s", model_name, cleaned_text[:250])
+                continue
+            return json.loads(match.group(0), strict=False)
         except Exception as err:
-            logger.warning("Gemini %s error: %s", model_name, err)
+            logger.warning("Gemini %s error (%s): %s", model_name, type(err).__name__, err)
 
     return None
 
@@ -415,6 +431,8 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
         if b["category"].lower() == chosen_cat.lower() and b["title"] not in _RECENT_TITLES
     ]
     if not cat_matches:
+        cat_matches = [b for b in bank if b["category"].lower() == chosen_cat.lower()]
+    if not cat_matches:
         cat_matches = [b for b in bank if b["title"] not in _RECENT_TITLES] or bank
 
     tpl = random.choice(cat_matches)
@@ -422,10 +440,11 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
     if len(_RECENT_TITLES) > 5:
         _RECENT_TITLES.pop(0)
 
+    enforced_cat = chosen_cat if chosen_cat in CATEGORIES else tpl["category"]
     return {
         "title": tpl["title"],
         "difficulty": chosen_diff,
-        "category": tpl["category"],
+        "category": enforced_cat,
         "tags": _clean_tags(tpl["tags"]),
         "description": tpl["description"],
         "language": "python",
@@ -435,19 +454,129 @@ def _generate_procedural_fallback(chosen_cat: str, chosen_diff: str) -> Dict[str
     }
 
 
+def _fallback_senior_review(
+    title: str,
+    category: str,
+    buggy_code: str,
+    user_code: str,
+) -> Dict[str, str]:
+    orig_lines = (buggy_code or "").replace("\r\n", "\n").splitlines()
+    next_lines = (user_code or "").replace("\r\n", "\n").splitlines()
+    changed = sum(
+        1 for i in range(max(len(orig_lines), len(next_lines)))
+        if (orig_lines[i] if i < len(orig_lines) else "") != (next_lines[i] if i < len(next_lines) else "")
+    )
+    changed = max(1, changed)
+    cat_label = (category or "logic").strip().lower()
+    article = "an" if cat_label[:1] in ("a", "e", "i", "o", "u") else "a"
+    line_word = "line" if changed == 1 else "lines"
+    return {
+        "root_cause": (
+            f"The original {title or 'challenge'} implementation contained {article} {cat_label} defect "
+            "that broke on boundary or edge-case inputs."
+        ),
+        "patch_quality": (
+            f"Your patch resolves all hidden assertions cleanly with a focused {changed}-{line_word} change "
+            "and preserves clear control flow."
+        ),
+        "production_tip": (
+            f"Add targeted unit tests covering empty, boundary, and adversarial {cat_label} "
+            "inputs in CI before merging."
+        ),
+    }
+
+
+def _extract_review_fields(raw_obj: Any) -> Optional[Dict[str, str]]:
+    if isinstance(raw_obj, list) and raw_obj:
+        raw_obj = raw_obj[0]
+
+    if isinstance(raw_obj, str):
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_obj.strip(), flags=re.IGNORECASE)
+        match = re.search(r"\{[\s\S]*\}", cleaned)
+        if match:
+            try:
+                raw_obj = json.loads(match.group(0), strict=False)
+            except Exception as exc:
+                logger.warning("Senior review JSON decode failed: %s", exc)
+                return None
+        else:
+            logger.warning("Senior review string missing JSON object: %s", cleaned[:200])
+            return None
+
+    if not isinstance(raw_obj, dict):
+        return None
+
+    root_cause = str(raw_obj.get("root_cause") or "").strip()
+    patch_quality = str(raw_obj.get("patch_quality") or "").strip()
+    production_tip = str(raw_obj.get("production_tip") or "").strip()
+    if not (root_cause and patch_quality and production_tip):
+        logger.warning("Senior review JSON missing required keys: %s", list(raw_obj.keys()))
+        return None
+
+    return {
+        "root_cause": root_cause[:500],
+        "patch_quality": patch_quality[:500],
+        "production_tip": production_tip[:500],
+    }
+
+
+def review_user_patch(
+    title: str,
+    difficulty: str,
+    category: str,
+    description: str,
+    buggy_code: str,
+    user_code: str,
+    language: str = "python",
+) -> Dict[str, str]:
+    """Generates a specific 3-part Senior Engineer review via Gemini comparing buggy_code vs user_code."""
+    prompt = f"""You are a pragmatic Senior Staff Software Engineer reviewing a passing bug fix.
+Challenge: {title} ({difficulty} • {category} • {language})
+Problem: {(description or '')[:800]}
+
+Original Buggy Code:
+```
+{(buggy_code or '')[:4000]}
+```
+
+User's Passing Patch:
+```
+{(user_code or '')[:4000]}
+```
+
+Compare the specific Original Buggy Code against the User's Passing Patch and return ONLY a valid raw JSON object (no markdown fences) with these exact 3 string keys:
+- "root_cause": 1-2 crisp sentences explaining the exact bug in this specific buggy_code (reference actual variables, conditions, or lines).
+- "patch_quality": 1-2 crisp sentences evaluating how user_code fixes it (mentioning edge-case safety, clarity, or complexity).
+- "production_tip": 1 practical senior-engineer tip tailored to preventing this bug pattern in real production codebases."""
+
+    api_key = _load_env_key()
+    if not api_key:
+        logger.warning("Senior review skipped live Gemini call: GEMINI_API_KEY is missing or empty.")
+        return _fallback_senior_review(title=title, category=category, buggy_code=buggy_code, user_code=user_code)
+
+    raw_gemini = _call_gemini_api(api_key, prompt, temperature=0.35)
+    if raw_gemini is None:
+        logger.warning("Senior review Gemini API failed across all models for '%s'; using fallback.", title)
+        return _fallback_senior_review(title=title, category=category, buggy_code=buggy_code, user_code=user_code)
+
+    parsed = _extract_review_fields(raw_gemini)
+    if not parsed:
+        logger.warning("Senior review Gemini payload could not be normalized for '%s'; using fallback.", title)
+        return _fallback_senior_review(title=title, category=category, buggy_code=buggy_code, user_code=user_code)
+
+    return parsed
+
+
 def generate_ai_bug_challenge(
     category: Optional[str] = None,
     difficulty: Optional[str] = None,
 ) -> Dict[str, Any]:
-    chosen_cat = (
-        category
-        if category and category.lower() not in ("all", "all tracks")
-        else random.choice(CATEGORIES)
-    )
+    explicit_cat = bool(category and category.lower() not in ("all", "all tracks"))
+    chosen_cat = category if explicit_cat else random.choice(CATEGORIES)
     chosen_diff = (
         difficulty.capitalize()
         if difficulty and difficulty.lower() not in ("all", "all levels")
-        else random.choice(DIFFICULTIES)
+        else "Medium"
     )
 
     api_key = _load_env_key()
@@ -509,6 +638,9 @@ def generate_ai_bug_challenge(
 
     if not verified_problem:
         verified_problem = _generate_procedural_fallback(chosen_cat, chosen_diff)
+
+    if explicit_cat:
+        verified_problem["category"] = chosen_cat
 
     # Persist permanently to Supabase shared pool (IDs >= 100001), fallback to SQLite if service key missing
     new_id = insert_ai_problem_to_supabase(verified_problem)

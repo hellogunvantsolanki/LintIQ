@@ -1,0 +1,6 @@
+# Seeder-only dependencies for backend/seed_ai_pool.py
+# Kept separate from backend/requirements.txt to avoid bloating Render production builds.
+google-genai>=1.0.0
+google-auth>=2.29.0
+python-dotenv>=1.0.0
+httpx>=0.27.0

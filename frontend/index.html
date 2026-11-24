@@ -1,10 +1,21 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LintIQ â€” Code Solver Workspace</title>
+  <title>LintIQ – Debug Real Code. Not Just Algorithms.</title>
   <meta name="description" content="LintIQ is an interactive, gamified AI code review and bug-hunting arcade for developers." />
+
+  <!-- Open Graph & Twitter / X Preview -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://thelintiq.com/" />
+  <meta property="og:title" content="LintIQ – Debug Real Code. Not Just Algorithms." />
+  <meta property="og:description" content="Hunt real bugs, pass hidden assertions, and earn Surgical Patch scores across 1,600+ debugging challenges." />
+  <meta property="og:image" content="https://thelintiq.com/assets/og-card.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="LintIQ – Debug Real Code. Not Just Algorithms." />
+  <meta name="twitter:description" content="Hunt real bugs, pass hidden assertions, and earn Surgical Patch scores across 1,600+ debugging challenges." />
+  <meta name="twitter:image" content="https://thelintiq.com/assets/og-card.png" />
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,34 +25,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Geist', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            surface: {
-              DEFAULT: '#0f131c',
-              dim: '#0b0e15',
-              container: '#141822',
-              card: '#181d2a',
-              border: '#232938',
-              hover: '#1e2434',
-            },
-            accent: {
-              DEFAULT: '#10b981',
-              hover: '#059669',
-              subtle: '#064e3b',
-            }
-          }
-        }
-      }
-    };
-  </script>
+  <!-- Shared Tailwind Config (single source of truth) -->
+  <script src="js/tailwind-config.js"></script>
 
   <!-- Supabase JS Client CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -61,19 +46,11 @@
       color: #e2e8f0;
       font-family: 'Geist', sans-serif;
     }
-
     /* Zero-scroll locked workspace on desktop; natural scroll on mobile/tablet */
     @media (min-width: 1024px) {
-      html, body.lintiq-shell {
-        height: 100dvh;
-        overflow: hidden;
-      }
-      main.lintiq-main {
-        min-height: 0;
-        overflow: hidden;
-      }
+      html, body.lintiq-shell { height: 100dvh; overflow: hidden; }
+      main.lintiq-main { min-height: 0; overflow: hidden; }
     }
-
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0f131c; }
     ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
@@ -82,165 +59,8 @@
 </head>
 <body class="lintiq-shell flex flex-col min-h-[100dvh] w-full overflow-x-hidden antialiased">
 
-  <!-- TOP NAVIGATION BAR -->
-  <header class="h-12 bg-surface border-b border-surface-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 z-30 select-none">
-    <!-- Left: Brand, Direct Problem List Button, Workspace Active Pill & Prev/Next -->
-    <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
-      <a href="problem-directory.html" class="flex items-center gap-2 text-white font-bold tracking-tight shrink-0" title="Back to Problem Directory">
-        <span class="w-2.5 h-2.5 rounded-full bg-accent inline-block animate-pulse"></span>
-        <span class="text-base sm:text-lg">Lint<span class="text-accent">IQ</span></span>
-      </a>
-      <span class="hidden 2xl:inline-block px-2 py-0.5 text-[10px] font-semibold bg-surface-border text-emerald-400 rounded-md tracking-wider font-mono shrink-0">
-        ARCADE V1.6
-      </span>
-
-      <!-- Primary Multi-Page Navigation (Matches Problem List, Leaderboard & Profile) -->
-      <div class="flex items-center gap-1 ml-1 text-xs shrink-0">
-        <a
-          href="problem-directory.html"
-          class="px-2.5 py-1 rounded-md font-medium bg-surface-container hover:bg-surface-hover border border-surface-border hover:border-accent/50 text-gray-200 hover:text-emerald-400 transition flex items-center gap-1 whitespace-nowrap"
-          title="Back to Full Problem List"
-        >
-          <span>â†</span>
-          <span>Problem List</span>
-        </a>
-        <a
-          href="index.html"
-          class="hidden sm:inline-block px-2.5 py-1 rounded-md font-semibold bg-accent text-black shadow-sm whitespace-nowrap"
-        >
-          Workspace
-        </a>
-      </div>
-
-      <!-- Compact Prev / Quick Switcher Drawer / Next -->
-      <div class="flex items-center gap-0.5 bg-surface-container border border-surface-border rounded-md px-1.5 py-1 text-xs text-gray-300 shrink-0">
-        <button onclick="loadPrevProblem()" class="hover:text-white transition p-0.5 cursor-pointer" title="Previous Problem">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        <button onclick="openProblemListDrawer()" class="hover:text-emerald-400 text-gray-300 transition px-1.5 flex items-center gap-1 cursor-pointer" title="Quick Problem Switcher Drawer">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10" />
-          </svg>
-          <span id="seq-progress" class="hidden md:inline text-[10px] font-mono text-gray-400">0 / 0</span>
-        </button>
-
-        <button onclick="loadNextProblem()" class="hover:text-white transition p-0.5 cursor-pointer" title="Next Problem">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Center: Streak & Timer HUD -->
-    <div class="hidden lg:flex items-center gap-2 text-xs font-mono shrink-0">
-      <div class="flex items-center gap-1.5 bg-surface-container border border-surface-border px-2.5 py-1 rounded-md text-amber-400 font-medium whitespace-nowrap">
-        <span>âš¡ Streak:</span>
-        <span id="streak-count" class="text-white font-bold">0</span>
-      </div>
-
-      <div id="timer-hud" class="flex items-center gap-1.5 bg-surface-container border border-surface-border px-2.5 py-1 rounded-md text-emerald-400 whitespace-nowrap">
-        <span id="timer-display" class="font-bold">00:00</span>
-        <span id="timer-status" class="text-[10px] uppercase tracking-wider text-gray-400">READY</span>
-      </div>
-    </div>
-
-    <!-- Right: Page Links, Hint, Settings Popover & Auth -->
-    <div class="flex items-center gap-1.5 sm:gap-2 text-xs shrink-0">
-      <nav class="hidden xl:flex items-center gap-1">
-        <a href="leaderboard.html" class="px-2.5 py-1 text-gray-300 hover:text-white hover:bg-surface-border rounded-md transition whitespace-nowrap">
-          Leaderboard
-        </a>
-        <a href="profile.html" class="px-2.5 py-1 text-gray-300 hover:text-white hover:bg-surface-border rounded-md transition whitespace-nowrap">
-          Profile Stats
-        </a>
-      </nav>
-
-      <button
-        id="btn-hint"
-        onclick="handleHintClick()"
-        class="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2.5 py-1 rounded-md hover:bg-amber-500/20 transition whitespace-nowrap cursor-pointer"
-        title="Reveal AI Hint"
-      >
-        <span>ðŸ’¡</span>
-        <span class="hidden sm:inline">AI Hint</span>
-      </button>
-
-      <!-- Settings Floating Popover Dropdown -->
-      <div class="relative shrink-0" id="settings-dropdown-wrapper">
-        <button
-          id="open-settings-btn"
-          onclick="toggleSettingsDropdown(event)"
-          class="p-1.5 sm:px-2.5 sm:py-1 bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white rounded-md flex items-center gap-1.5 transition cursor-pointer"
-          title="Settings & Control Center"
-        >
-          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.573 1.066 1.724 1.724 0 012.37 2.37 1.724 1.724 0 001.065 2.572 1.724 1.724 0 010 3.35 1.724 1.724 0 00-1.066 2.573 1.724 1.724 0 01-2.37 2.37 1.724 1.724 0 00-2.572 1.065 1.724 1.724 0 01-3.35 0 1.724 1.724 0 00-2.573-1.066 1.724 1.724 0 01-2.37-2.37 1.724 1.724 0 00-1.065-2.572 1.724 1.724 0 010-3.35 1.724 1.724 0 001.066-2.573 1.724 1.724 0 012.37-2.37c.996.608 2.296.07 2.572-1.065z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span class="hidden sm:inline">Settings</span>
-        </button>
-
-        <div
-          id="settings-popover-menu"
-          class="hidden absolute right-0 mt-2 w-56 bg-[#141822] border border-surface-border rounded-xl py-2 px-1.5 shadow-2xl shadow-black/80 z-50 select-none"
-        >
-          <a href="problem-directory.html" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-emerald-400 hover:bg-surface-hover transition text-left">
-            <span>ðŸ“‹</span><span>Problem List</span>
-          </a>
-          <a href="leaderboard.html" class="w-full xl:hidden flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left">
-            <span>ðŸ†</span><span>Leaderboard</span>
-          </a>
-          <a href="profile.html" class="w-full xl:hidden flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left">
-            <span>ðŸ“ˆ</span><span>Profile Stats</span>
-          </a>
-          <div class="my-1 border-t border-surface-border"></div>
-          <button onclick="openSettingsAtTab('profile')" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>ðŸ‘¤</span><span>Profile & Bio</span>
-          </button>
-          <button onclick="openSettingsAtTab('analytics')" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>ðŸ“Š</span><span>Dashboard & Graph</span>
-          </button>
-          <button onclick="openSettingsAtTab('editor')" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>ðŸ–¥</span><span>Editor Settings</span>
-          </button>
-          <button onclick="closeSettingsDropdown(); exportLintIQData();" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-200 hover:bg-surface-hover hover:text-white transition text-left cursor-pointer">
-            <span>â¬‡</span><span>Export Stats (JSON)</span>
-          </button>
-
-          <div id="settings-logout-divider" class="hidden my-1.5 border-t border-surface-border"></div>
-
-          <button
-            id="settings-logout-btn"
-            onclick="closeSettingsDropdown(); if (typeof logout === 'function') logout();"
-            class="hidden w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition text-left cursor-pointer"
-          >
-            <span>â†ª</span><span>Logout</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Auth Section (Dynamic Sign In / User Profile) -->
-      <div id="auth-section" class="flex items-center gap-2 border-l border-surface-border pl-2 shrink-0">
-        <button id="btn-login" onclick="openAuthModal()" class="px-3 py-1 bg-accent hover:bg-accent-hover text-black font-semibold text-xs rounded-md transition whitespace-nowrap cursor-pointer">
-          Sign In
-        </button>
-
-        <div id="user-profile" class="hidden flex items-center gap-2">
-          <a href="profile.html" class="flex items-center gap-1.5 hover:opacity-85 transition" title="View Profile Stats">
-            <span id="user-display-name" class="hidden sm:inline text-[11px] font-medium text-gray-200 max-w-[125px] truncate"></span>
-            <span id="header-user-avatar" class="w-7 h-7 rounded-full bg-accent/20 border border-accent flex items-center justify-center text-accent text-[11px] font-bold">LQ</span>
-          </a>
-          <button onclick="logout()" class="text-[11px] text-gray-400 hover:text-rose-400 transition whitespace-nowrap cursor-pointer" title="Sign out">
-            Sign out
-          </button>
-        </div>
-      </div>
-    </div>
-  </header>
+  <!-- SHARED NAVBAR (injected by navbar.js) -->
+  <nav id="lintiq-navbar" data-page="workspace"></nav>
 
   <!-- MAIN SPLIT WORKSPACE (ZERO-SCROLL ON DESKTOP) -->
   <main class="lintiq-main flex-1 flex flex-col lg:flex-row p-2 gap-2 bg-surface-dim min-h-0">
@@ -250,223 +70,133 @@
       <!-- Left Panel Tabs -->
       <div class="h-10 bg-surface-container border-b border-surface-border flex items-center justify-between px-2 shrink-0 select-none">
         <div class="flex items-center gap-1">
-          <button
-            id="left-tab-btn-desc"
-            onclick="switchLeftTab('desc')"
-            class="px-3 py-1.5 text-xs font-semibold text-white bg-surface rounded-t-md border-t-2 border-accent flex items-center gap-1.5 cursor-pointer"
-          >
-            <svg class="w-3.5 h-3.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+          <button id="left-tab-btn-desc" onclick="switchLeftTab('desc')" class="px-3 py-1.5 text-xs font-semibold text-white bg-surface rounded-t-md border-t-2 border-accent flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             <span>Description</span>
           </button>
-
-          <button
-            id="left-tab-btn-notes"
-            onclick="switchLeftTab('notes')"
-            class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-t-md border-t-2 border-transparent transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>ðŸ“ Scratchpad</span>
+          <button id="left-tab-btn-notes" onclick="switchLeftTab('notes')" class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-t-md border-t-2 border-transparent transition flex items-center gap-1.5 cursor-pointer">
+            <span>📝 Scratchpad</span>
           </button>
         </div>
-
         <!-- Mobile-only compact Streak -->
         <div class="flex lg:hidden items-center gap-2 text-[11px] font-mono text-gray-400 pr-1">
-          <span class="text-amber-400">âš¡<span id="mobile-streak-mirror">0</span></span>
+          <span class="text-amber-400">⚡<span id="mobile-streak-mirror">0</span></span>
         </div>
       </div>
 
       <!-- TAB CONTENT 1: Description -->
       <div id="left-tab-panel-desc" class="flex-1 overflow-y-auto p-4 sm:p-5 select-text space-y-4 min-h-0">
-        <div class="flex items-center justify-between gap-2 flex-wrap">
-          <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-start justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap pt-0.5">
             <span id="problem-difficulty" class="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-surface-card text-gray-300 border border-surface-border rounded">Loading...</span>
             <span id="problem-category" class="px-2 py-0.5 text-[11px] font-mono text-sky-300 bg-sky-500/10 border border-sky-500/25 rounded">Track</span>
+            <span id="daily-bug-badge" class="hidden px-2 py-0.5 text-[11px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35 rounded whitespace-nowrap">🔥 Bug of the Day • 2x XP</span>
           </div>
-          <span id="problem-id" class="text-xs text-gray-500 font-mono font-semibold">#0</span>
+          <div class="flex flex-col items-end gap-1 shrink-0">
+            <button id="copy-challenge-link-btn" type="button" onclick="copyChallengeLink()" title="Copy challenge link" aria-label="Copy challenge link" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container hover:bg-surface-hover border border-surface-border hover:border-emerald-500/40 text-[11px] font-mono text-gray-300 hover:text-emerald-300 transition cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-not-allowed">
+              <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <span>Copy Link</span>
+            </button>
+            <span id="problem-id" class="text-xs text-gray-500 font-mono font-semibold">#0</span>
+          </div>
         </div>
-
-        <h1 id="problem-title" class="text-lg sm:text-xl font-bold text-white tracking-tight break-words">
-          Connecting to challenge bank...
-        </h1>
-
-        <!-- Dynamic Granular Problem Tags -->
+        <h1 id="problem-title" class="text-lg sm:text-xl font-bold text-white tracking-tight break-words">Connecting to challenge bank...</h1>
         <div id="problem-tags" class="flex flex-wrap gap-1.5"></div>
-
-        <!-- Dynamic Problem Statement -->
-        <div class="text-sm text-gray-300 leading-relaxed">
-          <p id="problem-desc" class="whitespace-pre-line break-words"></p>
-        </div>
-
-        <!-- Dynamic Hint Box (populated by requestHint() in app.js) -->
+        <div class="text-sm text-gray-300 leading-relaxed"><p id="problem-desc" class="whitespace-pre-line break-words"></p></div>
         <div id="hint-box" class="hidden p-3.5 bg-amber-500/10 border border-amber-500/35 rounded-lg text-xs text-amber-200 leading-relaxed break-words">
-          <div class="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
-            <span>ðŸ’¡ AI Diagnostic Hint</span>
-          </div>
+          <div class="font-bold text-amber-300 mb-1 flex items-center gap-1.5"><span>💡 AI Diagnostic Hint</span></div>
           <span id="hint-text"></span>
         </div>
       </div>
 
-      <!-- TAB CONTENT 2: Personal Scratchpad (Saved per-browser) -->
+      <!-- TAB CONTENT 2: Personal Scratchpad -->
       <div id="left-tab-panel-notes" class="hidden flex-1 flex flex-col p-4 min-h-0">
         <div class="flex items-center justify-between mb-2 text-xs text-gray-400">
           <span>Personal Debugging Notes (auto-saved locally)</span>
           <button onclick="clearWorkspaceNotes()" class="text-[11px] text-gray-500 hover:text-rose-400 transition cursor-pointer">Clear</button>
         </div>
-        <textarea
-          id="workspace-notes-input"
-          placeholder="Jot down edge cases, variable traces, or complexity notes here..."
-          class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"
-        ></textarea>
+        <textarea id="workspace-notes-input" placeholder="Jot down edge cases, variable traces, or complexity notes here..." class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"></textarea>
       </div>
 
-      <!-- Left Panel Footer: Assertion Count & Instant AI Bug -->
+      <!-- Left Panel Footer -->
       <div class="h-10 bg-surface-container border-t border-surface-border px-4 flex items-center justify-between gap-2 shrink-0 text-xs text-gray-400 select-none">
-        <span id="test-case-count" class="font-mono text-emerald-400 font-medium whitespace-nowrap">ðŸ§ª 0 Test Assertions</span>
-        <button
-          id="ai-generate-btn"
-          onclick="generateAIChallenge()"
-          class="flex items-center gap-1.5 bg-surface-card border border-emerald-500/30 hover:bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer whitespace-nowrap"
-        >
-          <span>âœ¨ Generate AI Bug</span>
-        </button>
+        <span id="test-case-count" class="font-mono text-emerald-400 font-medium whitespace-nowrap">🧪 0 Test Assertions</span>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="ai-generate-btn" onclick="generateAIChallenge()" class="flex items-center gap-1.5 bg-surface-card border border-emerald-500/30 hover:bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer whitespace-nowrap">
+            <span>✨ Generate AI Bug</span>
+          </button>
+          <button id="analyze-patch-btn" type="button" onclick="openPatchReviewModal()" disabled title="Submit a passing patch to unlock Senior Engineer Review" class="flex items-center gap-1.5 bg-surface-card border border-surface-border text-gray-400 opacity-45 cursor-not-allowed px-2.5 py-1 rounded-md transition text-xs font-semibold whitespace-nowrap">
+            <span>🔍 Analyze My Patch</span>
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- RIGHT PANEL: MONACO EDITOR & TESTCASE / SANDBOX TRAY -->
     <section id="workspace-right-pane" class="w-full lg:w-[54%] xl:w-1/2 flex flex-col gap-2 min-h-0 min-w-0">
-
       <!-- TOP CARD: MONACO CODE EDITOR -->
       <div class="flex-1 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl min-h-[340px] lg:min-h-0">
-        <!-- Editor Header -->
         <div class="h-10 bg-surface-container border-b border-surface-border px-3 flex items-center justify-between gap-2 shrink-0 select-none">
           <div class="flex items-center gap-2 min-w-0">
             <span id="editor-filename" class="text-xs font-mono font-semibold text-gray-100 truncate">solution.py</span>
             <span class="hidden sm:inline text-[10px] bg-surface border border-surface-border text-gray-400 px-1.5 py-0.5 rounded font-mono">Editable Patch</span>
           </div>
-
           <div class="flex items-center gap-1.5 shrink-0">
-            <!-- Real Backend Language Switcher -->
-            <select
-              id="language-select"
-              onchange="switchLanguage(this.value)"
-              class="bg-surface border border-surface-border text-emerald-400 font-mono text-xs rounded px-2 py-1 outline-none focus:border-accent cursor-pointer"
-            >
+            <select id="language-select" onchange="switchLanguage(this.value)" class="bg-surface border border-surface-border text-emerald-400 font-mono text-xs rounded px-2 py-1 outline-none focus:border-accent cursor-pointer">
               <option value="python">Python 3.11</option>
               <option value="cpp">C++20</option>
-              <option value="java">Java 17</option>
               <option value="javascript">JavaScript (Node)</option>
             </select>
-
-            <button onclick="formatWorkspaceCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs font-mono transition cursor-pointer" title="Format Code (Shift+Alt+F)">
-              { }
-            </button>
-            <button onclick="resetStarterCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Reset Starter Code">
-              â†º
-            </button>
-            <button id="btn-fullscreen-editor" onclick="toggleEditorFullscreen()" class="hidden lg:inline-flex px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Toggle Focus Mode">
-              â›¶
+            <button onclick="formatWorkspaceCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs font-mono transition cursor-pointer" title="Format Code (Shift+Alt+F)">{ }</button>
+            <button onclick="resetStarterCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Reset Starter Code">↺</button>
+            <button id="btn-fullscreen-editor" onclick="toggleEditorFullscreen()" class="hidden lg:inline-flex px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Toggle Focus Mode">⛶</button>
+            <button id="share-patch-btn" type="button" onclick="copySharePatchSummary()" disabled class="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-medium bg-surface border border-surface-border text-gray-400 opacity-45 cursor-not-allowed transition whitespace-nowrap" title="Solve this bug to unlock Share Patch">
+              <span>🔗</span><span>Share Patch</span>
             </button>
           </div>
         </div>
-
-        <!-- Monaco Editor Mount Point -->
         <div id="editor-container" class="flex-1 w-full min-h-[280px] lg:min-h-0 overflow-hidden bg-[#0a0d14]"></div>
       </div>
 
       <!-- BOTTOM CARD: TESTCASE & SANDBOX OUTPUT TRAY -->
       <div id="workspace-tray" class="h-52 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl shrink-0 transition-all duration-150">
-        <!-- Tray Header Tabs -->
         <div class="h-9 bg-surface-container border-b border-surface-border px-3 flex items-center justify-between gap-2 shrink-0 select-none">
           <div class="flex items-center gap-3">
-            <button
-              id="tray-tab-btn-testcase"
-              onclick="switchTrayTab('testcase')"
-              class="text-xs font-semibold text-white border-b-2 border-accent py-2 flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>â˜‘ Testcase</span>
+            <button id="tray-tab-btn-testcase" onclick="switchTrayTab('testcase')" class="text-xs font-semibold text-white border-b-2 border-accent py-2 flex items-center gap-1.5 cursor-pointer">
+              <span>☑ Testcase</span>
               <span id="stdin-mode-badge" class="text-[10px] font-mono bg-surface border border-surface-border text-sky-400 px-1.5 py-0.2 rounded">Sample #1</span>
             </button>
-
-            <button
-              id="tray-tab-btn-output"
-              onclick="switchTrayTab('output')"
-              class="text-xs text-gray-400 hover:text-gray-200 border-b-2 border-transparent py-2 flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <span>ðŸ’» Sandbox Output</span>
+            <button id="tray-tab-btn-output" onclick="switchTrayTab('output')" class="text-xs text-gray-400 hover:text-gray-200 border-b-2 border-transparent py-2 flex items-center gap-1.5 transition cursor-pointer">
+              <span>💻 Sandbox Output</span>
               <span id="status-tag" class="text-[10px] font-mono bg-surface-border text-gray-300 px-1.5 py-0.2 rounded">Idle</span>
             </button>
-
-            <!-- Compatibility hidden trigger for app.js toggleCustomInput() -->
-            <button type="button" id="btn-toggle-stdin" onclick="toggleCustomInput()" class="hidden">
-              <span id="stdin-caret">â–¾</span>
-            </button>
+            <button type="button" id="btn-toggle-stdin" onclick="toggleCustomInput()" class="hidden"><span id="stdin-caret">▾</span></button>
           </div>
-
           <div class="flex items-center gap-2 text-xs">
-            <button type="button" onclick="switchTrayTab('testcase'); fillSampleInput();" class="text-emerald-400 hover:underline cursor-pointer" title="Load first sample test input">
-              Use Sample
-            </button>
-            <span class="text-gray-600">â€¢</span>
-            <button type="button" onclick="switchTrayTab('testcase'); clearCustomInput();" class="text-gray-400 hover:text-rose-400 transition cursor-pointer" title="Clear custom input">
-              Clear
-            </button>
-            <button type="button" id="btn-collapse-tray" onclick="toggleTrayCollapse()" class="ml-1 px-1.5 py-0.5 text-gray-400 hover:text-white hover:bg-surface-hover rounded transition cursor-pointer" title="Collapse / Expand Console">
-              â–¾
-            </button>
+            <button type="button" onclick="switchTrayTab('testcase'); fillSampleInput();" class="text-emerald-400 hover:underline cursor-pointer" title="Load first sample test input">Use Sample</button>
+            <span class="text-gray-600">•</span>
+            <button type="button" onclick="switchTrayTab('testcase'); clearCustomInput();" class="text-gray-400 hover:text-rose-400 transition cursor-pointer" title="Clear custom input">Clear</button>
+            <button type="button" id="btn-collapse-tray" onclick="toggleTrayCollapse()" class="ml-1 px-1.5 py-0.5 text-gray-400 hover:text-white hover:bg-surface-hover rounded transition cursor-pointer" title="Collapse / Expand Console">▾</button>
           </div>
         </div>
-
-        <!-- Tray Body (Collapsible) -->
         <div id="workspace-tray-body" class="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <!-- TAB 1: Testcase Custom Input (stdin) -->
           <div id="tray-panel-testcase" class="flex-1 p-3 overflow-y-auto min-h-0">
             <div id="custom-stdin-wrapper" class="h-full flex flex-col gap-1.5">
-              <label for="custom-stdin" class="text-[10px] uppercase font-mono tracking-wider text-gray-400">
-                Custom Input (stdin) â€” Safe Test Run does not affect your streak
-              </label>
-              <textarea
-                id="custom-stdin"
-                rows="3"
-                placeholder="Type custom stdin for Test Run (leave empty or click 'Use Sample')..."
-                class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-2.5 font-mono text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"
-              ></textarea>
+              <label for="custom-stdin" class="text-[10px] uppercase font-mono tracking-wider text-gray-400">Custom Input (stdin) – Safe Test Run does not affect your streak</label>
+              <textarea id="custom-stdin" rows="3" placeholder="Type custom stdin for Test Run (leave empty or click 'Use Sample')..." class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-2.5 font-mono text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"></textarea>
             </div>
           </div>
-
-          <!-- TAB 2: Sandbox Execution Output -->
           <div id="tray-panel-output" class="hidden flex-1 p-3 overflow-y-auto min-h-0 bg-[#090d13]">
-            <pre id="console-output" class="font-mono text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed">Click inside the code editor to start timing and solve the bug. Use â–¶ Test Run anytime without risking your streak.</pre>
+            <pre id="console-output" class="font-mono text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed">Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.</pre>
           </div>
         </div>
-
-        <!-- Action Footer Bar (Always Visible) -->
         <div class="h-11 bg-surface-container border-t border-surface-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 select-none">
-          <button
-            onclick="resetStarterCode()"
-            class="px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white border border-surface-border rounded-md hover:bg-surface-hover transition cursor-pointer whitespace-nowrap"
-          >
-            â†º Reset
-          </button>
-
+          <button onclick="resetStarterCode()" class="px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white border border-surface-border rounded-md hover:bg-surface-hover transition cursor-pointer whitespace-nowrap">↺ Reset</button>
           <div class="flex items-center gap-2">
-            <button
-              id="btn-test-run"
-              onclick="switchTrayTab('output'); runTestCode();"
-              title="Run code safely in cloud sandbox without affecting your streak (Ctrl + ')"
-              class="px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 rounded-md transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <span>â–¶</span>
-              <span>Test Run</span>
-            </button>
-            <button
-              id="btn-submit"
-              onclick="switchTrayTab('output'); submitPatch();"
-              title="Grade against all hidden tests (Ctrl + Enter)"
-              class="px-4 sm:px-5 py-1.5 text-xs font-semibold text-black bg-accent hover:bg-accent-hover rounded-md shadow-lg shadow-accent/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <span>Submit Patch</span>
-            </button>
+            <button id="btn-test-run" onclick="switchTrayTab('output'); runTestCode();" title="Run code safely in cloud sandbox without affecting your streak (Ctrl + ')" class="px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 rounded-md transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><span>▶</span><span>Test Run</span></button>
+            <button id="btn-submit" onclick="switchTrayTab('output'); submitPatch();" title="Grade against all hidden tests (Ctrl + Enter)" class="px-4 sm:px-5 py-1.5 text-xs font-semibold text-black bg-accent hover:bg-accent-hover rounded-md shadow-lg shadow-accent/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><span>Submit Patch</span></button>
           </div>
         </div>
       </div>
@@ -475,839 +205,81 @@
 
   <!-- STATUS FOOTER -->
   <footer class="h-6 bg-surface-dim border-t border-surface-border/60 px-3 flex items-center justify-between text-[11px] text-gray-500 shrink-0 select-none">
-    <div>LintIQ IDE â€¢ ARCADE V1.6</div>
-    <div class="hidden sm:block font-mono">Ctrl+' Test Run â€¢ Ctrl+Enter Submit</div>
+    <div>LintIQ IDE • ARCADE V1.6</div>
+    <div class="flex items-center gap-2.5 font-mono">
+      <span class="hidden sm:inline">Ctrl+' Test Run • Ctrl+Enter Submit</span>
+      <button id="btn-shortcuts-help" type="button" onclick="openShortcutsModal()" title="View keyboard shortcuts (?)" aria-label="Keyboard shortcuts help" class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-[10px] text-gray-300 hover:text-emerald-300 transition cursor-pointer">
+        <span class="text-emerald-400 font-bold">?</span><span>Shortcuts</span>
+      </button>
+    </div>
   </footer>
 
-  <!-- Hidden fallback container so app.js inline sequence updates never error -->
-  <div id="problem-sequence-list" class="hidden"></div>
+  <!-- INJECTED COMPONENTS -->
+  <div id="lintiq-problem-drawer"></div>
+  <div id="lintiq-settings-modal"></div>
+  <div id="lintiq-auth-modal"></div>
 
-  <!-- SLIDE-OUT PROBLEM SEQUENCE DRAWER -->
-  <div id="problem-list-drawer" class="hidden fixed inset-0 z-50 flex">
-    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeProblemListDrawer()"></div>
-    <div class="relative ml-auto w-full max-w-md h-full bg-[#0d1117] border-l border-surface-border flex flex-col shadow-2xl">
-      <div class="px-5 py-4 border-b border-surface-border bg-surface flex items-center justify-between shrink-0">
-        <div>
-          <h3 class="text-sm font-bold text-white">ðŸ“‹ Problem Sequence</h3>
-          <span id="drawer-count" class="text-[11px] font-mono text-gray-400">Loading...</span>
+  <!-- SENIOR ENGINEER CODE REVIEW MODAL -->
+  <div id="patch-review-modal" onclick="closePatchReviewModal()" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
+    <div onclick="event.stopPropagation()" class="bg-surface border border-surface-border w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl flex flex-col">
+      <div class="px-5 py-4 bg-surface-dim border-b border-surface-border flex items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0 flex-wrap">
+          <span class="text-cyan-400 text-base">🔍</span>
+          <h2 id="review-modal-title" class="text-sm sm:text-base font-bold text-white tracking-wide">Senior Engineer Code Review</h2>
+          <span id="review-problem-badge" class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 truncate max-w-[260px]">Challenge</span>
         </div>
+        <button type="button" onclick="closePatchReviewModal()" class="text-gray-400 hover:text-white hover:bg-surface-hover text-base px-2 py-0.5 rounded transition cursor-pointer shrink-0" aria-label="Close Review Modal">×</button>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <div id="review-loading" class="hidden py-10 flex flex-col items-center justify-center gap-3 text-xs font-mono text-gray-300">
+          <div class="w-6 h-6 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>
+          <span>Analyzing your patch diff...</span>
+        </div>
+
+        <div id="review-error" class="hidden p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs font-mono text-rose-300"></div>
+
+        <div id="review-cards" class="hidden space-y-3.5"></div>
+      </div>
+
+      <div class="px-5 py-3 bg-surface-dim border-t border-surface-border flex items-center justify-between text-[11px] font-mono text-gray-500 shrink-0">
+        <span>LintIQ Automated Staff Review</span>
+        <button type="button" onclick="closePatchReviewModal()" class="px-3 py-1 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white transition cursor-pointer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEYBOARD SHORTCUTS HELP MODAL -->
+  <div id="shortcuts-modal" onclick="closeShortcutsModal()" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
+    <div onclick="event.stopPropagation()" class="bg-surface border border-surface-border w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-5 py-3.5 bg-surface-dim border-b border-surface-border flex items-center justify-between gap-3 shrink-0">
         <div class="flex items-center gap-2">
-          <a href="problem-directory.html" class="text-[11px] font-mono text-emerald-400 hover:underline">Full List â†—</a>
-          <button onclick="closeProblemListDrawer()" class="text-gray-400 hover:text-white text-lg px-2 py-0.5 rounded transition cursor-pointer">âœ•</button>
+          <span class="text-emerald-400 text-sm font-mono">⌨</span>
+          <h2 id="shortcuts-modal-title" class="text-sm font-bold text-white tracking-wide">Workspace Keyboard Shortcuts</h2>
         </div>
+        <button type="button" onclick="closeShortcutsModal()" class="text-gray-400 hover:text-white hover:bg-surface-hover text-base px-2 py-0.5 rounded transition cursor-pointer" aria-label="Close Shortcuts Modal">×</button>
       </div>
-
-      <!-- Track Filter Pills & Difficulty Selector -->
-      <div class="px-4 py-3 border-b border-surface-border/70 bg-surface-container/50 space-y-2.5 shrink-0">
-        <div id="category-bar" class="flex items-center gap-1.5 overflow-x-auto pb-1">
-          <button onclick="selectCategory('All')" data-cat="All" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-emerald-600 text-white whitespace-nowrap shrink-0 cursor-pointer">
-            All Tracks <span id="total-count-badge" class="ml-1 text-[10px] opacity-90"></span>
-          </button>
-          <button onclick="selectCategory('Algorithms')" data-cat="Algorithms" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Algorithms</button>
-          <button onclick="selectCategory('Data Structures')" data-cat="Data Structures" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Data Structures</button>
-          <button onclick="selectCategory('Off-by-One')" data-cat="Off-by-One" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Off-by-One</button>
-          <button onclick="selectCategory('Edge Cases')" data-cat="Edge Cases" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Edge Cases</button>
-          <button onclick="selectCategory('Type Coercion')" data-cat="Type Coercion" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Type Coercion</button>
-          <button onclick="selectCategory('Memory & State')" data-cat="Memory & State" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Memory & State</button>
-          <button onclick="selectCategory('Concurrency')" data-cat="Concurrency" class="cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap shrink-0 cursor-pointer">Concurrency</button>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Search by title, number, or ID..."
-            oninput="filterDrawerList(this.value)"
-            class="flex-1 px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-accent font-mono"
-          />
-          <select id="difficulty-select" onchange="selectDifficulty(this.value)" class="bg-surface border border-surface-border text-gray-200 text-xs rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:border-accent">
-            <option value="All">All</option>
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-        </div>
-      </div>
-
-      <div id="problem-sequence-rows" class="flex-1 overflow-y-auto divide-y divide-surface-border/50">
-        <!-- Populated by app.js -->
+      <div id="shortcuts-list-rows" class="p-4 space-y-2.5 text-xs"></div>
+      <div class="px-5 py-2.5 bg-surface-dim border-t border-surface-border flex items-center justify-between text-[11px] font-mono text-gray-500">
+        <span>Press <kbd class="px-1.5 py-0.5 rounded bg-surface-container border border-surface-border text-gray-300">?</kbd> anytime outside inputs</span>
+        <button type="button" onclick="closeShortcutsModal()" class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white transition cursor-pointer">Close</button>
       </div>
     </div>
   </div>
 
-  <!-- SETTINGS, EDITOR PREFERENCES & ANALYTICS MODAL -->
-  <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <div class="bg-surface border border-surface-border w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl relative flex flex-col">
+  <!-- Shared JS (API, Supabase, Auth) -->
+  <script src="js/shared.js"></script>
 
-      <div class="px-5 sm:px-6 pt-4 bg-surface-dim border-b border-surface-border shrink-0">
-        <div class="flex items-center justify-between pb-3">
-          <div class="flex items-center gap-2">
-            <span class="text-emerald-400 font-mono text-sm">âš™</span>
-            <h2 id="settings-title" class="text-base font-bold text-white tracking-wide">LintIQ Control Center</h2>
-          </div>
-          <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">âœ•</button>
-        </div>
+  <!-- Component Injectors -->
+  <script src="components/navbar.js"></script>
+  <script src="components/auth-modal.js"></script>
+  <script src="components/settings-modal.js"></script>
+  <script src="components/problem-drawer.js"></script>
 
-        <div class="flex items-center gap-2 text-xs font-mono overflow-x-auto">
-          <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold transition whitespace-nowrap cursor-pointer">
-            ðŸ‘¤ Profile & Bio
-          </button>
-          <button onclick="switchSettingsTab('editor')" id="tab-btn-editor" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap cursor-pointer">
-            ðŸ–¥ Editor & Sandbox
-          </button>
-          <button onclick="switchSettingsTab('analytics')" id="tab-btn-analytics" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap cursor-pointer">
-            ðŸ“Š Dashboard & Graph
-          </button>
-        </div>
-      </div>
-
-      <!-- TAB 1: Profile -->
-      <div id="settings-panel-profile" class="settings-tab-panel p-5 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6">
-        <div class="md:col-span-5 bg-surface-dim border border-surface-border rounded-xl p-5 flex flex-col justify-between min-w-0">
-          <div>
-            <div class="flex items-center gap-3 pb-4 mb-4 border-b border-surface-border">
-              <div id="profile-initials" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-sky-600 flex items-center justify-center font-bold text-base text-white shrink-0">LQ</div>
-              <div class="min-w-0">
-                <div id="profile-display-name" class="text-base font-bold text-white truncate">Guest Engineer</div>
-                <div id="profile-display-role" class="text-xs text-gray-400 truncate">LintIQ Bug Hunter</div>
-                <div id="profile-display-github" class="text-[11px] font-mono text-emerald-400 mt-0.5 truncate"></div>
-              </div>
-            </div>
-
-            <div class="space-y-2.5 text-xs font-mono">
-              <div class="flex justify-between py-1.5 border-b border-surface-border/70 gap-2">
-                <span class="text-gray-400">Primary Stack</span>
-                <span id="summary-lang" class="text-gray-200 truncate">Python 3.11</span>
-              </div>
-              <div class="flex justify-between py-1.5 border-b border-surface-border/70 gap-2">
-                <span class="text-gray-400">Location</span>
-                <span id="summary-location" class="text-gray-200 truncate">India</span>
-              </div>
-              <div class="flex justify-between py-1.5 border-b border-surface-border/70 gap-2">
-                <span class="text-gray-400">Rank Tier</span>
-                <span class="text-amber-400 font-semibold">Bug Hunter II</span>
-              </div>
-              <div class="flex justify-between py-1.5 gap-2">
-                <span class="text-gray-400">Sandbox Timeout</span>
-                <span class="text-sky-400">3.5s Cloud Container</span>
-              </div>
-            </div>
-          </div>
-          <div class="mt-4 pt-3 border-t border-surface-border text-[11px] font-mono text-gray-500">
-            Synced with LintIQ Account & Local Storage
-          </div>
-        </div>
-
-        <div class="md:col-span-7 bg-surface-dim border border-surface-border rounded-xl p-5 min-w-0">
-          <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-4">Edit Personal Details</h3>
-          <form id="profile-form" onsubmit="saveUserProfile(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">Full Name</label>
-              <input type="text" id="input-fullname" placeholder="Your full name" required class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white focus:outline-none focus:border-accent" />
-            </div>
-            <div>
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">GitHub Username</label>
-              <input type="text" id="input-github" placeholder="github-username" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white focus:outline-none focus:border-accent" />
-            </div>
-            <div>
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">Email Address</label>
-              <input type="email" id="input-email" placeholder="you@example.com" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white focus:outline-none focus:border-accent" />
-            </div>
-            <div>
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">Location / University</label>
-              <input type="text" id="input-location" placeholder="India" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white focus:outline-none focus:border-accent" />
-            </div>
-            <div class="sm:col-span-2">
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">Headline / Bio</label>
-              <input type="text" id="input-bio" placeholder="Full-Stack Developer | Python & FastAPI" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white focus:outline-none focus:border-accent" />
-            </div>
-            <div>
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">Portfolio / LinkedIn URL</label>
-              <input type="url" id="input-website" placeholder="https://github.com/username" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white focus:outline-none focus:border-accent" />
-            </div>
-            <div>
-              <label class="block text-[11px] font-mono text-gray-400 mb-1">Preferred Runtime</label>
-              <select id="input-lang" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white font-mono focus:outline-none focus:border-accent">
-                <option value="python" selected>Python 3.11</option>
-                <option value="javascript">JavaScript (Node.js)</option>
-                <option value="cpp">C++20</option>
-                <option value="java">Java 17</option>
-              </select>
-            </div>
-            <div class="sm:col-span-2 pt-2 flex items-center justify-between gap-2">
-              <button type="submit" class="px-4 py-2 bg-accent hover:bg-accent-hover text-black text-xs font-semibold rounded-lg transition cursor-pointer">
-                Save Personal Profile
-              </button>
-              <span id="profile-save-status" class="text-xs font-mono text-emerald-400"></span>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- TAB 2: Editor Preferences -->
-      <div id="settings-panel-editor" class="settings-tab-panel hidden p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
-        <div class="bg-surface-dim border border-surface-border rounded-xl p-5 space-y-4">
-          <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400">Monaco Editor Configuration</h3>
-          <div>
-            <div class="flex justify-between text-xs font-mono mb-1">
-              <span class="text-gray-300">Font Size</span>
-              <span id="editor-fontsize-val" class="text-emerald-400">14px</span>
-            </div>
-            <input type="range" id="pref-fontsize" min="12" max="20" value="14" oninput="applyEditorPrefs()" class="w-full accent-emerald-500 cursor-pointer" />
-          </div>
-          <div>
-            <label class="block text-xs font-mono text-gray-300 mb-1">Indentation Size (Python Standard: 4)</label>
-            <select id="pref-tabsize" onchange="applyEditorPrefs()" class="w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-xs text-white font-mono">
-              <option value="4" selected>4 Spaces (Recommended)</option>
-              <option value="2">2 Spaces</option>
-            </select>
-          </div>
-          <label class="flex items-center justify-between p-2.5 bg-surface border border-surface-border rounded-lg cursor-pointer">
-            <span class="text-xs text-gray-200">Show Code Minimap</span>
-            <input type="checkbox" id="pref-minimap" onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
-          </label>
-          <label class="flex items-center justify-between p-2.5 bg-surface border border-surface-border rounded-lg cursor-pointer">
-            <span class="text-xs text-gray-200">Word Wrap Long Lines</span>
-            <input type="checkbox" id="pref-wordwrap" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4" />
-          </label>
-        </div>
-
-        <div class="bg-surface-dim border border-surface-border rounded-xl p-5 flex flex-col justify-between">
-          <div class="space-y-4">
-            <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400">Arcade & Sandbox Behavior</h3>
-            <label class="flex items-center justify-between p-2.5 bg-surface border border-surface-border rounded-lg cursor-pointer gap-2">
-              <div>
-                <div class="text-xs font-semibold text-gray-200">Auto-Start Timer on Keystroke</div>
-                <div class="text-[11px] text-gray-400">Starts challenge stopwatch immediately when editing</div>
-              </div>
-              <input type="checkbox" id="pref-autotimer" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4 shrink-0" />
-            </label>
-            <label class="flex items-center justify-between p-2.5 bg-surface border border-surface-border rounded-lg cursor-pointer gap-2">
-              <div>
-                <div class="text-xs font-semibold text-gray-200">Show AST Safety Warnings</div>
-                <div class="text-[11px] text-gray-400">Highlight blocked imports before submitting</div>
-              </div>
-              <input type="checkbox" id="pref-astwarn" checked onchange="applyEditorPrefs()" class="accent-emerald-500 w-4 h-4 shrink-0" />
-            </label>
-            <div class="p-3 bg-surface border border-surface-border rounded-lg text-xs font-mono space-y-1">
-              <div class="text-gray-400 text-[11px] uppercase">Keyboard Shortcuts</div>
-              <div class="flex justify-between text-gray-300"><span>Safe Test Run</span><kbd class="px-1.5 py-0.5 bg-surface-border rounded text-[10px]">Ctrl + '</kbd></div>
-              <div class="flex justify-between text-gray-300"><span>Submit Patch</span><kbd class="px-1.5 py-0.5 bg-surface-border rounded text-[10px]">Ctrl + Enter</kbd></div>
-              <div class="flex justify-between text-gray-300"><span>Format Code</span><kbd class="px-1.5 py-0.5 bg-surface-border rounded text-[10px]">Shift + Alt + F</kbd></div>
-            </div>
-          </div>
-          <div class="pt-3 flex justify-end">
-            <span id="editor-pref-status" class="text-xs font-mono text-emerald-400">Preferences applied live</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB 3: Analytics -->
-      <div id="settings-panel-analytics" class="settings-tab-panel hidden p-5 sm:p-6">
-        <div id="analytics-logged-out" class="hidden py-14 px-6 text-center bg-surface-dim border border-surface-border rounded-xl">
-          <div class="text-3xl mb-3">ðŸ”’</div>
-          <h3 class="text-base font-bold text-white mb-1">Sign in to view your Dashboard</h3>
-          <p class="text-xs text-gray-400 max-w-md mx-auto mb-5">
-            Your 7-day bug-hunt telemetry, pass rate, runtime latency, and personal streak history are tracked per account.
-          </p>
-          <button onclick="closeSettingsModal(); openAuthModal();" class="px-4 py-2 bg-accent hover:bg-accent-hover text-black text-xs font-semibold rounded-lg transition cursor-pointer">
-            Sign In / Register
-          </button>
-        </div>
-
-        <div id="analytics-auth-content" class="space-y-5">
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="bg-surface-dim border border-surface-border rounded-lg p-3">
-              <div class="text-[11px] font-mono text-gray-400">Patches Solved</div>
-              <div id="stat-patches" class="text-lg font-bold text-emerald-400 mt-0.5">0</div>
-            </div>
-            <div class="bg-surface-dim border border-surface-border rounded-lg p-3">
-              <div class="text-[11px] font-mono text-gray-400">Avg Runtime</div>
-              <div id="stat-runtime" class="text-lg font-bold text-sky-400 mt-0.5">0 ms</div>
-            </div>
-            <div class="bg-surface-dim border border-surface-border rounded-lg p-3">
-              <div class="text-[11px] font-mono text-gray-400">Pass Rate</div>
-              <div id="stat-accuracy" class="text-lg font-bold text-amber-400 mt-0.5">0%</div>
-            </div>
-            <div class="bg-surface-dim border border-surface-border rounded-lg p-3">
-              <div class="text-[11px] font-mono text-gray-400">Best Streak</div>
-              <div id="stat-best-streak" class="text-lg font-bold text-purple-400 mt-0.5">0</div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
-            <div class="md:col-span-8 bg-surface-dim border border-surface-border rounded-xl p-4 min-w-0">
-              <div class="flex items-center justify-between mb-2 gap-2">
-                <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400">7-Day Bug-Hunt & Latency Graph</h3>
-                <span class="text-[11px] font-mono text-emerald-400 whitespace-nowrap">â— Live Telemetry</span>
-              </div>
-              <div class="relative h-56 w-full">
-                <canvas id="lintiq-activity-chart"></canvas>
-              </div>
-            </div>
-
-            <div class="md:col-span-4 bg-surface-dim border border-surface-border rounded-xl p-4 flex flex-col justify-between min-w-0">
-              <div>
-                <h3 class="text-xs font-mono uppercase tracking-wider text-gray-400 mb-3">Account Telemetry</h3>
-                <p class="text-xs text-gray-400 leading-relaxed">
-                  Stats update automatically each time you submit a patch while signed in as
-                  <span id="analytics-account-name" class="text-emerald-400 font-mono"></span>.
-                </p>
-              </div>
-              <div class="pt-4 mt-4 border-t border-surface-border flex flex-col gap-2">
-                <button onclick="exportLintIQData()" class="w-full py-1.5 bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-mono text-gray-200 rounded-lg transition cursor-pointer">
-                  â¬‡ Export Profile & Stats (JSON)
-                </button>
-                <button onclick="resetLintIQMetrics()" class="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-mono text-rose-400 rounded-lg transition cursor-pointer">
-                  â†º Reset Local Telemetry
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- GLOBAL LEADERBOARD MODAL (Compat for app.js) -->
-  <div id="leaderboard-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-surface border border-surface-border w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-xl p-5 sm:p-6 shadow-2xl relative">
-      <div class="flex items-center justify-between pb-4 border-b border-surface-border">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">ðŸ†</span>
-          <h3 class="text-lg font-bold text-white tracking-wide">Global Cloud Leaderboard</h3>
-        </div>
-        <button onclick="closeLeaderboardModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">âœ•</button>
-      </div>
-
-      <div class="mt-4 overflow-x-auto">
-        <table class="w-full text-left text-xs font-mono">
-          <thead>
-            <tr class="text-gray-400 border-b border-surface-border">
-              <th class="py-2 px-3">#</th>
-              <th class="py-2 px-3">Engineer</th>
-              <th class="py-2 px-3 text-right">Score</th>
-              <th class="py-2 px-3 text-center">Streak</th>
-              <th class="py-2 px-3 text-right">Solves</th>
-            </tr>
-          </thead>
-          <tbody id="leaderboard-rows" class="divide-y divide-surface-border/60">
-            <tr>
-              <td colspan="5" class="py-6 text-center text-gray-400">Loading top bug hunters...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mt-5 pt-3 border-t border-surface-border flex justify-between items-center text-[11px] text-gray-400 gap-2">
-        <span id="leaderboard-sync-status">â˜ï¸ Permanent Cloud Leaderboard</span>
-        <div class="flex items-center gap-3">
-          <a href="leaderboard.html" class="text-gray-300 hover:text-white font-mono">Full Page â†—</a>
-          <button onclick="fetchLeaderboard()" class="text-emerald-400 hover:underline font-mono cursor-pointer">Refresh</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- AUTH MODAL -->
-  <div id="auth-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-surface border border-surface-border w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
-      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm cursor-pointer">âœ•</button>
-      <h3 class="text-lg font-bold text-white mb-1">Enter the Bug Arcade</h3>
-      <p class="text-xs text-gray-400 mb-5">Sign in to save streaks, claim score points, and climb the cloud leaderboard.</p>
-
-      <div class="space-y-2 mb-4">
-        <button onclick="loginWithOAuth('github')" class="w-full py-2 px-3 bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-semibold text-white rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" /></svg>
-          Continue with GitHub
-        </button>
-
-        <button onclick="loginWithOAuth('google')" class="w-full py-2 px-3 bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-semibold text-white rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
-          <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" /><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5.1 3.7-8.8z" /><path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.8 0-1.3.2-2.1.4-2.8L1.9 6.3C.7 8.7 0 10.3 0 12s.7 3.3 1.9 5.7l3.7-2.9z" /><path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z" /></svg>
-          Continue with Google
-        </button>
-      </div>
-
-      <div class="flex items-center my-4">
-        <div class="flex-1 border-t border-surface-border"></div>
-        <span class="px-2 text-[10px] text-gray-400 uppercase tracking-widest font-mono">or email</span>
-        <div class="flex-1 border-t border-surface-border"></div>
-      </div>
-
-      <form onsubmit="handleEmailAuth(event)" class="space-y-3">
-        <div>
-          <label class="block text-[11px] font-mono text-gray-400 mb-1">Email address</label>
-          <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full px-3 py-2 bg-surface-dim border border-surface-border rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-accent" />
-        </div>
-        <button type="submit" id="btn-email-submit" class="w-full py-2 bg-gray-100 hover:bg-white text-gray-900 text-xs font-semibold rounded-lg transition cursor-pointer">
-          Send Magic Sign-In Link
-        </button>
-        <p id="auth-msg" class="text-[11px] text-center"></p>
-      </form>
-    </div>
-  </div>
-
-  <!-- External Application Logic -->
+  <!-- Core Workspace Logic -->
   <script src="js/workspace.js"></script>
 
-  <!-- Workspace UI, Settings Popover, Profile, Editor Prefs & Analytics Controller -->
-  <script>
-    const LINTIQ_PREFS_KEY = "lintiq_editor_prefs_v1";
-    const LINTIQ_NOTES_KEY = "lintiq_workspace_notes_v1";
-    let lintiqChartInstance = null;
-    let isTrayCollapsed = false;
-    let isEditorFullscreen = false;
-
-    function switchLeftTab(tab) {
-      const descBtn = document.getElementById("left-tab-btn-desc");
-      const notesBtn = document.getElementById("left-tab-btn-notes");
-      const descPanel = document.getElementById("left-tab-panel-desc");
-      const notesPanel = document.getElementById("left-tab-panel-notes");
-
-      const activeClasses = ["font-semibold", "text-white", "bg-surface", "border-accent"];
-      const inactiveClasses = ["text-gray-400", "border-transparent"];
-
-      if (tab === "notes") {
-        descPanel?.classList.add("hidden");
-        notesPanel?.classList.remove("hidden");
-        descBtn?.classList.remove(...activeClasses);
-        descBtn?.classList.add(...inactiveClasses);
-        notesBtn?.classList.remove(...inactiveClasses);
-        notesBtn?.classList.add(...activeClasses);
-      } else {
-        notesPanel?.classList.add("hidden");
-        descPanel?.classList.remove("hidden");
-        notesBtn?.classList.remove(...activeClasses);
-        notesBtn?.classList.add(...inactiveClasses);
-        descBtn?.classList.remove(...inactiveClasses);
-        descBtn?.classList.add(...activeClasses);
-      }
-    }
-
-    function handleHintClick() {
-      switchLeftTab("desc");
-      if (typeof requestHint === "function") requestHint();
-      setTimeout(() => {
-        document.getElementById("hint-box")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 60);
-    }
-
-    function switchTrayTab(tab) {
-      if (isTrayCollapsed) toggleTrayCollapse(false);
-
-      const tcBtn = document.getElementById("tray-tab-btn-testcase");
-      const outBtn = document.getElementById("tray-tab-btn-output");
-      const tcPanel = document.getElementById("tray-panel-testcase");
-      const outPanel = document.getElementById("tray-panel-output");
-      const stdinWrapper = document.getElementById("custom-stdin-wrapper");
-
-      if (tab === "output") {
-        tcPanel?.classList.add("hidden");
-        outPanel?.classList.remove("hidden");
-        tcBtn?.classList.remove("font-semibold", "text-white", "border-accent");
-        tcBtn?.classList.add("text-gray-400", "border-transparent");
-        outBtn?.classList.remove("text-gray-400", "border-transparent");
-        outBtn?.classList.add("font-semibold", "text-white", "border-accent");
-      } else {
-        outPanel?.classList.add("hidden");
-        tcPanel?.classList.remove("hidden");
-        stdinWrapper?.classList.remove("hidden");
-        outBtn?.classList.remove("font-semibold", "text-white", "border-accent");
-        outBtn?.classList.add("text-gray-400", "border-transparent");
-        tcBtn?.classList.remove("text-gray-400", "border-transparent");
-        tcBtn?.classList.add("font-semibold", "text-white", "border-accent");
-      }
-    }
-
-    function toggleTrayCollapse(forceState) {
-      const tray = document.getElementById("workspace-tray");
-      const body = document.getElementById("workspace-tray-body");
-      const btn = document.getElementById("btn-collapse-tray");
-      isTrayCollapsed = typeof forceState === "boolean" ? forceState : !isTrayCollapsed;
-
-      if (isTrayCollapsed) {
-        body?.classList.add("hidden");
-        tray?.classList.remove("h-52");
-        tray?.classList.add("h-20");
-        if (btn) btn.textContent = "â–´";
-      } else {
-        body?.classList.remove("hidden");
-        tray?.classList.remove("h-20");
-        tray?.classList.add("h-52");
-        if (btn) btn.textContent = "â–¾";
-      }
-      requestAnimationFrame(() => window.editor?.layout?.());
-    }
-
-    function toggleEditorFullscreen() {
-      const leftPane = document.getElementById("workspace-left-pane");
-      const rightPane = document.getElementById("workspace-right-pane");
-      isEditorFullscreen = !isEditorFullscreen;
-
-      if (isEditorFullscreen) {
-        leftPane?.classList.add("lg:hidden");
-        rightPane?.classList.remove("lg:w-[54%]", "xl:w-1/2");
-        rightPane?.classList.add("lg:w-full");
-      } else {
-        leftPane?.classList.remove("lg:hidden");
-        rightPane?.classList.remove("lg:w-full");
-        rightPane?.classList.add("lg:w-[54%]", "xl:w-1/2");
-      }
-      requestAnimationFrame(() => window.editor?.layout?.());
-    }
-
-    function formatWorkspaceCode() {
-      if (window.editor) {
-        window.editor.getAction("editor.action.formatDocument")?.run();
-      }
-    }
-
-    function clearWorkspaceNotes() {
-      const el = document.getElementById("workspace-notes-input");
-      if (el) {
-        el.value = "";
-        localStorage.removeItem(LINTIQ_NOTES_KEY);
-      }
-    }
-
-    function getProfileStorageKey() {
-      const uid = typeof currentUser !== "undefined" && currentUser?.id ? currentUser.id : "guest";
-      return `lintiq_user_profile_${uid}`;
-    }
-
-    function getMetricsStorageKey() {
-      const uid = typeof currentUser !== "undefined" && currentUser?.id ? currentUser.id : null;
-      return uid ? `lintiq_user_metrics_${uid}` : null;
-    }
-
-    function getDefaultProfileFromAuth() {
-      const user = typeof currentUser !== "undefined" ? currentUser : null;
-      const fullName = user && typeof getDisplayUsername === "function"
-        ? getDisplayUsername(user)
-        : "Guest Engineer";
-      const email = user?.email || "";
-      const github = user?.user_metadata?.user_name || "";
-
-      return {
-        full_name: fullName,
-        github,
-        email,
-        location: "India",
-        bio: "LintIQ Bug Hunter",
-        website: github ? `https://github.com/${github}` : "",
-        language: "python"
-      };
-    }
-
-    function getDefaultLintIQMetrics() {
-      return {
-        labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        patchesSolved: [0, 0, 0, 0, 0, 0, 0],
-        avgLatencyMs: [0, 0, 0, 0, 0, 0, 0],
-        totalAccepted: 0,
-        totalAttempts: 0,
-        passRate: 0,
-        bestStreak: 0
-      };
-    }
-
-    function toggleSettingsDropdown(event) {
-      if (event) event.stopPropagation();
-      document.getElementById("settings-popover-menu")?.classList.toggle("hidden");
-    }
-
-    function closeSettingsDropdown() {
-      document.getElementById("settings-popover-menu")?.classList.add("hidden");
-    }
-
-    function openSettingsAtTab(tabName) {
-      closeSettingsDropdown();
-      openSettingsModal();
-      switchSettingsTab(tabName);
-    }
-
-    document.addEventListener("click", (e) => {
-      const wrapper = document.getElementById("settings-dropdown-wrapper");
-      if (wrapper && !wrapper.contains(e.target)) {
-        closeSettingsDropdown();
-      }
-    });
-
-    function switchSettingsTab(tabName) {
-      document.querySelectorAll(".settings-tab-panel").forEach(p => p.classList.add("hidden"));
-      document.querySelectorAll(".settings-tab-btn").forEach(b => {
-        b.classList.remove("border-emerald-500", "text-emerald-400", "font-semibold");
-        b.classList.add("border-transparent", "text-zinc-400");
-      });
-
-      document.getElementById(`settings-panel-${tabName}`)?.classList.remove("hidden");
-      const activeBtn = document.getElementById(`tab-btn-${tabName}`);
-      if (activeBtn) {
-        activeBtn.classList.remove("border-transparent", "text-zinc-400");
-        activeBtn.classList.add("border-emerald-500", "text-emerald-400", "font-semibold");
-      }
-
-      if (tabName === "analytics") {
-        requestAnimationFrame(() => renderLintIQActivityChart());
-      }
-    }
-
-    function updateProfileSummaryUI(p) {
-      const cleanName = (p.full_name || "Guest Engineer").trim();
-      document.getElementById("profile-display-name").textContent = cleanName;
-      document.getElementById("profile-display-role").textContent = (p.bio || "LintIQ Bug Hunter").trim();
-      document.getElementById("profile-display-github").textContent = p.github ? `@${p.github.replace(/^@/, "")}` : "";
-      document.getElementById("summary-location").textContent = p.location || "India";
-
-      const langMap = { python: "Python 3.11", javascript: "JavaScript (Node.js)", cpp: "C++20", java: "Java 17" };
-      document.getElementById("summary-lang").textContent = langMap[p.language] || "Python 3.11";
-
-      const initials = cleanName
-        .split(/\s+/)
-        .filter(Boolean)
-        .map(part => part[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2) || "LQ";
-
-      document.getElementById("profile-initials").textContent = initials;
-      const headerAvatar = document.getElementById("header-user-avatar");
-      if (headerAvatar) headerAvatar.textContent = initials;
-    }
-
-    function loadLocalProfile() {
-      const defaults = getDefaultProfileFromAuth();
-      const saved = JSON.parse(localStorage.getItem(getProfileStorageKey()) || "null");
-      const profile = saved ? { ...defaults, ...saved } : defaults;
-
-      document.getElementById("input-fullname").value = profile.full_name || "";
-      document.getElementById("input-github").value = profile.github || "";
-      document.getElementById("input-email").value = profile.email || "";
-      document.getElementById("input-location").value = profile.location || "India";
-      document.getElementById("input-bio").value = profile.bio || "";
-      document.getElementById("input-website").value = profile.website || "";
-      document.getElementById("input-lang").value = profile.language || "python";
-      updateProfileSummaryUI(profile);
-    }
-
-    function applyEditorPrefs() {
-      const fontSize = parseInt(document.getElementById("pref-fontsize").value, 10) || 14;
-      const tabSize = parseInt(document.getElementById("pref-tabsize").value, 10) || 4;
-      const minimap = document.getElementById("pref-minimap").checked;
-      const wordWrap = document.getElementById("pref-wordwrap").checked ? "on" : "off";
-      const autoTimer = document.getElementById("pref-autotimer").checked;
-      const astWarn = document.getElementById("pref-astwarn").checked;
-
-      document.getElementById("editor-fontsize-val").textContent = `${fontSize}px`;
-
-      const prefs = { fontSize, tabSize, minimap, wordWrap, autoTimer, astWarn };
-      localStorage.setItem(LINTIQ_PREFS_KEY, JSON.stringify(prefs));
-
-      if (window.editor && typeof window.editor.updateOptions === "function") {
-        window.editor.updateOptions({
-          fontSize,
-          tabSize,
-          minimap: { enabled: minimap },
-          wordWrap
-        });
-      }
-    }
-
-    function loadEditorPrefs() {
-      const prefs = JSON.parse(localStorage.getItem(LINTIQ_PREFS_KEY) || "null");
-      if (!prefs) return;
-      document.getElementById("pref-fontsize").value = prefs.fontSize || 14;
-      document.getElementById("pref-tabsize").value = prefs.tabSize || 4;
-      document.getElementById("pref-minimap").checked = Boolean(prefs.minimap);
-      document.getElementById("pref-wordwrap").checked = prefs.wordWrap !== "off";
-      document.getElementById("pref-autotimer").checked = prefs.autoTimer !== false;
-      document.getElementById("pref-astwarn").checked = prefs.astWarn !== false;
-      applyEditorPrefs();
-    }
-
-    function renderLintIQActivityChart() {
-      const loggedOutEl = document.getElementById("analytics-logged-out");
-      const authContentEl = document.getElementById("analytics-auth-content");
-      const metricsKey = getMetricsStorageKey();
-
-      if (!metricsKey) {
-        loggedOutEl?.classList.remove("hidden");
-        authContentEl?.classList.add("hidden");
-        if (lintiqChartInstance) {
-          lintiqChartInstance.destroy();
-          lintiqChartInstance = null;
-        }
-        return;
-      }
-
-      loggedOutEl?.classList.add("hidden");
-      authContentEl?.classList.remove("hidden");
-
-      const accountNameEl = document.getElementById("analytics-account-name");
-      if (accountNameEl && typeof getDisplayUsername === "function" && currentUser) {
-        accountNameEl.textContent = getDisplayUsername(currentUser);
-      }
-
-      const metrics = JSON.parse(localStorage.getItem(metricsKey) || "null") || getDefaultLintIQMetrics();
-      const totalSolves = Math.max(metrics.totalAccepted || 0, typeof solves === "number" ? solves : 0);
-      const bestStreak = Math.max(metrics.bestStreak || 0, typeof streak === "number" ? streak : 0);
-      const latestMs = metrics.avgLatencyMs[metrics.avgLatencyMs.length - 1] || 0;
-
-      document.getElementById("stat-patches").textContent = totalSolves;
-      document.getElementById("stat-runtime").textContent = `${latestMs} ms`;
-      document.getElementById("stat-accuracy").textContent = `${metrics.passRate || 0}%`;
-      document.getElementById("stat-best-streak").textContent = bestStreak;
-
-      const canvas = document.getElementById("lintiq-activity-chart");
-      if (!canvas || typeof Chart === "undefined") return;
-      if (lintiqChartInstance) lintiqChartInstance.destroy();
-
-      lintiqChartInstance = new Chart(canvas.getContext("2d"), {
-        type: "line",
-        data: {
-          labels: metrics.labels,
-          datasets: [
-            {
-              label: "Bugs Patched",
-              data: metrics.patchesSolved,
-              borderColor: "#34d399",
-              backgroundColor: "rgba(52, 211, 153, 0.16)",
-              borderWidth: 2,
-              tension: 0.35,
-              fill: true,
-              yAxisID: "y"
-            },
-            {
-              label: "Exec Latency (ms)",
-              data: metrics.avgLatencyMs,
-              borderColor: "#38bdf8",
-              backgroundColor: "rgba(56, 189, 248, 0.1)",
-              borderWidth: 2,
-              borderDash: [4, 4],
-              tension: 0.35,
-              fill: false,
-              yAxisID: "y1"
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: { labels: { color: "#d4d4d8", font: { size: 11 } } }
-          },
-          scales: {
-            x: { ticks: { color: "#a1a1aa", font: { size: 11 } }, grid: { color: "rgba(63, 63, 70, 0.4)" } },
-            y: { type: "linear", position: "left", beginAtZero: true, ticks: { color: "#34d399", stepSize: 1, font: { size: 11 } }, grid: { color: "rgba(63, 63, 70, 0.4)" } },
-            y1: { type: "linear", position: "right", beginAtZero: true, ticks: { color: "#38bdf8", font: { size: 11 } }, grid: { drawOnChartArea: false } }
-          }
-        }
-      });
-    }
-
-    function openSettingsModal() {
-      document.getElementById("settings-modal").classList.remove("hidden");
-      loadLocalProfile();
-      loadEditorPrefs();
-    }
-
-    function closeSettingsModal() {
-      document.getElementById("settings-modal").classList.add("hidden");
-    }
-
-    function saveUserProfile(event) {
-      event.preventDefault();
-      const payload = {
-        full_name: document.getElementById("input-fullname").value.trim(),
-        github: document.getElementById("input-github").value.trim(),
-        email: document.getElementById("input-email").value.trim(),
-        location: document.getElementById("input-location").value.trim(),
-        bio: document.getElementById("input-bio").value.trim(),
-        website: document.getElementById("input-website").value.trim(),
-        language: document.getElementById("input-lang").value
-      };
-
-      localStorage.setItem(getProfileStorageKey(), JSON.stringify(payload));
-      updateProfileSummaryUI(payload);
-
-      const statusEl = document.getElementById("profile-save-status");
-      statusEl.textContent = "Saved!";
-      setTimeout(() => { statusEl.textContent = ""; }, 2000);
-    }
-
-    function exportLintIQData() {
-      const metricsKey = getMetricsStorageKey();
-      const bundle = {
-        exported_at: new Date().toISOString(),
-        profile: JSON.parse(localStorage.getItem(getProfileStorageKey()) || "null") || getDefaultProfileFromAuth(),
-        preferences: JSON.parse(localStorage.getItem(LINTIQ_PREFS_KEY) || "{}"),
-        metrics: metricsKey ? (JSON.parse(localStorage.getItem(metricsKey) || "null") || getDefaultLintIQMetrics()) : null
-      };
-      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "lintiq-profile-backup.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function resetLintIQMetrics() {
-      const metricsKey = getMetricsStorageKey();
-      if (!metricsKey) return;
-      localStorage.setItem(metricsKey, JSON.stringify(getDefaultLintIQMetrics()));
-      renderLintIQActivityChart();
-    }
-
-    window.syncSettingsModalAuth = function () {
-      loadLocalProfile();
-      const modal = document.getElementById("settings-modal");
-      if (modal && !modal.classList.contains("hidden")) {
-        const analyticsPanel = document.getElementById("settings-panel-analytics");
-        if (analyticsPanel && !analyticsPanel.classList.contains("hidden")) {
-          renderLintIQActivityChart();
-        }
-      }
-    };
-
-    window.addEventListener("DOMContentLoaded", () => {
-      loadEditorPrefs();
-
-      const notesEl = document.getElementById("workspace-notes-input");
-      if (notesEl) {
-        notesEl.value = localStorage.getItem(LINTIQ_NOTES_KEY) || "";
-        notesEl.addEventListener("input", () => {
-          localStorage.setItem(LINTIQ_NOTES_KEY, notesEl.value);
-        });
-      }
-
-      const consoleEl = document.getElementById("console-output");
-      if (consoleEl && typeof MutationObserver !== "undefined") {
-        let initialSkip = true;
-        new MutationObserver(() => {
-          if (initialSkip) { initialSkip = false; return; }
-          switchTrayTab("output");
-        }).observe(consoleEl, { childList: true, characterData: true, subtree: true });
-      }
-
-      const streakEl = document.getElementById("streak-count");
-      const mobileStreakEl = document.getElementById("mobile-streak-mirror");
-      if (streakEl && mobileStreakEl && typeof MutationObserver !== "undefined") {
-        new MutationObserver(() => {
-          mobileStreakEl.textContent = streakEl.textContent;
-        }).observe(streakEl, { childList: true, characterData: true, subtree: true });
-      }
-
-      const editorEl = document.getElementById("editor-container");
-      if (editorEl && typeof ResizeObserver !== "undefined") {
-        new ResizeObserver(() => {
-          if (window.editor && typeof window.editor.layout === "function") {
-            window.editor.layout();
-          }
-        }).observe(editorEl);
-      }
-    });
-  </script>
+  <!-- Workspace UI Controller (tabs, settings, prefs, analytics, scratchpad) -->
+  <script src="js/workspace-ui.js"></script>
 </body>
 </html>

@@ -1,10 +1,21 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LintIQ â€” Problem Directory</title>
+  <title>LintIQ – Problem Directory</title>
   <meta name="description" content="Browse all LintIQ debugging challenges across 7 engineering tracks and 3 difficulties." />
+
+  <!-- Open Graph & Twitter / X Preview -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://thelintiq.com/problem-directory.html" />
+  <meta property="og:title" content="LintIQ Problem Directory – 1,600+ Real Debugging Challenges" />
+  <meta property="og:description" content="Explore debugging challenges across Algorithms, Data Structures, Off-by-One, Edge Cases, Type Coercion, Memory & State, and Concurrency." />
+  <meta property="og:image" content="https://thelintiq.com/assets/og-card.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="LintIQ Problem Directory – 1,600+ Real Debugging Challenges" />
+  <meta name="twitter:description" content="Explore debugging challenges across 7 core engineering tracks and 3 difficulty tiers." />
+  <meta name="twitter:image" content="https://thelintiq.com/assets/og-card.png" />
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,34 +25,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Geist', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            surface: {
-              DEFAULT: '#0f131c',
-              dim: '#0a0e16',
-              container: '#141822',
-              card: '#181d28',
-              border: '#232938',
-              hover: '#1e2434',
-            },
-            accent: {
-              DEFAULT: '#10b981',
-              hover: '#059669',
-              subtle: '#064e3b',
-            }
-          }
-        }
-      }
-    };
-  </script>
+  <!-- Shared Tailwind Config -->
+  <script src="js/tailwind-config.js"></script>
 
   <!-- Supabase JS Client CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -61,63 +46,37 @@
 </head>
 <body class="flex flex-col min-h-screen antialiased">
 
-  <!-- TOP NAVIGATION BAR -->
-  <header class="h-12 bg-surface border-b border-surface-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 sticky top-0 z-40 select-none">
-    <div class="flex items-center gap-3 min-w-0">
-      <a href="problem-directory.html" class="flex items-center gap-2 text-white font-bold tracking-tight shrink-0">
-        <span class="w-2.5 h-2.5 rounded-full bg-accent inline-block animate-pulse"></span>
-        <span class="text-base sm:text-lg">Lint<span class="text-accent">IQ</span></span>
-      </a>
-      <span class="hidden lg:inline-block px-2 py-0.5 text-[10px] font-semibold bg-surface-border text-emerald-400 rounded-md tracking-wider font-mono shrink-0">
-        ARCADE V1.6
-      </span>
-
-      <div class="flex items-center gap-1 ml-1 sm:ml-2 text-xs">
-        <a href="problem-directory.html" class="px-3 py-1 rounded-md font-semibold bg-accent text-black shadow-sm whitespace-nowrap">
-          Problem List
-        </a>
-        <a href="index.html" class="px-3 py-1 rounded-md font-medium text-gray-300 hover:text-white hover:bg-surface-border transition whitespace-nowrap">
-          Workspace
-        </a>
-      </div>
-    </div>
-
-    <div class="flex items-center gap-2 sm:gap-3 text-xs shrink-0">
-      <div class="hidden sm:flex items-center gap-1.5 bg-surface-container border border-surface-border px-2.5 py-1 rounded-md text-amber-400 font-mono font-medium">
-        <span>âš¡ Streak:</span>
-        <span id="dir-streak" class="text-white font-bold">0</span>
-      </div>
-
-      <nav class="hidden md:flex items-center gap-1">
-        <a href="leaderboard.html" class="px-2.5 py-1 text-gray-300 hover:text-white hover:bg-surface-border rounded-md transition whitespace-nowrap">Leaderboard</a>
-        <a href="profile.html" class="px-2.5 py-1 text-gray-300 hover:text-white hover:bg-surface-border rounded-md transition whitespace-nowrap">Profile Stats</a>
-      </nav>
-
-      <a href="index.html?ai=1" class="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-2.5 py-1 rounded-md hover:bg-emerald-500/20 transition font-medium whitespace-nowrap">
-        <span>âœ¨</span>
-        <span class="hidden sm:inline">Instant AI Bug</span>
-      </a>
-
-      <!-- Dynamic Auth Section -->
-      <div class="flex items-center gap-2 pl-2 border-l border-surface-border">
-        <button id="dir-btn-login" onclick="openDirAuthModal()" class="px-3 py-1 bg-accent hover:bg-accent-hover text-black font-semibold rounded-md transition cursor-pointer whitespace-nowrap">
-          Sign In
-        </button>
-
-        <div id="dir-user-profile" class="hidden flex items-center gap-2">
-          <a href="profile.html" class="flex items-center gap-2 hover:opacity-85 transition">
-            <span id="dir-user-name" class="hidden sm:inline text-[11px] font-medium text-gray-200 max-w-[130px] truncate"></span>
-            <div id="dir-user-avatar" class="w-7 h-7 rounded-full bg-accent/20 border border-accent flex items-center justify-center text-accent text-[11px] font-bold">LQ</div>
-          </a>
-          <button onclick="dirLogout()" class="text-[11px] text-gray-400 hover:text-rose-400 transition cursor-pointer whitespace-nowrap" title="Sign out">
-            Sign out
-          </button>
-        </div>
-      </div>
-    </div>
-  </header>
+  <!-- SHARED NAVBAR -->
+  <nav id="lintiq-navbar" data-page="directory"></nav>
 
   <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-5">
+
+    <!-- BUG OF THE DAY BANNER -->
+    <section id="daily-bug-banner" class="hidden bg-gradient-to-r from-[#141923] via-[#111827] to-[#0e1b18] border border-amber-500/35 rounded-xl p-4 sm:p-5 shadow-xl">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1.5 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/35 rounded-full">🔥 Bug of the Day</span>
+            <span class="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 rounded">2x XP</span>
+            <span id="daily-bug-diff" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded border">Hard</span>
+            <span id="daily-bug-category" class="text-[11px] font-mono text-sky-300">Algorithms</span>
+          </div>
+          <h2 class="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+            <a id="daily-bug-title-link" href="index.html" class="hover:text-emerald-300 transition">Loading daily bug...</a>
+          </h2>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 shrink-0">
+          <div class="px-3 py-1.5 rounded-lg bg-surface-container/80 border border-surface-border text-xs font-mono text-gray-300 whitespace-nowrap">
+            <span>⏱️</span>
+            <span id="daily-bug-countdown">Resets in --h --m --s</span>
+          </div>
+          <div id="daily-bug-action" class="shrink-0">
+            <a id="daily-bug-cta" href="index.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-black text-xs font-bold transition shadow-lg shadow-accent/20 whitespace-nowrap">Solve Daily Bug →</a>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- TRACK PILLS + SEARCH & FILTERS -->
     <div class="space-y-3">
@@ -140,8 +99,8 @@
         <button onclick="setDirCategory('Type Coercion')" data-cat="Type Coercion" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
           Type Coercion <span class="ml-1 opacity-70" id="cat-count-Type Coercion"></span>
         </button>
-        <button onclick="setDirCategory('Memory & State')" data-cat="Memory & State" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Memory & State <span class="ml-1 opacity-70" id="cat-count-Memory & State"></span>
+        <button onclick="setDirCategory('Memory &amp; State')" data-cat="Memory &amp; State" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
+          Memory &amp; State <span class="ml-1 opacity-70" id="cat-count-Memory &amp; State"></span>
         </button>
         <button onclick="setDirCategory('Concurrency')" data-cat="Concurrency" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
           Concurrency <span class="ml-1 opacity-70" id="cat-count-Concurrency"></span>
@@ -150,42 +109,19 @@
 
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <div class="relative flex-1 max-w-md">
-          <input
-            id="dir-search"
-            type="text"
-            placeholder="Search by title, #id, category, or #tag..."
-            oninput="handleDirFilterChange()"
-            class="w-full bg-surface-container border border-surface-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent"
-          />
-          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <input id="dir-search" type="text" placeholder="Search by title, #id, category, or #tag..." oninput="handleDirFilterChange()" class="w-full bg-surface-container border border-surface-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent" />
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>
-
         <div class="flex items-center gap-2 flex-wrap">
-          <select id="dir-difficulty" onchange="handleDirFilterChange()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer">
-            <option value="All">Difficulty: All Levels</option>
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-
-          <select id="dir-status" onchange="handleDirFilterChange()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer">
-            <option value="All">Status: All</option>
-            <option value="Solved">Solved</option>
-            <option value="Todo">Todo</option>
-          </select>
-
-          <button onclick="resetDirFilters()" class="px-2.5 py-1.5 text-xs text-gray-400 hover:text-white bg-surface-container border border-surface-border rounded-lg transition cursor-pointer">
-            Reset
-          </button>
+          <select id="dir-difficulty" onchange="handleDirFilterChange()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer"><option value="All">Difficulty: All Levels</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>
+          <select id="dir-status" onchange="handleDirFilterChange()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer"><option value="All">Status: All</option><option value="Solved">Solved</option><option value="Todo">Todo</option></select>
+          <button onclick="resetDirFilters()" class="px-2.5 py-1.5 text-xs text-gray-400 hover:text-white bg-surface-container border border-surface-border rounded-lg transition cursor-pointer">Reset</button>
         </div>
       </div>
     </div>
 
     <!-- PROGRESS & ACTIVE SESSION CARDS -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      <!-- Left: Real Debugging Proficiency -->
       <div class="lg:col-span-7 bg-surface border border-surface-border rounded-xl p-5 shadow-lg flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
@@ -200,13 +136,11 @@
               <span id="prog-pct" class="text-xs font-semibold text-emerald-400 ml-1">0.0%</span>
             </div>
           </div>
-
           <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden flex my-3">
             <div id="bar-easy" class="bg-emerald-400 h-full transition-all duration-300" style="width: 0%;"></div>
             <div id="bar-med" class="bg-amber-400 h-full transition-all duration-300" style="width: 0%;"></div>
             <div id="bar-hard" class="bg-rose-400 h-full transition-all duration-300" style="width: 0%;"></div>
           </div>
-
           <div class="flex items-center justify-between gap-2 flex-wrap text-xs text-gray-400 pt-1">
             <div class="flex items-center gap-3 flex-wrap font-mono text-[11px]">
               <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span id="prog-easy">Easy: 0/0</span></span>
@@ -216,48 +150,29 @@
             <span id="prog-remaining" class="text-gray-500 text-[11px] font-mono">0 Remaining</span>
           </div>
         </div>
-
         <div class="grid grid-cols-3 gap-3 pt-4 mt-4 border-t border-surface-border text-xs">
-          <div>
-            <div class="text-[10px] uppercase font-mono text-gray-500">Current Streak</div>
-            <div id="stat-streak" class="font-bold text-amber-400 mt-0.5">0</div>
-          </div>
-          <div>
-            <div class="text-[10px] uppercase font-mono text-gray-500">Arcade Score</div>
-            <div id="stat-score" class="font-bold text-emerald-400 mt-0.5">0 pts</div>
-          </div>
-          <div>
-            <div class="text-[10px] uppercase font-mono text-gray-500">Total Solved</div>
-            <div id="stat-solves" class="font-bold text-white mt-0.5">0 Bugs</div>
-          </div>
+          <div><div class="text-[10px] uppercase font-mono text-gray-500">Current Streak</div><div id="stat-streak" class="font-bold text-amber-400 mt-0.5">0</div></div>
+          <div><div class="text-[10px] uppercase font-mono text-gray-500">Arcade Score</div><div id="stat-score" class="font-bold text-emerald-400 mt-0.5">0 pts</div></div>
+          <div><div class="text-[10px] uppercase font-mono text-gray-500">Total Solved</div><div id="stat-solves" class="font-bold text-white mt-0.5">0 Bugs</div></div>
         </div>
       </div>
 
-      <!-- Right: Active Session / Quick Launch -->
       <div class="lg:col-span-5 bg-surface border border-surface-border rounded-xl p-5 shadow-lg flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between text-xs mb-2">
-            <span class="flex items-center gap-1.5 text-amber-400 font-semibold">
-              <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-              <span id="active-badge-text">ACTIVE SESSION</span>
-            </span>
+            <span class="flex items-center gap-1.5 text-amber-400 font-semibold"><span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span><span id="active-badge-text">ACTIVE SESSION</span></span>
             <span id="active-updated" class="text-gray-500 text-[11px] font-mono">Ready</span>
           </div>
           <div class="flex items-center gap-2 mt-2">
             <span id="active-diff" class="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded uppercase">EASY</span>
-            <span id="active-meta" class="text-xs text-gray-400 font-mono">#1 â€¢ Loading...</span>
+            <span id="active-meta" class="text-xs text-gray-400 font-mono">#1 • Loading...</span>
           </div>
           <h3 id="active-title" class="text-base font-bold text-white tracking-tight mt-1.5 truncate">Loading challenge catalog...</h3>
           <p id="active-desc" class="text-xs text-gray-400 line-clamp-2 mt-1">Connecting to LintIQ backend to fetch your full debugging catalog...</p>
         </div>
-
         <div class="flex items-center gap-2 pt-4">
-          <a id="active-resume-btn" href="index.html" class="flex-1 bg-accent hover:bg-accent-hover text-black font-semibold text-xs py-2 px-3 rounded-lg text-center transition whitespace-nowrap">
-            â–¶ Open Workspace
-          </a>
-          <button id="btn-pick-random" onclick="pickRandomProblem()" class="bg-surface-container hover:bg-surface-border border border-surface-border text-gray-200 font-medium text-xs py-2 px-3 rounded-lg transition cursor-pointer whitespace-nowrap">
-            ðŸŽ² Pick Random
-          </button>
+          <a id="active-resume-btn" href="index.html" class="flex-1 bg-accent hover:bg-accent-hover text-black font-semibold text-xs py-2 px-3 rounded-lg text-center transition whitespace-nowrap">▶ Open Workspace</a>
+          <button id="btn-pick-random" onclick="pickRandomProblem()" class="bg-surface-container hover:bg-surface-border border border-surface-border text-gray-200 font-medium text-xs py-2 px-3 rounded-lg transition cursor-pointer whitespace-nowrap">🎲 Pick Random</button>
         </div>
       </div>
     </div>
@@ -275,25 +190,13 @@
           <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-gray-500"></span><span>Todo</span></span>
         </div>
       </div>
-
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead class="bg-surface-container/60 text-gray-400 uppercase tracking-wider text-[10px] font-mono border-b border-surface-border">
-            <tr>
-              <th class="py-3 px-4 w-14 text-center">Status</th>
-              <th class="py-3 px-4">Title & Diagnostic Tags</th>
-              <th class="py-3 px-4">Track</th>
-              <th class="py-3 px-4">Difficulty</th>
-              <th class="py-3 px-4">Assertions</th>
-              <th class="py-3 px-4 text-right">Action</th>
-            </tr>
+            <tr><th class="py-3 px-4 w-14 text-center">Status</th><th class="py-3 px-4">Title & Diagnostic Tags</th><th class="py-3 px-4">Track</th><th class="py-3 px-4">Difficulty</th><th class="py-3 px-4">Assertions</th><th class="py-3 px-4 text-right">Action</th></tr>
           </thead>
           <tbody id="directory-rows" class="divide-y divide-surface-border/50 text-gray-300">
-            <tr>
-              <td colspan="6" class="py-12 text-center text-gray-400 font-mono">
-                Loading full problem catalog from LintIQ engine...
-              </td>
-            </tr>
+            <tr><td colspan="6" class="py-12 text-center text-gray-400 font-mono">Loading full problem catalog from LintIQ engine...</td></tr>
           </tbody>
         </table>
       </div>
@@ -301,77 +204,38 @@
       <!-- PAGINATION BAR -->
       <div class="px-4 sm:px-5 py-3 bg-surface-container/50 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
         <div class="flex items-center gap-3 flex-wrap">
-          <span id="page-range-info" class="font-mono text-[11px]">Showing 0â€“0 of 0 problems</span>
+          <span id="page-range-info" class="font-mono text-[11px]">Showing 0–0 of 0 problems</span>
           <div class="flex items-center gap-1.5">
             <label for="rows-per-page" class="text-[11px] font-mono text-gray-500">Rows:</label>
-            <select id="rows-per-page" onchange="changePageSize(this.value)" class="bg-surface border border-surface-border text-gray-200 text-xs rounded px-2 py-1 font-mono focus:outline-none focus:border-accent cursor-pointer">
-              <option value="25" selected>25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+            <select id="rows-per-page" onchange="changePageSize(this.value)" class="bg-surface border border-surface-border text-gray-200 text-xs rounded px-2 py-1 font-mono focus:outline-none focus:border-accent cursor-pointer"><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select>
           </div>
         </div>
-
         <div class="flex items-center gap-2 flex-wrap">
           <form onsubmit="jumpToProblemNumber(event)" class="flex items-center gap-1.5 mr-2">
             <label for="goto-problem-input" class="text-[11px] font-mono text-gray-500">Go to #</label>
-            <input
-              id="goto-problem-input"
-              type="number"
-              min="1"
-              placeholder="ID"
-              class="w-16 bg-surface border border-surface-border rounded px-2 py-1 text-xs font-mono text-white focus:outline-none focus:border-accent"
-            />
-            <button type="submit" class="px-2 py-1 bg-surface border border-surface-border hover:border-accent text-gray-300 hover:text-white rounded text-xs transition cursor-pointer">â†’</button>
+            <input id="goto-problem-input" type="number" min="1" placeholder="ID" class="w-16 bg-surface border border-surface-border rounded px-2 py-1 text-xs font-mono text-white focus:outline-none focus:border-accent" />
+            <button type="submit" class="px-2 py-1 bg-surface border border-surface-border hover:border-accent text-gray-300 hover:text-white rounded text-xs transition cursor-pointer">→</button>
           </form>
-
-          <div id="pagination-controls" class="flex items-center gap-1 font-mono">
-            <!-- Populated dynamically by directory.js -->
-          </div>
+          <div id="pagination-controls" class="flex items-center gap-1 font-mono"></div>
         </div>
       </div>
     </div>
   </main>
 
   <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0 mt-auto">
-    <div>LintIQ IDE â€¢ ARCADE V1.6</div>
+    <div>LintIQ IDE • ARCADE V1.6</div>
     <div id="dir-sync-footer" class="font-mono">Connected</div>
   </footer>
 
-  <!-- AUTH MODAL -->
-  <div id="dir-auth-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-surface border border-surface-border w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
-      <button onclick="closeDirAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm cursor-pointer">âœ•</button>
-      <h3 class="text-lg font-bold text-white mb-1">Enter the Bug Arcade</h3>
-      <p class="text-xs text-gray-400 mb-5">Sign in to sync your solved checkmarks, streaks, and cloud leaderboard score.</p>
+  <!-- INJECTED COMPONENTS -->
+  <div id="lintiq-auth-modal"></div>
 
-      <div class="space-y-2 mb-4">
-        <button onclick="dirLoginWithOAuth('github')" class="w-full py-2 px-3 bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-semibold text-white rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
-          Continue with GitHub
-        </button>
-        <button onclick="dirLoginWithOAuth('google')" class="w-full py-2 px-3 bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-semibold text-white rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
-          Continue with Google
-        </button>
-      </div>
+  <!-- Shared JS -->
+  <script src="js/shared.js"></script>
 
-      <div class="flex items-center my-4">
-        <div class="flex-1 border-t border-surface-border"></div>
-        <span class="px-2 text-[10px] text-gray-400 uppercase tracking-widest font-mono">or email</span>
-        <div class="flex-1 border-t border-surface-border"></div>
-      </div>
-
-      <form onsubmit="dirHandleEmailAuth(event)" class="space-y-3">
-        <div>
-          <label class="block text-[11px] font-mono text-gray-400 mb-1">Email address</label>
-          <input type="email" id="dir-auth-email" required placeholder="you@example.com" class="w-full px-3 py-2 bg-surface-dim border border-surface-border rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-accent" />
-        </div>
-        <button type="submit" id="dir-btn-email-submit" class="w-full py-2 bg-gray-100 hover:bg-white text-gray-900 text-xs font-semibold rounded-lg transition cursor-pointer">
-          Send Magic Sign-In Link
-        </button>
-        <p id="dir-auth-msg" class="text-[11px] text-center"></p>
-      </form>
-    </div>
-  </div>
+  <!-- Components -->
+  <script src="components/navbar.js"></script>
+  <script src="components/auth-modal.js"></script>
 
   <!-- Directory Logic -->
   <script src="js/directory.js"></script>
