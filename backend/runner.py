@@ -445,6 +445,7 @@ def _build_safe_env(tmpdir: str) -> Dict[str, str]:
         "PATH": os.environ.get("PATH", ""),
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1",
         "TEMP": tmpdir,
         "TMP": tmpdir,
         "TMPDIR": tmpdir,
@@ -500,7 +501,7 @@ def _execute_remote_piston(
     }
 
     headers = {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
         "User-Agent": "LintIQ-Arcade-Judge/2.6",
     }
     if api_key:

@@ -161,7 +161,7 @@ def _call_gemini_api(
                 url,
                 json=payload,
                 headers={
-                    "Content-Type": "application/json",
+                    "Content-Type": "application/json; charset=utf-8",
                     "x-goog-api-key": api_key,
                 },
             )

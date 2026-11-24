@@ -13,6 +13,7 @@ import time
 from fastapi import FastAPI, HTTPException, Query, Header, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 from schemas import SubmitPatchRequest, RunCodeRequest, HintRequest, ReviewPatchRequest
 from database import (
@@ -467,7 +468,16 @@ def _bg_reset_user_streak(
         logger.error("Background reset_user_streak failed: %s", exc)
 
 
-app = FastAPI(title="LintIQ API", version="1.6.2")
+class UTF8JSONResponse(JSONResponse):
+    """Default JSON response enforcing explicit UTF-8 charset."""
+    media_type = "application/json; charset=utf-8"
+
+
+app = FastAPI(
+    title="LintIQ API",
+    version="1.6.2",
+    default_response_class=UTF8JSONResponse,
+)
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
@@ -492,6 +502,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def ensure_utf8_charset(request: Request, call_next):
+    """Ensures JSON, text, HTML, and SVG HTTP responses explicitly specify charset=utf-8."""
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    lower_ct = content_type.lower()
+    if (
+        content_type
+        and "charset=" not in lower_ct
+        and (
+            lower_ct.startswith("text/")
+            or lower_ct.startswith("application/json")
+            or lower_ct.startswith("image/svg+xml")
+        )
+    ):
+        response.headers["content-type"] = f"{content_type}; charset=utf-8"
+    return response
 
 init_db()
 ensure_db_indexes()
@@ -1189,7 +1218,7 @@ def get_readme_badge_svg(
 </svg>"""
         return Response(
             content=svg,
-            media_type="image/svg+xml",
+            media_type="image/svg+xml; charset=utf-8",
             headers={"Cache-Control": "public, max-age=1800"},
         )
 
@@ -1281,6 +1310,6 @@ def get_readme_badge_svg(
 
     return Response(
         content=svg,
-        media_type="image/svg+xml",
+        media_type="image/svg+xml; charset=utf-8",
         headers={"Cache-Control": "public, max-age=1800"},
     )

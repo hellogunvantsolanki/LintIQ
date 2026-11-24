@@ -97,3 +97,19 @@ def test_submit_patch_rate_limit_429(monkeypatch):
 
     second = client.post("/submit-patch", json=payload, headers=headers)
     assert second.status_code == 429
+
+
+def test_responses_include_utf8_charset():
+    health_resp = client.get("/health")
+    assert health_resp.status_code == 200
+    assert "charset=utf-8" in health_resp.headers.get("content-type", "").lower()
+
+    unauth_resp = client.get("/profile/00000000-0000-0000-0000-000000000000")
+    assert unauth_resp.status_code == 401
+    assert "charset=utf-8" in unauth_resp.headers.get("content-type", "").lower()
+
+    svg_resp = client.get("/badge/unknown_tester_utf8.svg")
+    assert svg_resp.status_code == 200
+    svg_ct = svg_resp.headers.get("content-type", "").lower()
+    assert "image/svg+xml" in svg_ct and "charset=utf-8" in svg_ct
+
