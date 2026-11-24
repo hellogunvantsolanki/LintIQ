@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LintIQ Profile & Performance Statistics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Geist', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            surface: {
+              DEFAULT: '#0f131c',
+              dim: '#0a0e16',
+              container: '#141822',
+              card: '#181d28',
+              border: '#232938',
+              hover: '#1e2434',
+            },
+            accent: {
+              DEFAULT: '#10b981',
+              hover: '#059669',
+              subtle: '#064e3b',
+            }
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-[#0a0e16] text-[#e2e8f0] font-sans min-h-screen flex flex-col">
+  <header class="h-12 bg-surface border-b border-surface-border px-4 flex items-center justify-between shrink-0 sticky top-0 z-40">
+    <div class="flex items-center space-x-4">
+      <a href="problem-directory.html" class="flex items-center space-x-2 text-white font-bold tracking-tight">
+        <span class="w-3 h-3 rounded-full bg-accent inline-block animate-pulse"></span>
+        <span class="text-lg">Lint<span class="text-accent">IQ</span></span>
+      </a>
+      <span class="px-2 py-0.5 text-[10px] font-semibold bg-surface-border text-emerald-400 rounded-md tracking-wider">ARCADE V1.6</span>
+      <div class="flex items-center space-x-1 ml-4 text-xs">
+        <a href="problem-directory.html" class="px-3 py-1.5 rounded-md font-medium text-gray-300 hover:text-white hover:bg-surface-border transition">Problem List</a>
+        <a href="index.html" class="px-3 py-1.5 rounded-md font-medium text-gray-300 hover:text-white hover:bg-surface-border transition">Workspace</a>
+      </div>
+    </div>
+    <div class="flex items-center space-x-3 text-xs">
+      <nav class="flex items-center space-x-2">
+        <a href="leaderboard.html" class="px-2.5 py-1 text-gray-300 hover:text-white hover:bg-surface-border rounded-md transition">Leaderboard</a>
+        <a href="profile.html" class="px-3 py-1.5 rounded-md font-semibold bg-accent text-black shadow-sm">Profile Stats</a>
+      </nav>
+      <div class="w-7 h-7 rounded-full bg-accent/20 border border-accent flex items-center justify-center text-accent text-xs font-bold">GS</div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+    <!-- USER CARD -->
+    <div class="bg-surface border border-surface-border rounded-xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div class="flex items-center gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-surface-container border border-surface-border flex items-center justify-center text-accent text-2xl font-mono">
+          &lt;/&gt;
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-bold text-white">Gunvant Solanki</h1>
+            <span class="text-xs text-gray-400">@gunvantsolanki</span>
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">VERIFIED ARCHITECT</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1 max-w-xl">
+            Full-stack & Systems Engineer focusing on distributed memory models, micro-benchmarks, and algorithmic edge-case patching.
+          </p>
+          <div class="flex items-center gap-3 mt-3 text-xs text-gray-400">
+            <span>🎖 Season 02 Contender</span>
+            <span>📈 Top 12% Global Rank</span>
+            <span>⚡ Clean Patch Veteran</span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="px-3 py-2 bg-surface-container border border-surface-border hover:bg-surface-hover text-xs rounded-lg text-white">Share Card</button>
+        <button class="px-3 py-2 bg-accent hover:bg-accent-hover text-black font-semibold text-xs rounded-lg">Export Certificate</button>
+      </div>
+    </div>
+
+    <!-- STATS ROW -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs">
+        <div class="text-[10px] uppercase font-mono text-gray-500">Global Rank</div>
+        <div class="text-xl font-bold text-white mt-1">#1,420 <span class="text-xs text-emerald-400">▲ 14</span></div>
+        <div class="text-[11px] text-gray-500 mt-0.5">Top 1.2% active tier</div>
+      </div>
+      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs">
+        <div class="text-[10px] uppercase font-mono text-gray-500">Contest Rating</div>
+        <div class="text-xl font-bold text-white mt-1">1,842</div>
+        <div class="text-[11px] text-gray-500 mt-0.5">Division 1 Master</div>
+      </div>
+      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs">
+        <div class="text-[10px] uppercase font-mono text-gray-500">Total Patched</div>
+        <div class="text-xl font-bold text-white mt-1">142 <span class="text-xs text-gray-500 font-normal">/ 200</span></div>
+        <div class="text-[11px] text-emerald-400 mt-0.5">71% Completion</div>
+      </div>
+      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs">
+        <div class="text-[10px] uppercase font-mono text-gray-500">Active Streak</div>
+        <div class="text-xl font-bold text-amber-400 mt-1">12 Days 🔥</div>
+        <div class="text-[11px] text-gray-500 mt-0.5">Max: 45 days</div>
+      </div>
+      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs">
+        <div class="text-[10px] uppercase font-mono text-gray-500">Submissions</div>
+        <div class="text-xl font-bold text-white mt-1">318</div>
+        <div class="text-[11px] text-emerald-400 mt-0.5">84.6% Accuracy</div>
+      </div>
+    </div>
+
+    <!-- RECENT PATCHES -->
+    <div class="bg-surface border border-surface-border rounded-xl p-5 shadow-xl">
+      <h2 class="text-sm font-bold text-white mb-4">Recent Patches & Solved History</h2>
+      <div class="space-y-2 text-xs">
+        <div class="p-3 bg-surface-container/50 border border-surface-border rounded-lg flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-emerald-400">✓</span>
+            <div><span class="font-medium text-white">1. Sum of First N Natural Numbers</span><span class="text-gray-500 ml-2">Python 3.11</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-emerald-400 font-mono">4/4 passed</span>
+            <span class="text-emerald-400 font-bold">+15 pts</span>
+            <span class="text-gray-500">2 hours ago</span>
+          </div>
+        </div>
+        <div class="p-3 bg-surface-container/50 border border-surface-border rounded-lg flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-emerald-400">✓</span>
+            <div><span class="font-medium text-white">2. Two Sum with Zero Index Guard</span><span class="text-gray-500 ml-2">TypeScript 5.3</span></div>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-emerald-400 font-mono">5/5 passed</span>
+            <span class="text-emerald-400 font-bold">+12 pts</span>
+            <span class="text-gray-500">1 day ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

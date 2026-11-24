@@ -103,12 +103,13 @@ function getDisplayUsername(user) {
 }
 
 function openAuthModal() {
-  document.getElementById("auth-modal").classList.remove("hidden");
-  document.getElementById("auth-msg").textContent = "";
+  document.getElementById("auth-modal")?.classList.remove("hidden");
+  const msg = document.getElementById("auth-msg");
+  if (msg) msg.textContent = "";
 }
 
 function closeAuthModal() {
-  document.getElementById("auth-modal").classList.add("hidden");
+  document.getElementById("auth-modal")?.classList.add("hidden");
 }
 
 async function loginWithOAuth(provider) {
@@ -304,9 +305,9 @@ function selectCategory(category) {
   selectedCategory = category;
   document.querySelectorAll(".cat-pill").forEach(btn => {
     if (btn.getAttribute("data-cat") === category) {
-      btn.className = "cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-emerald-600 text-white shadow-sm whitespace-nowrap shrink-0";
+      btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-emerald-600 text-white shadow-sm whitespace-nowrap shrink-0 cursor-pointer";
     } else {
-      btn.className = "cat-pill px-3 py-1 rounded-full text-xs font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0";
+      btn.className = "cat-pill px-2.5 py-1 rounded-full text-[11px] font-medium transition bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 whitespace-nowrap shrink-0 cursor-pointer";
     }
   });
   currentSeqIndex = 0;
@@ -336,39 +337,39 @@ function getProblemCode(problem, lang) {
 
 function renderProblemSequence() {
   const container = document.getElementById("problem-sequence-list");
-  if (!container) return;
-
   const list = problemSequence.length > 0 ? problemSequence : PROBLEMS;
   const activeIdx = problemSequence.length > 0 ? currentSeqIndex : currentProblemIndex;
 
-  container.innerHTML = list.map((p, idx) => {
-    const active = idx === activeIdx
-      ? "bg-emerald-500/15 border-emerald-500/40 text-white"
-      : "bg-[#0d1117] border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/70";
+  if (container && !container.classList.contains("hidden")) {
+    container.innerHTML = list.slice(0, 200).map((p, idx) => {
+      const active = idx === activeIdx
+        ? "bg-emerald-500/15 border-emerald-500/40 text-white"
+        : "bg-[#0d1117] border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/70";
 
-    const diffColor = p.difficulty === "Easy" ? "text-emerald-400"
-      : p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
+      const diffColor = p.difficulty === "Easy" ? "text-emerald-400"
+        : p.difficulty === "Medium" ? "text-amber-400" : "text-rose-400";
 
-    if (problemSequence.length > 0) {
+      if (problemSequence.length > 0) {
+        return `
+          <button type="button" onclick="jumpToProblemById(${p.id})"
+            class="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs transition cursor-pointer ${active}">
+            <span class="flex items-center gap-1.5 truncate font-medium">
+              <span class="w-4 text-center">${p.solved ? "✅" : "○"}</span>
+              ${idx + 1}. ${p.title}
+            </span>
+            <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
+          </button>
+        `;
+      }
       return `
-        <button type="button" onclick="jumpToProblemById(${p.id})"
+        <button type="button" onclick="selectProblem(${idx})"
           class="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs transition cursor-pointer ${active}">
-          <span class="flex items-center gap-1.5 truncate font-medium">
-            <span class="w-4 text-center">${p.solved ? "✅" : "○"}</span>
-            ${idx + 1}. ${p.title}
-          </span>
+          <span class="truncate font-medium">${p.id}. ${p.title}</span>
           <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
         </button>
       `;
-    }
-    return `
-      <button type="button" onclick="selectProblem(${idx})"
-        class="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs transition cursor-pointer ${active}">
-        <span class="truncate font-medium">${p.id}. ${p.title}</span>
-        <span class="font-mono text-[10px] ${diffColor} ml-2 shrink-0">${p.difficulty}</span>
-      </button>
-    `;
-  }).join("");
+    }).join("");
+  }
 
   const progEl = document.getElementById("seq-progress");
   if (progEl) {
@@ -438,7 +439,7 @@ function resetStarterCode() {
 async function fetchProblemSequence(category, difficulty, autoLoadFirst = true) {
   category = category || selectedCategory || "All";
   difficulty = difficulty || selectedDifficulty || "All";
-  const url = `${API_BASE}/problems?category=${encodeURIComponent(category)}&difficulty=${encodeURIComponent(difficulty)}&limit=200`;
+  const url = `${API_BASE}/problems?category=${encodeURIComponent(category)}&difficulty=${encodeURIComponent(difficulty)}&limit=5000`;
 
   try {
     const headers = {};
@@ -449,7 +450,12 @@ async function fetchProblemSequence(category, difficulty, autoLoadFirst = true) 
     const res = await fetch(url, { headers });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    problemSequence = data.problems || [];
+
+    const localSolvedMap = getSolvedMap();
+    problemSequence = (data.problems || []).map(p => ({
+      ...p,
+      solved: Boolean(p.solved) || Boolean(localSolvedMap[String(p.id)])
+    }));
 
     const drawerCount = document.getElementById("drawer-count");
     if (drawerCount) drawerCount.textContent = `${data.total} Challenges (Sequential)`;
@@ -474,7 +480,11 @@ function renderDrawerRows(list) {
   const container = document.getElementById("problem-sequence-rows");
   if (!container) return;
 
-  container.innerHTML = list.map((p, idx) => {
+  // Cap rendered DOM rows to 250 for smooth drawer scrolling; search narrows across all 1,600+
+  const visible = list.slice(0, 250);
+  const moreCount = Math.max(0, list.length - visible.length);
+
+  container.innerHTML = visible.map((p) => {
     const isActive = problemSequence[currentSeqIndex]?.id === p.id;
     const diffClass =
       p.difficulty === "Easy" ? "text-emerald-400" :
@@ -483,30 +493,60 @@ function renderDrawerRows(list) {
     return `
       <button
         onclick="jumpToProblemById(${p.id})"
-        class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition ${
+        class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition cursor-pointer ${
           isActive ? "bg-emerald-500/15 border-l-2 border-emerald-400" : "hover:bg-[#161b22]"
         }"
       >
         <div class="flex items-center gap-2.5 min-w-0">
           <span class="w-4 text-center text-xs">${p.solved ? "✅" : "○"}</span>
-          <span class="text-xs font-mono text-zinc-500 shrink-0">${idx + 1}.</span>
+          <span class="text-xs font-mono text-zinc-500 shrink-0">#${p.id}</span>
           <span class="text-xs font-medium text-zinc-200 truncate">${p.title}</span>
         </div>
         <span class="text-[11px] font-mono font-semibold shrink-0 ${diffClass}">${p.difficulty}</span>
       </button>
     `;
-  }).join("");
+  }).join("") + (moreCount > 0
+    ? `<div class="px-4 py-3 text-center text-[11px] font-mono text-zinc-500">Use search above or <a href="problem-directory.html" class="text-emerald-400 hover:underline">open Problem Directory</a> to browse ${moreCount} more challenges.</div>`
+    : "");
 }
 window.renderDrawerRows = renderDrawerRows;
 
 function filterDrawerList(query) {
-  const q = query.trim().toLowerCase();
+  const q = query.trim().toLowerCase().replace(/^#/, "");
   const filtered = problemSequence.filter(
     (p, idx) => p.title.toLowerCase().includes(q) || String(idx + 1) === q || String(p.id) === q
   );
   renderDrawerRows(filtered);
 }
 window.filterDrawerList = filterDrawerList;
+
+async function loadProblemByIdDirect(problemId) {
+  try {
+    resetTimer();
+    hideCopyDiffButton();
+    document.getElementById("problem-title").textContent = "Loading challenge...";
+    document.getElementById("hint-box")?.classList.add("hidden");
+
+    const res = await fetch(`${API_BASE}/problems/${encodeURIComponent(problemId)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const problem = await res.json();
+
+    const seqIdx = problemSequence.findIndex(p => Number(p.id) === Number(problem.id));
+    if (seqIdx !== -1) currentSeqIndex = seqIdx;
+
+    renderProblem(problem);
+    renderDrawerRows(problemSequence);
+    renderProblemSequence();
+  } catch (err) {
+    console.error("Failed to load problem by ID:", err);
+    if (problemSequence.length > 0) {
+      loadSequentialProblem(0);
+    } else {
+      loadNewProblem();
+    }
+  }
+}
+window.loadProblemByIdDirect = loadProblemByIdDirect;
 
 async function loadSequentialProblem(seqIndex) {
   if (seqIndex < 0 || seqIndex >= problemSequence.length) return;
@@ -517,15 +557,13 @@ async function loadSequentialProblem(seqIndex) {
     resetTimer();
     hideCopyDiffButton();
     document.getElementById("problem-title").textContent = "Loading challenge...";
-    document.getElementById("hint-box").classList.add("hidden");
+    document.getElementById("hint-box")?.classList.add("hidden");
 
     const res = await fetch(`${API_BASE}/problems/${target.id}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const problem = await res.json();
 
     renderProblem(problem);
-    document.getElementById("problem-id").textContent = `#${seqIndex + 1}`;
-
     renderDrawerRows(problemSequence);
     renderProblemSequence();
   } catch (err) {
@@ -537,9 +575,12 @@ async function loadSequentialProblem(seqIndex) {
 window.loadSequentialProblem = loadSequentialProblem;
 
 function jumpToProblemById(id) {
-  const idx = problemSequence.findIndex(p => p.id === id);
+  const idx = problemSequence.findIndex(p => Number(p.id) === Number(id));
   if (idx !== -1) {
     loadSequentialProblem(idx);
+    closeProblemListDrawer();
+  } else {
+    loadProblemByIdDirect(id);
     closeProblemListDrawer();
   }
 }
@@ -583,17 +624,18 @@ window.closeProblemListDrawer = closeProblemListDrawer;
 
 // --- 4. PERMANENT CLOUD LEADERBOARD MODAL LOGIC ---
 function openLeaderboardModal() {
-  document.getElementById("leaderboard-modal").classList.remove("hidden");
+  document.getElementById("leaderboard-modal")?.classList.remove("hidden");
   fetchLeaderboard();
 }
 
 function closeLeaderboardModal() {
-  document.getElementById("leaderboard-modal").classList.add("hidden");
+  document.getElementById("leaderboard-modal")?.classList.add("hidden");
 }
 
 async function fetchLeaderboard() {
   const tbody = document.getElementById("leaderboard-rows");
   const syncStatus = document.getElementById("leaderboard-sync-status");
+  if (!tbody) return;
 
   try {
     let leaders = [];
@@ -686,6 +728,28 @@ function updateMetrics() {
   localStorage.setItem("lintiq_streak", streak);
   localStorage.setItem("lintiq_score", score);
   localStorage.setItem("lintiq_solves", solves);
+}
+
+function saveLastActiveProblem(problem) {
+  if (!problem || !problem.id) return;
+  try {
+    localStorage.setItem("lintiq_last_active_problem", JSON.stringify({
+      id: problem.id,
+      title: problem.title,
+      difficulty: problem.difficulty || "Medium",
+      category: problem.category || "General",
+      description: String(problem.description || "").slice(0, 160),
+      updatedAt: Date.now()
+    }));
+  } catch (_) {}
+}
+
+function syncProblemUrl(problemId) {
+  if (!problemId || !window.history || typeof window.history.replaceState !== "function") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("id", String(problemId));
+  url.searchParams.delete("ai");
+  window.history.replaceState(null, "", url.pathname + url.search);
 }
 
 function getSeenAiIdsKey() {
@@ -927,8 +991,8 @@ function resetTimer() {
   updateTimerDisplay();
   const status = document.getElementById("timer-status");
   if (status) {
-    status.textContent = "(Ready)";
-    status.className = "text-[10px] uppercase tracking-wider text-zinc-400 ml-0.5";
+    status.textContent = "READY";
+    status.className = "text-[10px] uppercase tracking-wider text-gray-400";
   }
 }
 
@@ -937,8 +1001,8 @@ function startTimer() {
   timerRunning = true;
   const status = document.getElementById("timer-status");
   if (status) {
-    status.textContent = "(Running)";
-    status.className = "text-[10px] uppercase tracking-wider text-emerald-400 ml-0.5";
+    status.textContent = "RUNNING";
+    status.className = "text-[10px] uppercase tracking-wider text-emerald-400";
   }
 
   timerInterval = setInterval(() => {
@@ -953,15 +1017,16 @@ function stopTimer() {
   timerRunning = false;
   const status = document.getElementById("timer-status");
   if (status) {
-    status.textContent = "(Solved)";
-    status.className = "text-[10px] uppercase tracking-wider text-sky-400 ml-0.5";
+    status.textContent = "SOLVED";
+    status.className = "text-[10px] uppercase tracking-wider text-sky-400";
   }
 }
 
 function updateTimerDisplay() {
   const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
   const secs = String(timerSeconds % 60).padStart(2, '0');
-  document.getElementById("timer-display").textContent = `${mins}:${secs}`;
+  const display = document.getElementById("timer-display");
+  if (display) display.textContent = `${mins}:${secs}`;
 }
 
 // --- 6. PROBLEM LIFECYCLE (STATELESS RENDERER) ---
@@ -972,8 +1037,14 @@ function renderProblem(problem, customConsoleMsg = null) {
   window.currentProblem = problem;
   hideCopyDiffButton();
 
+  // Persist active session for problem-directory.html & update browser URL
+  saveLastActiveProblem(problem);
+  if (Number(problem.id) < 100000) {
+    syncProblemUrl(problem.id);
+  }
+
   document.getElementById("problem-id").textContent = `#${problem.id}`;
-  document.getElementById("problem-title").textContent = problem.title;
+  document.getElementById("problem-title").textContent = `#${problem.id} ${problem.title}`;
   document.getElementById("problem-desc").textContent = problem.description;
   document.getElementById("problem-category").textContent = problem.category || "General";
 
@@ -981,18 +1052,29 @@ function renderProblem(problem, customConsoleMsg = null) {
   const tagsList = Array.isArray(problem.tags) ? problem.tags : [];
   tagsContainer.innerHTML = tagsList.map(tag => {
     const cleanTag = String(tag).startsWith("#") ? tag : `#${tag}`;
-    return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">${cleanTag}</span>`;
+    return `<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-container text-gray-400 border border-surface-border">${cleanTag}</span>`;
   }).join("");
 
   const tcCount = Array.isArray(problem.test_cases) ? problem.test_cases.length : 0;
   document.getElementById("test-case-count").textContent = `🧪 ${tcCount} Test Assertion${tcCount === 1 ? '' : 's'}`;
 
   const diffBadge = document.getElementById("problem-difficulty");
-  diffBadge.textContent = problem.difficulty || "Medium";
+  const diffText = (problem.difficulty || "Medium").toUpperCase();
+  diffBadge.textContent = diffText;
+  if (diffText === "EASY") {
+    diffBadge.className = "px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded";
+  } else if (diffText === "HARD") {
+    diffBadge.className = "px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded";
+  } else {
+    diffBadge.className = "px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded";
+  }
 
-  document.getElementById("hint-box").classList.add("hidden");
-  document.getElementById("status-tag").textContent = "Idle";
-  document.getElementById("status-tag").className = "text-zinc-400 shrink-0";
+  document.getElementById("hint-box")?.classList.add("hidden");
+  const statusTag = document.getElementById("status-tag");
+  if (statusTag) {
+    statusTag.textContent = "Idle";
+    statusTag.className = "text-[10px] font-mono bg-surface-border text-gray-300 px-1.5 py-0.2 rounded";
+  }
   document.getElementById("console-output").textContent =
     customConsoleMsg ||
     "Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.";
@@ -1001,7 +1083,6 @@ function renderProblem(problem, customConsoleMsg = null) {
   if (stdinEl) {
     stdinEl.value = getSampleInput();
     updateStdinBadge();
-    toggleCustomInput(false);
   }
 
   const targetLang = (problem.language || "python").toLowerCase();
@@ -1020,10 +1101,8 @@ async function loadNewProblem() {
     resetTimer();
     hideCopyDiffButton();
     document.getElementById("problem-title").textContent = "Fetching next bug hunt...";
-    document.getElementById("hint-box").classList.add("hidden");
+    document.getElementById("hint-box")?.classList.add("hidden");
     document.getElementById("console-output").textContent = "Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.";
-    document.getElementById("status-tag").textContent = "Idle";
-    document.getElementById("status-tag").className = "text-zinc-400 shrink-0";
 
     const params = new URLSearchParams();
     if (selectedCategory && selectedCategory !== "All") {
@@ -1072,8 +1151,8 @@ async function runTestCode() {
   if (now < testRunCooldownUntil) return;
 
   const prefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
-  const timerStatusText = document.getElementById("timer-status")?.textContent || "";
-  if (prefs.autoTimer !== false && !timerRunning && timerStatusText !== "(Solved)") {
+  const timerStatusText = (document.getElementById("timer-status")?.textContent || "").toUpperCase();
+  if (prefs.autoTimer !== false && !timerRunning && !timerStatusText.includes("SOLVED")) {
     startTimer();
   }
 
@@ -1107,7 +1186,7 @@ async function runTestCode() {
   if (submitBtn) submitBtn.disabled = true;
 
   statusTag.textContent = "Testing...";
-  statusTag.className = "text-sky-400 shrink-0";
+  statusTag.className = "text-[10px] font-mono bg-sky-500/15 text-sky-400 px-1.5 py-0.2 rounded";
 
   try {
     const res = await fetch(`${API}/run-code`, {
@@ -1137,7 +1216,7 @@ async function runTestCode() {
 
         if (actualNorm === expectedNorm) {
           statusTag.textContent = "Sample Passed";
-          statusTag.className = "text-emerald-400 shrink-0";
+          statusTag.className = "text-[10px] font-mono bg-emerald-500/15 text-emerald-400 px-1.5 py-0.2 rounded";
 
           const lines = [
             `✓ SAMPLE #1 PASSED (⚡ ${msText} | Streak safe)`,
@@ -1150,7 +1229,7 @@ async function runTestCode() {
           consoleEl.textContent = lines.join("\n");
         } else {
           statusTag.textContent = "Sample Failed";
-          statusTag.className = "text-rose-400 shrink-0";
+          statusTag.className = "text-[10px] font-mono bg-rose-500/15 text-rose-400 px-1.5 py-0.2 rounded";
 
           const lines = [
             `✖ SAMPLE #1 FAILED (⚡ ${msText} | Streak safe)`,
@@ -1165,7 +1244,7 @@ async function runTestCode() {
         }
       } else {
         statusTag.textContent = "Test Run";
-        statusTag.className = "text-sky-400 shrink-0";
+        statusTag.className = "text-[10px] font-mono bg-sky-500/15 text-sky-400 px-1.5 py-0.2 rounded";
 
         const lines = [
           `▶ TEST RUN (${modeLabel} | ⚡ ${msText} | Streak safe)`
@@ -1178,7 +1257,7 @@ async function runTestCode() {
       }
     } else {
       statusTag.textContent = "Test Error";
-      statusTag.className = "text-rose-400 shrink-0";
+      statusTag.className = "text-[10px] font-mono bg-rose-500/15 text-rose-400 px-1.5 py-0.2 rounded";
 
       const errTitle = (data.error_type || "error").replace(/_/g, " ").toUpperCase();
       const lines = [
@@ -1194,7 +1273,7 @@ async function runTestCode() {
     }
   } catch (err) {
     statusTag.textContent = "Test Error";
-    statusTag.className = "text-rose-400 shrink-0";
+    statusTag.className = "text-[10px] font-mono bg-rose-500/15 text-rose-400 px-1.5 py-0.2 rounded";
     consoleEl.textContent = `✖ Test Run failed: ${err.message}`;
     console.error(err);
   } finally {
@@ -1227,7 +1306,7 @@ async function submitPatch() {
   if (testBtn) testBtn.disabled = true;
 
   statusTag.textContent = "Running...";
-  statusTag.className = "text-amber-400 shrink-0";
+  statusTag.className = "text-[10px] font-mono bg-amber-500/15 text-amber-400 px-1.5 py-0.2 rounded";
 
   const userId = currentUser?.id || null;
   const username = currentUser ? getDisplayUsername(currentUser) : null;
@@ -1262,10 +1341,10 @@ async function submitPatch() {
     if (result.passed) {
       stopTimer();
       statusTag.textContent = "Passed";
-      statusTag.className = "text-emerald-400 shrink-0";
+      statusTag.className = "text-[10px] font-mono bg-emerald-500/15 text-emerald-400 px-1.5 py-0.2 rounded";
 
       // Mark solved checkmark live in Problem Sequence & Drawer
-      const seqItem = problemSequence.find(p => p.id === currentProblem.id);
+      const seqItem = problemSequence.find(p => Number(p.id) === Number(currentProblem.id));
       if (seqItem && !seqItem.solved) {
         seqItem.solved = true;
         renderProblemSequence();
@@ -1289,6 +1368,8 @@ async function submitPatch() {
         score = result.profile.score;
         solves = result.profile.solves;
         pointsEarned = result.profile.points_earned;
+        solvedMap[pidKey] = { bestPoints: Math.max(prevRecord?.bestPoints || 0, pointsEarned), bestGrade: grade };
+        saveSolvedMap(solvedMap);
       } else {
         const timeBonus = Math.max(0, 60 - timerSeconds);
         if (prevRecord) {
@@ -1332,7 +1413,7 @@ async function submitPatch() {
       recordLintIQSolve(timerSeconds, true, runtimeMs);
     } else {
       statusTag.textContent = "Failed";
-      statusTag.className = "text-rose-400 shrink-0";
+      statusTag.className = "text-[10px] font-mono bg-rose-500/15 text-rose-400 px-1.5 py-0.2 rounded";
       consoleEl.textContent = `✖ Patch Failed:\n${result.message || 'Logic or assertion error.'}`;
       streak = 0;
       updateMetrics();
@@ -1340,7 +1421,7 @@ async function submitPatch() {
     }
   } catch (err) {
     statusTag.textContent = "Error";
-    statusTag.className = "text-rose-400 shrink-0";
+    statusTag.className = "text-[10px] font-mono bg-rose-500/15 text-rose-400 px-1.5 py-0.2 rounded";
     consoleEl.textContent = `Failed to communicate with test runner: ${err.message}`;
     console.error(err);
   } finally {
@@ -1376,7 +1457,7 @@ async function requestHint() {
   }
 }
 
-// --- 10. MONACO INITIALIZATION ---
+// --- 10. MONACO INITIALIZATION & DEEP-LINK ROUTING ---
 require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
 require(["vs/editor/editor.main"], function () {
   const savedPrefs = JSON.parse(localStorage.getItem("lintiq_editor_prefs_v1") || "null") || {};
@@ -1424,8 +1505,38 @@ require(["vs/editor/editor.main"], function () {
     stdinEl.addEventListener("input", updateStdinBadge);
   }
 
+  // Parse URL params (?id=42, ?category=Algorithms, ?difficulty=Hard, ?ai=1)
+  const urlParams = new URLSearchParams(window.location.search);
+  const requestedId = parseInt(urlParams.get("id") || "", 10);
+  const requestedAi = urlParams.get("ai") === "1";
+  const requestedCat = urlParams.get("category");
+  const requestedDiff = urlParams.get("difficulty");
+
+  if (requestedCat) selectedCategory = requestedCat;
+  if (requestedDiff) {
+    selectedDifficulty = requestedDiff;
+    const diffEl = document.getElementById("difficulty-select");
+    if (diffEl) diffEl.value = requestedDiff;
+  }
+
   initAuth().then(() => {
-    fetchProblemSequence(selectedCategory, selectedDifficulty, true).then(() => {
+    const autoLoadFirst = !Number.isFinite(requestedId) && !requestedAi;
+    fetchProblemSequence(selectedCategory, selectedDifficulty, autoLoadFirst).then(() => {
+      if (requestedAi) {
+        generateAIChallenge();
+        return;
+      }
+
+      if (Number.isFinite(requestedId)) {
+        const matchIdx = problemSequence.findIndex(p => Number(p.id) === requestedId);
+        if (matchIdx !== -1) {
+          loadSequentialProblem(matchIdx);
+        } else {
+          loadProblemByIdDirect(requestedId);
+        }
+        return;
+      }
+
       if (problemSequence.length === 0) {
         if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
           selectProblem(0);
@@ -1434,7 +1545,9 @@ require(["vs/editor/editor.main"], function () {
         }
       }
     }).catch(() => {
-      if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
+      if (Number.isFinite(requestedId)) {
+        loadProblemByIdDirect(requestedId);
+      } else if (typeof selectProblem === "function" && Array.isArray(window.PROBLEMS) && window.PROBLEMS.length > 0) {
         selectProblem(0);
       } else {
         loadNewProblem();

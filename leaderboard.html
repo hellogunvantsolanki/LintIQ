@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LintIQ Global Leaderboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Geist', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            surface: {
+              DEFAULT: '#0f131c',
+              dim: '#0a0e16',
+              container: '#141822',
+              card: '#181d28',
+              border: '#232938',
+              hover: '#1e2434',
+            },
+            accent: {
+              DEFAULT: '#10b981',
+              hover: '#059669',
+              subtle: '#064e3b',
+            }
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-[#0a0e16] text-[#e2e8f0] font-sans min-h-screen flex flex-col">
+  <!-- HEADER -->
+  <header class="h-12 bg-surface border-b border-surface-border px-4 flex items-center justify-between shrink-0 sticky top-0 z-40">
+    <div class="flex items-center space-x-4">
+      <a href="problem-directory.html" class="flex items-center space-x-2 text-white font-bold tracking-tight">
+        <span class="w-3 h-3 rounded-full bg-accent inline-block animate-pulse"></span>
+        <span class="text-lg">Lint<span class="text-accent">IQ</span></span>
+      </a>
+      <span class="px-2 py-0.5 text-[10px] font-semibold bg-surface-border text-emerald-400 rounded-md tracking-wider">
+        ARCADE V1.6
+      </span>
+      <div class="flex items-center space-x-1 ml-4 text-xs">
+        <a href="problem-directory.html" class="px-3 py-1.5 rounded-md font-medium text-gray-300 hover:text-white hover:bg-surface-border transition">Problem List</a>
+        <a href="index.html" class="px-3 py-1.5 rounded-md font-medium text-gray-300 hover:text-white hover:bg-surface-border transition">Workspace</a>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3 text-xs">
+      <div class="flex items-center space-x-1.5 bg-surface-container border border-surface-border px-2.5 py-1 rounded-md text-amber-400 font-medium">
+        <span>⚡ Streak: 1</span>
+      </div>
+      <nav class="flex items-center space-x-2 ml-1">
+        <a href="leaderboard.html" class="px-3 py-1.5 rounded-md font-semibold bg-accent text-black shadow-sm">Leaderboard</a>
+        <a href="profile.html" class="px-2.5 py-1 text-gray-300 hover:text-white hover:bg-surface-border rounded-md transition">Profile Stats</a>
+      </nav>
+      <a href="profile.html" class="flex items-center space-x-2 pl-2 border-l border-surface-border">
+        <span class="text-[11px] font-medium text-gray-300">GUNVANT SOLANKI</span>
+        <div class="w-7 h-7 rounded-full bg-accent/20 border border-accent flex items-center justify-center text-accent text-xs font-bold">GS</div>
+      </a>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="text-[10px] uppercase font-mono tracking-widest text-emerald-400 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Live Competition • Arcade Ladder
+        </div>
+        <h1 class="text-2xl font-bold text-white mt-1">Global Arcade Leaderboard & Competitions</h1>
+        <p class="text-xs text-gray-400 mt-1">Season 02: Bug Hunter Championship • Ends in 14d 08h 22m</p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="bg-surface border border-surface-border px-4 py-2 rounded-xl text-xs flex items-center gap-3">
+          <div class="text-xl">🏆</div>
+          <div><div class="text-[10px] text-gray-500 uppercase">Prize Pool</div><div class="font-bold text-white">$15,000 + Badges</div></div>
+        </div>
+        <div class="bg-surface border border-surface-border px-4 py-2 rounded-xl text-xs flex items-center gap-3">
+          <div class="text-xl">👥</div>
+          <div><div class="text-[10px] text-gray-500 uppercase">Active Solvers</div><div class="font-bold text-white">11,842 Enrolled</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- YOUR RANK HIGHLIGHT BAR -->
+    <div class="bg-surface border border-emerald-500/30 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-accent text-black font-black flex items-center justify-center text-sm">GS</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white">Gunvant Solanki</span>
+            <span class="text-xs text-gray-400">@gunvant_s</span>
+            <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-medium">PRO VERIFIED</span>
+          </div>
+          <div class="text-xs text-gray-400 mt-0.5">Top 12% Contender • Next Tier: 1,900 ELO (58 pts away)</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-6 text-xs">
+        <div><div class="text-[10px] text-gray-500 uppercase font-mono">Global Rank</div><div class="text-base font-bold text-emerald-400">#1,420 <span class="text-xs text-emerald-300">▲ 14</span></div></div>
+        <div><div class="text-[10px] text-gray-500 uppercase font-mono">Arcade Rating</div><div class="text-base font-bold text-white">1,842 <span class="text-[10px] text-gray-500">ELO</span></div></div>
+        <div><div class="text-[10px] text-gray-500 uppercase font-mono">Bugs Patched</div><div class="text-base font-bold text-white">142 <span class="text-[10px] text-gray-500">94.8% Acc</span></div></div>
+        <div><div class="text-[10px] text-gray-500 uppercase font-mono">Active Streak</div><div class="text-base font-bold text-amber-400">⚡ 12 Days</div></div>
+        <a href="profile.html" class="px-4 py-2 bg-accent hover:bg-accent-hover text-black font-semibold text-xs rounded-lg transition">View Profile</a>
+      </div>
+    </div>
+
+    <!-- PODIUM -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-surface border border-surface-border rounded-xl p-5 relative overflow-hidden order-2 md:order-1">
+        <div class="text-xs text-gray-400 flex justify-between items-center mb-3">
+          <span class="font-bold text-white text-lg">#2</span>
+          <span class="bg-surface-container px-2 py-0.5 rounded text-[10px]">EU Central</span>
+        </div>
+        <div class="font-bold text-white text-base">Sophia V. <span class="text-emerald-400">✓</span></div>
+        <div class="text-xs text-gray-400">ETH Zurich • Distributed Sys</div>
+        <div class="mt-4 pt-3 border-t border-surface-border flex justify-between text-xs">
+          <span>Avg: <strong class="text-white">2m 41s</strong></span>
+          <span class="text-emerald-400 font-bold">2,840 pts</span>
+        </div>
+      </div>
+
+      <div class="bg-surface border-2 border-accent/60 rounded-xl p-5 relative overflow-hidden order-1 md:order-2 shadow-2xl">
+        <div class="text-xs text-emerald-400 flex justify-between items-center mb-3 font-semibold">
+          <span class="font-bold text-white text-xl">#1</span>
+          <span class="bg-emerald-500/20 px-2 py-0.5 rounded text-[10px]">CHAMPION</span>
+        </div>
+        <div class="font-bold text-white text-lg">Alex Chen <span class="text-emerald-400">✓</span></div>
+        <div class="text-xs text-gray-400">MIT Tech Labs • Compiler Engineer</div>
+        <div class="mt-4 pt-3 border-t border-surface-border flex justify-between text-xs">
+          <span>Avg: <strong class="text-white">2m 14s</strong></span>
+          <span class="text-emerald-400 font-bold text-sm">2,980 pts</span>
+        </div>
+      </div>
+
+      <div class="bg-surface border border-surface-border rounded-xl p-5 relative overflow-hidden order-3">
+        <div class="text-xs text-gray-400 flex justify-between items-center mb-3">
+          <span class="font-bold text-white text-lg">#3</span>
+          <span class="bg-surface-container px-2 py-0.5 rounded text-[10px]">APAC South</span>
+        </div>
+        <div class="font-bold text-white text-base">Marcus Brody <span class="text-emerald-400">✓</span></div>
+        <div class="text-xs text-gray-400">Systems Security • Kernel Dev</div>
+        <div class="mt-4 pt-3 border-t border-surface-border flex justify-between text-xs">
+          <span>Avg: <strong class="text-white">3m 02s</strong></span>
+          <span class="text-emerald-400 font-bold">2,792 pts</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

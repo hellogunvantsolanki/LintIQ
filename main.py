@@ -319,7 +319,7 @@ def list_problems_sequential(
     category: str = Query("All"),
     difficulty: str = Query("All"),
     user_id: Optional[str] = Query(None),  # Ignored in favor of verified JWT to prevent IDOR
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
@@ -344,9 +344,9 @@ def list_problems_sequential(
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-        # Deduplicate by title (keeping the lowest ID) so the sequence stays clean
+        # Deduplicate by title (keeping the lowest ID) so the directory & sequence stay clean
         query = f"""
-            SELECT MIN(id) AS id, title, difficulty, category, language
+            SELECT MIN(id) AS id, title, difficulty, category, language, tags, test_cases, description
             FROM problems
             {where_sql}
             GROUP BY title
@@ -371,19 +371,47 @@ def list_problems_sequential(
     finally:
         conn.close()
 
-    return {
-        "total": total_row["total"] if total_row else 0,
-        "problems": [
+    problems_out = []
+    for r in rows:
+        raw_tags = r["tags"]
+        if isinstance(raw_tags, str):
+            try:
+                parsed_tags = json.loads(raw_tags) or []
+            except Exception:
+                parsed_tags = []
+        else:
+            parsed_tags = raw_tags or []
+
+        raw_tc = r["test_cases"]
+        if isinstance(raw_tc, str):
+            try:
+                tc_count = len(json.loads(raw_tc) or [])
+            except Exception:
+                tc_count = 0
+        elif isinstance(raw_tc, list):
+            tc_count = len(raw_tc)
+        else:
+            tc_count = 0
+
+        desc_preview = (r["description"] or "").strip().replace("\n", " ")[:150]
+
+        problems_out.append(
             {
                 "id": r["id"],
                 "title": r["title"],
-                "difficulty": r["difficulty"].capitalize() if r["difficulty"] else "",
-                "category": r["category"],
+                "difficulty": r["difficulty"].capitalize() if r["difficulty"] else "Medium",
+                "category": r["category"] or "General",
                 "language": r["language"] or "python",
+                "tags": parsed_tags[:4] if isinstance(parsed_tags, list) else [],
+                "test_count": tc_count,
+                "description_preview": desc_preview,
                 "solved": r["id"] in solved_ids,
             }
-            for r in rows
-        ],
+        )
+
+    return {
+        "total": total_row["total"] if total_row else 0,
+        "problems": problems_out,
     }
 
 
