@@ -108,17 +108,25 @@ BANNED_MODULES = {
     "multiprocessing", "signal", "sqlite3", "http",
     "ftplib", "smtplib", "webbrowser", "pickle", "marshal",
     "runpy", "tempfile", "glob", "builtins", "inspect", "gc",
+    "sysconfig", "linecache", "pkgutil", "zipimport", "code",
+    "codeop", "compileall", "mmap", "fcntl", "resource",
+    "posix", "nt", "_io", "_thread", "threading", "asyncio",
+    "concurrent", "ssl", "httpx", "aiohttp", "fileinput",
+    "shelve", "dbm", "tarfile", "zipfile", "gzip", "bz2", "lzma",
 }
 
 BANNED_CALLS = {
     "__import__", "eval", "exec", "compile", "open", "breakpoint",
+    "getattr", "setattr", "delattr", "globals", "locals", "vars",
 }
 
 BANNED_ATTRS = {
-    "__subclasses__", "__builtins__", "__globals__",
+    "__subclasses__", "__builtins__", "__globals__", "__class__",
+    "__base__", "__bases__", "__mro__", "__dict__", "__getattribute__",
+    "__reduce__", "__reduce_ex__", "func_globals", "func_code",
     "__import__", "__loader__", "__spec__", "__code__", "__closure__",
     "_getframe", "_current_frames", "f_locals", "f_globals", "f_back",
-    "gi_frame", "cr_frame", "ag_frame",
+    "gi_frame", "cr_frame", "ag_frame", "environ",
 }
 
 _PYTHON_STDERR_ERROR_MARKERS = (
@@ -393,11 +401,11 @@ def _sanitize_error_text(text: Optional[str], max_len: int = 3000) -> str:
 
 
 def _check_python_syntax(code_str: str) -> Optional[str]:
-    """Catches Python SyntaxError/IndentationError locally before spending a remote API call."""
+    """Catches Python SyntaxError/IndentationError/ValueError locally before spending a remote API call."""
     try:
         compile(code_str, "solution.py", "exec")
         return None
-    except SyntaxError as exc:
+    except (SyntaxError, ValueError) as exc:
         raw = "".join(traceback.format_exception_only(type(exc), exc)).strip()
         return _sanitize_error_text(raw)
 
@@ -1197,11 +1205,11 @@ def _evaluate_non_python_parallel(
         if isinstance(wall_time, (int, float)):
             total_runtime_ms += int(wall_time)
 
-        actual_output = str(run_info.get("stdout", "")).strip()
-        expected_output = str(test_cases[idx].get("expected_output", "")).strip()
+        actual_output = str(run_info.get("stdout", "")).strip()[:2000]
+        expected_output = str(test_cases[idx].get("expected_output", "")).strip()[:2000]
 
         if actual_output != expected_output:
-            test_input = str(test_cases[idx].get("input", ""))
+            test_input = str(test_cases[idx].get("input", ""))[:500]
             return {
                 "passed": False,
                 "message": (

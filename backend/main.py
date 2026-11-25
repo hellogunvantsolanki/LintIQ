@@ -29,6 +29,7 @@ from database import (
     compute_ist_streak_summary,
     get_effective_streak,
     fetch_public_profile_by_username,
+    fetch_public_profile_dossier,
     record_user_solve,
     reset_user_streak,
     fetch_top_leaderboard,
@@ -81,6 +82,11 @@ _SUBMIT_RATE_LOCK = threading.Lock()
 _SUBMIT_RATE_BUCKETS: Dict[str, Deque[float]] = {}
 _SUBMIT_MIN_INTERVAL_SEC = 2.0
 _SUBMIT_MAX_PER_MIN = 15
+
+_PUBLIC_PROFILE_RATE_LOCK = threading.Lock()
+_PUBLIC_PROFILE_RATE_BUCKETS: Dict[str, Deque[float]] = {}
+_PUBLIC_PROFILE_MIN_INTERVAL_SEC = 0.0
+_PUBLIC_PROFILE_MAX_PER_MIN = 60
 
 # Bounded server-side solve-start tracker (prevents client-forged time_seconds speed bonuses)
 _SOLVE_START_LOCK = threading.Lock()
@@ -176,8 +182,8 @@ def _get_client_ip(request: Request) -> str:
     if forwarded:
         parts = [p.strip() for p in forwarded.split(",") if p.strip()]
         if parts:
-            return parts[-1]
-    return request.client.host if request.client else "unknown"
+            return parts[-1][:64]
+    return (request.client.host if request.client else "unknown")[:64]
 
 
 def _check_bucket_rate_limit(
@@ -499,9 +505,19 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=None if IS_PRODUCTION else r"https://lint-.*-hellogunvantsolankis-projects\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Never expose raw Python tracebacks, file paths, or secrets on unhandled exceptions."""
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return UTF8JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error."},
+    )
 
 
 @app.middleware("http")
@@ -584,8 +600,8 @@ def get_daily_challenge(authorization: Optional[str] = Header(None, alias="Autho
 @app.get("/get-problem")
 def get_problem(
     request: Request,
-    category: Optional[str] = Query(None, description="Filter by problem domain category"),
-    difficulty: Optional[str] = Query(None, description="Filter by Easy, Medium, or Hard"),
+    category: Optional[str] = Query(None, max_length=64, description="Filter by problem domain category"),
+    difficulty: Optional[str] = Query(None, max_length=32, description="Filter by Easy, Medium, or Hard"),
     exclude_id: Optional[int] = Query(None, description="Exclude current problem ID to avoid immediate repeats"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
@@ -608,9 +624,9 @@ def get_problem(
 
 @app.get("/problems")
 def list_problems_sequential(
-    category: str = Query("All"),
-    difficulty: str = Query("All"),
-    user_id: Optional[str] = Query(None),  # Ignored in favor of verified JWT to prevent IDOR
+    category: str = Query("All", max_length=64),
+    difficulty: str = Query("All", max_length=32),
+    user_id: Optional[str] = Query(None, max_length=128),  # Ignored in favor of verified JWT to prevent IDOR
     limit: int = Query(100, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     authorization: Optional[str] = Header(None, alias="Authorization"),
@@ -756,10 +772,10 @@ def get_problem_by_id(
 def create_ai_problem(
     request: Request,
     background_tasks: BackgroundTasks,
-    category: Optional[str] = None,
-    difficulty: Optional[str] = None,
-    user_id: Optional[str] = None,  # Kept for backwards URL compatibility; ignored in favor of verified JWT
-    exclude_ids: Optional[str] = None,
+    category: Optional[str] = Query(None, max_length=64),
+    difficulty: Optional[str] = Query(None, max_length=32),
+    user_id: Optional[str] = Query(None, max_length=128),  # Ignored in favor of verified JWT
+    exclude_ids: Optional[str] = Query(None, max_length=2048),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
     """
@@ -1109,8 +1125,17 @@ def get_leaderboard():
 
 
 @app.get("/public-profile/{username}")
-def get_public_profile(username: str):
+def get_public_profile(username: str, request: Request):
     """Unauthenticated, read-only public profile endpoint (zero PII leaked)."""
+    _check_bucket_rate_limit(
+        lock=_PUBLIC_PROFILE_RATE_LOCK,
+        buckets=_PUBLIC_PROFILE_RATE_BUCKETS,
+        client_ip=_get_client_ip(request),
+        min_interval=_PUBLIC_PROFILE_MIN_INTERVAL_SEC,
+        max_per_min=_PUBLIC_PROFILE_MAX_PER_MIN,
+        wait_msg="Too many profile lookups. Please wait a moment.",
+        cap_msg="Public profile lookup rate limit reached. Try again in a minute.",
+    )
     profile = fetch_public_profile_by_username(username)
     if not profile:
         raise HTTPException(status_code=404, detail="Developer profile not found")
@@ -1119,6 +1144,45 @@ def get_public_profile(username: str):
     for forbidden in ("id", "user_id", "email"):
         profile.pop(forbidden, None)
     return profile
+
+
+@app.get("/api/users/{user_id}/public-profile")
+def get_public_engineer_dossier(user_id: str, request: Request):
+    """
+    Bundled read-only Codeforces-style public engineer dossier (stats, difficulty/category
+    breakdown, 12-week heatmap activity, and solved challenge metadata without code patches).
+    """
+    _check_bucket_rate_limit(
+        lock=_PUBLIC_PROFILE_RATE_LOCK,
+        buckets=_PUBLIC_PROFILE_RATE_BUCKETS,
+        client_ip=_get_client_ip(request),
+        min_interval=_PUBLIC_PROFILE_MIN_INTERVAL_SEC,
+        max_per_min=_PUBLIC_PROFILE_MAX_PER_MIN,
+        wait_msg="Too many profile lookups. Please wait a moment.",
+        cap_msg="Public profile lookup rate limit reached. Try again in a minute.",
+    )
+    dossier = fetch_public_profile_dossier(user_id)
+    if not dossier:
+        raise HTTPException(status_code=404, detail="Engineer profile not found")
+
+    forbidden_keys = (
+        "email",
+        "password",
+        "access_token",
+        "token",
+        "settings",
+        "user_code",
+        "buggy_code",
+        "submitted_code",
+        "patch",
+    )
+    prof = dossier.get("profile")
+    if isinstance(prof, dict):
+        for k in forbidden_keys + ("id", "user_id"):
+            prof.pop(k, None)
+    for k in forbidden_keys:
+        dossier.pop(k, None)
+    return dossier
 
 
 def _badge_tier_palette(solves_cnt: int, found: bool = True) -> Dict[str, str]:

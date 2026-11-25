@@ -492,22 +492,24 @@ function renderDrawerRows(list) {
     const statusDot = p.solved
       ? `<span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Solved"></span>`
       : `<span class="w-2 h-2 rounded-full border border-gray-500 shrink-0" title="Unsolved"></span>`;
+    const pid = Number(p.id);
     const safeTitle = typeof escapeHtml === "function" ? escapeHtml(p.title) : p.title;
+    const safeDiff = typeof escapeHtml === "function" ? escapeHtml(p.difficulty || "Medium") : (p.difficulty || "Medium");
 
     return `
       <button
         type="button"
-        onclick="jumpToProblemById(${p.id})"
+        onclick="jumpToProblemById(${pid})"
         class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition cursor-pointer ${
           isActive ? "bg-emerald-500/15 border-l-2 border-emerald-400" : "hover:bg-[#161b22]"
         }"
       >
         <div class="flex items-center gap-2.5 min-w-0">
           ${statusDot}
-          <span class="text-xs font-mono text-zinc-500 shrink-0">#${p.id}</span>
+          <span class="text-xs font-mono text-zinc-500 shrink-0">#${pid}</span>
           <span class="text-xs font-medium text-zinc-200 truncate">${safeTitle}</span>
         </div>
-        <span class="text-[11px] font-mono font-semibold shrink-0 ${diffClass}">${p.difficulty}</span>
+        <span class="text-[11px] font-mono font-semibold shrink-0 ${diffClass}">${safeDiff}</span>
       </button>
     `;
   }).join("") + (moreCount > 0
@@ -1971,12 +1973,19 @@ require(["vs/editor/editor.main"], function () {
     stdinEl.addEventListener("input", updateStdinBadge);
   }
 
-  // Parse URL params (?id=42, ?category=Algorithms, ?difficulty=Hard, ?ai=1)
+  // Parse and allowlist URL params (?id=42, ?category=Algorithms, ?difficulty=Hard, ?ai=1)
   const urlParams = new URLSearchParams(window.location.search);
-  const requestedId = parseInt(urlParams.get("id") || "", 10);
+  const rawId = urlParams.get("id") || "";
+  const requestedId = /^\d+$/.test(rawId.trim()) ? parseInt(rawId.trim(), 10) : NaN;
   const requestedAi = urlParams.get("ai") === "1";
-  const requestedCat = urlParams.get("category");
-  const requestedDiff = urlParams.get("difficulty");
+  const allowedCats = new Set(
+    Array.from(document.querySelectorAll(".cat-pill")).map(b => b.getAttribute("data-cat")).filter(Boolean)
+  );
+  const rawCat = (urlParams.get("category") || "").trim();
+  const requestedCat = allowedCats.has(rawCat) ? rawCat : "";
+  const allowedDiffs = new Set(["Easy", "Medium", "Hard"]);
+  const rawDiff = (urlParams.get("difficulty") || "").trim();
+  const requestedDiff = allowedDiffs.has(rawDiff) ? rawDiff : "";
 
   if (requestedCat) {
     selectedCategory = requestedCat;

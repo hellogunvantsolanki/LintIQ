@@ -381,11 +381,12 @@ function renderTablePage() {
       ? `${p.test_count} Assertion${p.test_count === 1 ? "" : "s"}`
       : "Sandbox Suite";
 
+    const pid = Number(p.id);
     const actionHtml = isActive && !p.solved
-      ? `<a href="index.html?id=${p.id}" class="text-xs font-semibold text-amber-400 hover:text-amber-300 whitespace-nowrap">Resume →</a>`
+      ? `<a href="index.html?id=${encodeURIComponent(pid)}" class="text-xs font-semibold text-amber-400 hover:text-amber-300 whitespace-nowrap">Resume →</a>`
       : p.solved
-        ? `<a href="index.html?id=${p.id}" class="text-xs font-medium text-gray-400 hover:text-white whitespace-nowrap">Review</a>`
-        : `<a href="index.html?id=${p.id}" class="px-2.5 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded transition whitespace-nowrap">Solve</a>`;
+        ? `<a href="index.html?id=${encodeURIComponent(pid)}" class="text-xs font-medium text-gray-400 hover:text-white whitespace-nowrap">Review</a>`
+        : `<a href="index.html?id=${encodeURIComponent(pid)}" class="px-2.5 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded transition whitespace-nowrap">Solve</a>`;
 
     const rowBg = isActive ? "bg-amber-500/[0.03]" : "";
 
@@ -394,8 +395,8 @@ function renderTablePage() {
         <td class="py-3 px-4 text-center">${statusCell}</td>
         <td class="py-3 px-4">
           <div class="flex items-center gap-2 flex-wrap">
-            <a href="index.html?id=${p.id}" class="font-medium text-white hover:text-emerald-400 transition">
-              <span class="text-gray-500 font-mono mr-1">${p.id}.</span>${escapeHtml(p.title)}
+            <a href="index.html?id=${encodeURIComponent(pid)}" class="font-medium text-white hover:text-emerald-400 transition">
+              <span class="text-gray-500 font-mono mr-1">${pid}.</span>${escapeHtml(p.title)}
             </a>
             ${tagsHtml}
           </div>
@@ -479,7 +480,7 @@ function jumpToProblemNumber(event) {
 
   const exists = allProblems.find(p => Number(p.id) === id);
   if (exists) {
-    window.location.href = `index.html?id=${exists.id}`;
+    window.location.href = `index.html?id=${encodeURIComponent(Number(exists.id))}`;
   } else {
     showToast(`Problem #${id} was not found in the catalog.`, "warn");
   }

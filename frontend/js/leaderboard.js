@@ -114,19 +114,25 @@ async function loadLeaderboardPage() {
     podiumEl.innerHTML = leaders.slice(0, 3).map((player, idx) => {
       const style = podiumColors[idx];
       const name = player.username || "Engineer";
+      const profileKey = player.id || name;
+      const safeUserParam = encodeURIComponent(profileKey).replace(/'/g, "%27");
+      const profileHref = `user-profile.html?user=${safeUserParam}`;
       const isMe = currentUser?.id && player.id === currentUser.id;
       return `
-        <div class="bg-surface border ${style.border} rounded-xl p-5 shadow-xl ${style.glow} flex flex-col justify-between gap-3">
+        <a href="${escapeHtml(profileHref)}" class="group bg-surface border ${style.border} hover:border-emerald-400/60 hover:-translate-y-0.5 rounded-xl p-5 shadow-xl ${style.glow} flex flex-col justify-between gap-3 transition cursor-pointer">
           <div class="flex items-center justify-between">
             <span class="text-xs font-mono font-bold ${style.text}">${style.badge}</span>
-            ${isMe ? '<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono uppercase">You</span>' : ''}
+            <div class="flex items-center gap-1.5">
+              ${isMe ? '<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono uppercase">You</span>' : ''}
+              <span class="text-[10px] font-mono text-gray-500 group-hover:text-emerald-400 transition">View Profile →</span>
+            </div>
           </div>
           <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-full bg-surface-container border border-surface-border flex items-center justify-center text-sm font-bold text-white font-mono">
+            <div class="w-11 h-11 rounded-full bg-surface-container border border-surface-border group-hover:border-emerald-500/50 flex items-center justify-center text-sm font-bold text-white font-mono transition shrink-0">
               ${escapeHtml(getInitials(name))}
             </div>
             <div class="min-w-0">
-              <div class="text-base font-bold text-white truncate">${escapeHtml(name)}</div>
+              <div class="text-base font-bold text-white group-hover:text-emerald-300 transition truncate">${escapeHtml(name)}</div>
               <div class="text-[11px] text-gray-400 font-mono">⚡ ${Number(player.streak || 0)} streak • ${Number(player.solves || 0)} solved</div>
             </div>
           </div>
@@ -134,7 +140,7 @@ async function loadLeaderboardPage() {
             <span class="text-gray-500">ARCADE SCORE</span>
             <span class="text-emerald-400 font-bold text-sm">${Number(player.score || 0).toLocaleString()} pts</span>
           </div>
-        </div>
+        </a>
       `;
     }).join("");
   }
@@ -144,20 +150,23 @@ async function loadLeaderboardPage() {
     rowsEl.innerHTML = leaders.map((player, idx) => {
       const rank = idx + 1;
       const name = player.username || "Engineer";
+      const profileKey = player.id || name;
+      const safeUserParam = encodeURIComponent(profileKey).replace(/'/g, "%27");
+      const profileHref = `user-profile.html?user=${safeUserParam}`;
       const isMe = currentUser?.id && player.id === currentUser.id;
       const rankBadge = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
-      const rowBg = isMe ? "bg-emerald-500/10" : "hover:bg-surface-hover/50";
+      const rowBg = isMe ? "bg-emerald-500/10 hover:bg-emerald-500/15" : "hover:bg-surface-hover/70";
 
       return `
-        <tr class="${rowBg} transition">
+        <tr data-href="${escapeHtml(profileHref)}" onclick="window.location.href=this.getAttribute('data-href')" class="${rowBg} transition cursor-pointer group">
           <td class="py-3 px-4 font-mono font-bold text-gray-300">${rankBadge}</td>
           <td class="py-3 px-4">
-            <div class="flex items-center gap-2.5">
-              <span class="w-7 h-7 rounded-full bg-surface-container border border-surface-border flex items-center justify-center text-[10px] font-bold text-gray-200 font-mono shrink-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="w-7 h-7 rounded-full bg-surface-container border border-surface-border group-hover:border-emerald-500/50 flex items-center justify-center text-[10px] font-bold text-gray-200 font-mono shrink-0 transition">
                 ${escapeHtml(getInitials(name))}
               </span>
-              <span class="font-semibold text-white truncate">${escapeHtml(name)}</span>
-              ${isMe ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono uppercase">You</span>' : ''}
+              <a href="${escapeHtml(profileHref)}" onclick="event.stopPropagation()" class="font-semibold text-white group-hover:text-emerald-300 transition truncate">${escapeHtml(name)}</a>
+              ${isMe ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono uppercase shrink-0">You</span>' : ''}
             </div>
           </td>
           <td class="py-3 px-4 text-right font-mono font-bold text-emerald-400">${Number(player.score || 0).toLocaleString()}</td>

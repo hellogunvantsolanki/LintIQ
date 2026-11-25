@@ -1147,41 +1147,54 @@ def _enrich_recent_solves_metadata(solve_rows: List[Dict[str, Any]]) -> List[Dic
     return enriched
 
 
-def fetch_public_profile_by_username(username: str) -> Optional[Dict[str, Any]]:
+def _lookup_public_user_row(identifier: str) -> Optional[Dict[str, Any]]:
     """
-    Safely looks up a public developer profile by username (PostgREST-injection safe)
-    and returns strictly non-PII public stats, heatmap activity, and recent solves.
+    Safely looks up a non-mock user_profiles row by UUID or username (PostgREST & SQLite injection safe).
+    Selects only public columns (never email or auth credentials).
     """
-    clean_name = re.sub(r"[\x00-\x1f\x7f,*()%\"'\\;]", "", str(username or "")).strip()[:64]
-    if not clean_name:
+    clean_val = re.sub(r"[\x00-\x1f\x7f,*()%\"'\\;]", "", str(identifier or "")).strip()[:64]
+    if not clean_val or clean_val.startswith(("mock_", "test_")):
         return None
 
-    matched_row: Optional[Dict[str, Any]] = None
+    is_uuid = is_valid_user_id(clean_val)
     use_srv = has_supabase_service_key()
 
     try:
-        # 1. Exact equality match first (safe eq. filter)
-        resp = _SUPABASE_HTTP.get(
-            "/rest/v1/user_profiles",
-            params={
-                "username": f"eq.{clean_name}",
-                "select": "id,username,score,streak,solves,tier",
-                "order": "score.desc",
-                "limit": "5",
-            },
-            headers=_supabase_headers(use_service_role=use_srv),
-        )
-        if resp.status_code == 200:
-            rows = resp.json()
-            if isinstance(rows, list):
-                for r in rows:
-                    rid = str(r.get("id") or "")
+        if is_uuid:
+            resp = _SUPABASE_HTTP.get(
+                "/rest/v1/user_profiles",
+                params={
+                    "id": f"eq.{clean_val}",
+                    "select": "id,username,score,streak,solves,tier",
+                    "limit": "1",
+                },
+                headers=_supabase_headers(use_service_role=use_srv),
+            )
+            if resp.status_code == 200:
+                rows = resp.json()
+                if isinstance(rows, list) and rows:
+                    rid = str(rows[0].get("id") or "")
                     if rid and not rid.startswith(("mock_", "test_")):
-                        matched_row = r
-                        break
+                        return rows[0]
+        else:
+            resp = _SUPABASE_HTTP.get(
+                "/rest/v1/user_profiles",
+                params={
+                    "username": f"eq.{clean_val}",
+                    "select": "id,username,score,streak,solves,tier",
+                    "order": "score.desc",
+                    "limit": "5",
+                },
+                headers=_supabase_headers(use_service_role=use_srv),
+            )
+            if resp.status_code == 200:
+                rows = resp.json()
+                if isinstance(rows, list):
+                    for r in rows:
+                        rid = str(r.get("id") or "")
+                        if rid and not rid.startswith(("mock_", "test_")):
+                            return r
 
-        # 2. Case-insensitive fallback matched in Python (zero wildcard injection risk)
-        if not matched_row:
             resp_all = _SUPABASE_HTTP.get(
                 "/rest/v1/user_profiles",
                 params={
@@ -1193,23 +1206,33 @@ def fetch_public_profile_by_username(username: str) -> Optional[Dict[str, Any]]:
             )
             if resp_all.status_code == 200:
                 rows = resp_all.json()
-                target_lower = clean_name.lower()
+                target_lower = clean_val.lower()
                 if isinstance(rows, list):
                     for r in rows:
                         rid = str(r.get("id") or "")
                         uname = str(r.get("username") or "").strip()
                         if rid and not rid.startswith(("mock_", "test_")) and uname.lower() == target_lower:
-                            matched_row = r
-                            break
+                            return r
     except Exception as exc:
-        logger.warning("Supabase fetch_public_profile_by_username failed: %s", exc)
+        logger.warning("Supabase _lookup_public_user_row failed: %s", exc)
 
-    # 3. Local SQLite fallback
-    if not matched_row:
-        conn = None
-        try:
-            conn = get_connection()
-            cursor = conn.cursor()
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        if is_uuid:
+            cursor.execute(
+                """
+                SELECT id, username, score, streak, solves, tier
+                FROM user_profiles
+                WHERE id = ?
+                  AND id NOT LIKE 'mock_%'
+                  AND id NOT LIKE 'test_%'
+                LIMIT 1
+                """,
+                (clean_val,),
+            )
+        else:
             cursor.execute(
                 """
                 SELECT id, username, score, streak, solves, tier
@@ -1220,24 +1243,101 @@ def fetch_public_profile_by_username(username: str) -> Optional[Dict[str, Any]]:
                 ORDER BY score DESC
                 LIMIT 1
                 """,
-                (clean_name,),
+                (clean_val,),
             )
-            row = cursor.fetchone()
-            if row:
-                matched_row = {
-                    "id": row[0],
-                    "username": row[1],
-                    "score": row[2],
-                    "streak": row[3],
-                    "solves": row[4],
-                    "tier": row[5],
-                }
-        except Exception as exc:
-            logger.warning("SQLite fetch_public_profile_by_username failed: %s", exc)
-        finally:
-            if conn:
-                conn.close()
+        row = cursor.fetchone()
+        if row:
+            return {
+                "id": row[0],
+                "username": row[1],
+                "score": row[2],
+                "streak": row[3],
+                "solves": row[4],
+                "tier": row[5],
+            }
+    except Exception as exc:
+        logger.warning("SQLite _lookup_public_user_row failed: %s", exc)
+    finally:
+        if conn:
+            conn.close()
 
+    return None
+
+
+def _compute_user_global_rank(user_id: str, user_score: int) -> Tuple[int, int]:
+    """Returns (1-based global rank, total ranked engineers) across Supabase/SQLite."""
+    use_srv = has_supabase_service_key()
+    try:
+        resp = _SUPABASE_HTTP.get(
+            "/rest/v1/user_profiles",
+            params={
+                "select": "id,score",
+                "id": "not.like.mock_*",
+                "order": "score.desc",
+                "limit": "1000",
+            },
+            headers=_supabase_headers(use_service_role=use_srv),
+        )
+        if resp.status_code == 200:
+            rows = resp.json()
+            if isinstance(rows, list) and rows:
+                clean_rows = [
+                    r for r in rows
+                    if r.get("id") and not str(r.get("id")).startswith(("mock_", "test_"))
+                ]
+                if clean_rows:
+                    for idx, r in enumerate(clean_rows, start=1):
+                        if str(r.get("id")) == user_id:
+                            return idx, len(clean_rows)
+                    higher = sum(1 for r in clean_rows if int(r.get("score") or 0) > user_score)
+                    return higher + 1, len(clean_rows)
+    except Exception as exc:
+        logger.warning("Supabase _compute_user_global_rank failed: %s", exc)
+
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM user_profiles
+            WHERE id NOT LIKE 'mock_%' AND id NOT LIKE 'test_%' AND score > ?
+            """,
+            (int(user_score),),
+        )
+        higher = int((cursor.fetchone() or [0])[0] or 0)
+        cursor.execute(
+            "SELECT COUNT(*) FROM user_profiles WHERE id NOT LIKE 'mock_%' AND id NOT LIKE 'test_%'"
+        )
+        total = int((cursor.fetchone() or [0])[0] or 0)
+        return higher + 1, max(total, higher + 1)
+    except Exception as exc:
+        logger.warning("SQLite _compute_user_global_rank failed: %s", exc)
+        return 1, 1
+    finally:
+        if conn:
+            conn.close()
+
+
+def _make_initials(display_name: str) -> str:
+    parts = [p for p in str(display_name or "").strip().split() if p]
+    if not parts:
+        return "LQ"
+    return "".join(p[0] for p in parts[:2]).upper()[:2] or "LQ"
+
+
+def fetch_public_profile_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """
+    Safely looks up a public developer profile by username (PostgREST-injection safe)
+    and returns strictly non-PII public stats, heatmap activity, and recent solves.
+    """
+    clean_name = re.sub(r"[\x00-\x1f\x7f,*()%\"'\\;]", "", str(username or "")).strip()[:64]
+    if not clean_name or is_valid_user_id(clean_name):
+        # Preserve handle lookup behavior cleanly while allowing _lookup_public_user_row reuse
+        if not clean_name:
+            return None
+
+    matched_row = _lookup_public_user_row(clean_name)
     if not matched_row:
         return None
 
@@ -1279,6 +1379,209 @@ def fetch_public_profile_by_username(username: str) -> Optional[Dict[str, Any]]:
         "daily_activity": activity["daily_activity"],
         "solve_dates": activity["solve_dates"],
         "recent_solves": recent_enriched,
+    }
+
+
+def fetch_public_profile_dossier(identifier: str) -> Optional[Dict[str, Any]]:
+    """
+    Returns a bundled Codeforces-style read-only public dossier for a user (UUID or username).
+    Strictly strips PII (email, auth tokens, settings) and submitted source code/patches.
+    """
+    matched_row = _lookup_public_user_row(identifier)
+    if not matched_row:
+        return None
+
+    uid = str(matched_row.get("id") or "")
+    display_name = str(matched_row.get("username") or "Engineer").strip() or "Engineer"
+    score_val = int(matched_row.get("score") or 0)
+    solves_val = int(matched_row.get("solves") or 0)
+    streak_val = int(matched_row.get("streak") or 0)
+    tier_label = compute_rank_tier(score_val, matched_row.get("tier"))
+
+    rank_pos, total_ranked = _compute_user_global_rank(uid, score_val)
+
+    solve_rows = fetch_user_solve_history(uid, limit=2000) if is_valid_user_id(uid) else []
+    activity = compute_activity_summary(solve_rows)
+    ist_streak = compute_ist_streak_summary(solve_rows)
+
+    if matched_row.get("last_streak_date") is not None:
+        effective_streak = get_effective_streak(streak_val, matched_row.get("last_streak_date"))
+    elif solve_rows:
+        effective_streak = int(ist_streak["current_streak"] or 0)
+    else:
+        effective_streak = 0
+
+    best_streak = max(
+        int(activity["max_streak"] or 0),
+        int(ist_streak["max_streak"] or 0),
+        int(matched_row.get("max_streak") or 0),
+        effective_streak,
+    )
+
+    # Query catalog metadata once for problem totals, difficulty counts, categories, and tags
+    problem_meta: Dict[int, Dict[str, Any]] = {}
+    seen_titles: Set[str] = set()
+    diff_totals: Dict[str, int] = {"Easy": 0, "Medium": 0, "Hard": 0}
+    total_problems = 0
+
+    conn = None
+    try:
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT id, title, difficulty, category, tags FROM problems ORDER BY id ASC"
+        ).fetchall()
+        for r_id, title, diff, cat, raw_tags in rows:
+            pid = int(r_id)
+            norm_diff = str(diff or "Medium").strip().capitalize()
+            if norm_diff not in ("Easy", "Medium", "Hard"):
+                norm_diff = "Medium"
+            norm_cat = str(cat or "Algorithms").strip() or "Algorithms"
+            parsed_tags: List[str] = []
+            if isinstance(raw_tags, str):
+                try:
+                    loaded = json.loads(raw_tags)
+                    if isinstance(loaded, list):
+                        parsed_tags = [str(t).strip().lstrip("#") for t in loaded if str(t).strip()]
+                except Exception:
+                    parsed_tags = []
+            elif isinstance(raw_tags, list):
+                parsed_tags = [str(t).strip().lstrip("#") for t in raw_tags if str(t).strip()]
+
+            title_str = str(title or f"Challenge #{pid}").strip()
+            problem_meta[pid] = {
+                "title": title_str,
+                "difficulty": norm_diff,
+                "category": norm_cat,
+                "tags": parsed_tags,
+            }
+            if title_str not in seen_titles:
+                seen_titles.add(title_str)
+                total_problems += 1
+                diff_totals[norm_diff] = diff_totals.get(norm_diff, 0) + 1
+    except Exception as exc:
+        logger.warning("SQLite problem catalog load for public dossier failed: %s", exc)
+    finally:
+        if conn:
+            conn.close()
+
+    # Deduplicate user solves by problem_id preserving latest timestamp
+    dedup_solves: List[Dict[str, Any]] = []
+    seen_pids: Set[int] = set()
+    for row in solve_rows:
+        if row.get("problem_id") is None:
+            continue
+        pid = int(row["problem_id"])
+        if pid in seen_pids:
+            continue
+        seen_pids.add(pid)
+        dedup_solves.append(row)
+
+    diff_solved: Dict[str, int] = {"Easy": 0, "Medium": 0, "Hard": 0}
+    cat_counts: Dict[str, int] = {}
+    tag_counts: Dict[str, int] = {}
+    solved_challenges: List[Dict[str, Any]] = []
+    earliest_ts: Optional[str] = None
+
+    for row in dedup_solves:
+        pid = int(row["problem_id"])
+        solved_at = row.get("solved_at")
+        if solved_at and (earliest_ts is None or str(solved_at) < str(earliest_ts)):
+            earliest_ts = str(solved_at)
+
+        meta = problem_meta.get(pid)
+        if not meta and pid >= AI_PROBLEM_ID_THRESHOLD:
+            ai_prob = _fetch_supabase_ai_problem_by_id(pid)
+            if ai_prob:
+                norm_d = str(ai_prob.get("difficulty") or "Medium").strip().capitalize()
+                if norm_d not in ("Easy", "Medium", "Hard"):
+                    norm_d = "Medium"
+                raw_ai_tags = ai_prob.get("tags") or []
+                meta = {
+                    "title": str(ai_prob.get("title") or f"Challenge #{pid}"),
+                    "difficulty": norm_d,
+                    "category": str(ai_prob.get("category") or "Algorithms"),
+                    "tags": [str(t).strip().lstrip("#") for t in raw_ai_tags if str(t).strip()]
+                    if isinstance(raw_ai_tags, list)
+                    else [],
+                }
+
+        title_val = meta["title"] if meta else f"Challenge #{pid}"
+        diff_val = meta["difficulty"] if meta else "Medium"
+        cat_val = meta["category"] if meta else "General"
+        tags_val = meta.get("tags", []) if meta else []
+
+        if diff_val in diff_solved:
+            diff_solved[diff_val] += 1
+        cat_counts[cat_val] = cat_counts.get(cat_val, 0) + 1
+        for tg in tags_val:
+            tag_counts[tg] = tag_counts.get(tg, 0) + 1
+
+        # Strict public metadata only: NO user_code, buggy_code, test_cases, or email
+        solved_challenges.append({
+            "id": pid,
+            "title": title_val,
+            "category": cat_val,
+            "difficulty": diff_val,
+            "solved_at": solved_at,
+        })
+
+    # 12-week (84-day) IST rolling activity heatmap
+    ist_day_counts: Dict[str, int] = {}
+    for row in solve_rows:
+        day_key = _to_ist_date_from_ts(row.get("solved_at"))
+        if day_key:
+            ist_day_counts[day_key] = ist_day_counts.get(day_key, 0) + 1
+
+    today_ist_str, _ = get_ist_today_yesterday()
+    today_ist_date = datetime.strptime(today_ist_str, "%Y-%m-%d").date()
+    start_84_date = today_ist_date - timedelta(days=83)
+    activity_days: List[Dict[str, Any]] = []
+    total_84d = 0
+    for offset in range(84):
+        d_str = (start_84_date + timedelta(days=offset)).isoformat()
+        cnt = int(ist_day_counts.get(d_str, 0))
+        total_84d += cnt
+        activity_days.append({"date": d_str, "count": cnt})
+
+    top_categories = [
+        {"name": name, "count": cnt}
+        for name, cnt in sorted(cat_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:8]
+    ]
+    top_tags = [
+        {"name": name, "count": cnt}
+        for name, cnt in sorted(tag_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:8]
+    ]
+
+    return {
+        "profile": {
+            "display_name": display_name,
+            "initials": _make_initials(display_name),
+            "rank": rank_pos,
+            "total_ranked": total_ranked,
+            "tier": tier_label,
+            "score": score_val,
+            "current_streak": effective_streak,
+            "best_streak": best_streak,
+            "solved_count": max(solves_val, len(solved_challenges)),
+            "total_problems": total_problems,
+            "member_since": earliest_ts,
+        },
+        "breakdown": {
+            "difficulty": {
+                "Easy": {"solved": diff_solved["Easy"], "total": diff_totals["Easy"]},
+                "Medium": {"solved": diff_solved["Medium"], "total": diff_totals["Medium"]},
+                "Hard": {"solved": diff_solved["Hard"], "total": diff_totals["Hard"]},
+            },
+            "categories": top_categories,
+            "tags": top_tags,
+        },
+        "activity": {
+            "weeks": 12,
+            "total_solves": total_84d,
+            "velocity_per_week": round(total_84d / 12.0, 1),
+            "days": activity_days,
+        },
+        "solved_challenges": solved_challenges,
     }
 
 

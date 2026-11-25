@@ -635,3 +635,197 @@ def test_daily_streak_once_per_day_consecutive_and_missed_reset(monkeypatch):
     r4 = db.record_user_solve(uid, "StreakTester", time_seconds=15, problem_id=4)
     assert r4["streak"] == 1
     assert r4["max_streak"] == 4
+
+
+def test_api_users_public_profile_privacy_and_404(monkeypatch):
+    import database as db
+
+    uid = "00000000-0000-0000-0000-000000000077"
+    today_ist, _ = db.get_ist_today_yesterday()
+
+    monkeypatch.setattr(
+        db,
+        "_lookup_public_user_row",
+        lambda ident: {
+            "id": uid,
+            "username": "CleanAuditor",
+            "email": "secret@example.com",
+            "password": "hashed_password",
+            "access_token": "jwt_secret",
+            "settings": {"theme": "dark"},
+            "score": 520,
+            "streak": 3,
+            "solves": 1,
+            "tier": "Bug Hunter II",
+        }
+        if ident == uid
+        else None,
+    )
+    monkeypatch.setattr(db, "_compute_user_global_rank", lambda user_id, user_score: (5, 100))
+    monkeypatch.setattr(
+        db,
+        "fetch_user_solve_history",
+        lambda user_id, access_token=None, limit=2000: [
+            {
+                "problem_id": 1,
+                "best_points": 140,
+                "best_grade": "Surgical",
+                "user_code": "def secret_patch(): return 42",
+                "buggy_code": "def buggy(): pass",
+                "patch": "--- a\n+++ b",
+                "solved_at": f"{today_ist}T12:00:00Z",
+            }
+        ],
+    )
+
+    resp = client.get(f"/api/users/{uid}/public-profile")
+    assert resp.status_code == 200
+    body = resp.json()
+    raw_text = resp.text
+
+    # No private PII or source code anywhere in serialized response
+    for sensitive in (
+        "secret@example.com",
+        "hashed_password",
+        "jwt_secret",
+        "def secret_patch",
+        "def buggy",
+    ):
+        assert sensitive not in raw_text
+
+    forbidden_fields = {
+        "email",
+        "password",
+        "access_token",
+        "token",
+        "settings",
+        "user_code",
+        "buggy_code",
+        "submitted_code",
+        "patch",
+        "test_cases",
+        "hint",
+    }
+    assert not (forbidden_fields & set(body.keys()))
+    assert not ((forbidden_fields | {"id", "user_id"}) & set(body["profile"].keys()))
+    for ch in body["solved_challenges"]:
+        assert not (forbidden_fields & set(ch.keys()))
+        assert set(ch.keys()) == {"id", "title", "category", "difficulty", "solved_at"}
+
+    # Missing or mock users cleanly return 404
+    assert client.get("/api/users/00000000-0000-0000-0000-000000000999/public-profile").status_code == 404
+    assert client.get("/api/users/mock_fake_user/public-profile").status_code == 404
+
+
+def test_sandbox_blocks_getattr_reflection_null_bytes_and_env_secrets(monkeypatch):
+    import runner
+
+    # 1. Reflection / getattr / dunder bypass attempts must be blocked by AST sandbox
+    for evil_code in (
+        "getattr(__import__('os'), 'system')('id')",
+        "x = [].__class__.__base__.__subclasses__()",
+        "print(globals())",
+        "import sysconfig\nprint(sysconfig.get_paths())",
+        "import sys\nprint(sys.modules)",
+    ):
+        if "sys.modules" not in evil_code:
+            safe, msg = runner._check_python_security(evil_code)
+            assert not safe, f"Expected AST block for: {evil_code}"
+            assert "Security Alert" in msg
+
+    # 2. Null bytes must be handled cleanly without unhandled ValueError 500
+    with main._RUN_RATE_LOCK:
+        main._RUN_RATE_BUCKETS.clear()
+    null_resp = client.post(
+        "/run-code",
+        json={"user_code": "print(1)\x00", "stdin": "", "language": "python"},
+    )
+    assert null_resp.status_code == 200
+    assert null_resp.json()["ok"] is False
+    assert null_resp.json()["error_type"] == "syntax_error"
+
+    # 3. _build_safe_env strips all sensitive API/DB keys
+    monkeypatch.setenv("GEMINI_API_KEY", "secret-gemini-value")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "secret-supabase-role")
+    monkeypatch.setenv("ONLINECOMPILER_API_KEY", "secret-compiler-key")
+    safe_env = runner._build_safe_env("/tmp/lintiq_test_dir")
+    assert "GEMINI_API_KEY" not in safe_env
+    assert "SUPABASE_SERVICE_ROLE_KEY" not in safe_env
+    assert "ONLINECOMPILER_API_KEY" not in safe_env
+    assert safe_env.get("PYTHONIOENCODING") == "utf-8"
+    assert safe_env.get("PYTHONUTF8") == "1"
+
+
+def test_sqli_oversized_payloads_and_error_redaction(monkeypatch):
+    # 1. SQLi & PostgREST wildcard injection attempts return 400 or 404 safely
+    sqli_cat = client.get("/problems", params={"category": "Algorithms' OR '1'='1"})
+    assert sqli_cat.status_code == 400
+
+    sqli_user = client.get("/api/users/' OR 1=1 --/public-profile")
+    assert sqli_user.status_code == 404
+
+    # 2. Oversized payloads fail fast with 422 Pydantic validation
+    oversized_code = client.post(
+        "/run-code",
+        json={"user_code": "a" * 70000, "stdin": "", "language": "python"},
+    )
+    assert oversized_code.status_code == 422
+
+    oversized_submit = client.post(
+        "/submit-patch",
+        json={
+            "problem_id": 1,
+            "user_code": "print(1)",
+            "username": "x" * 200,
+            "language": "python",
+        },
+    )
+    assert oversized_submit.status_code == 422
+
+    oversized_query = client.get("/problems", params={"category": "A" * 120})
+    assert oversized_query.status_code == 422
+
+    # 3. Global exception handler redacts raw tracebacks and secret strings
+    no_raise_client = TestClient(main.app, raise_server_exceptions=False)
+    monkeypatch.setattr(
+        main,
+        "fetch_public_profile_dossier",
+        lambda uid: (_ for _ in ()).throw(RuntimeError("C:\\secret\\path GEMINI_API_KEY=AIzaSecretLeak")),
+    )
+    err_resp = no_raise_client.get("/api/users/00000000-0000-0000-0000-000000000099/public-profile")
+    assert err_resp.status_code == 500
+    assert err_resp.json() == {"detail": "Internal server error."}
+    assert "AIzaSecretLeak" not in err_resp.text
+    assert "C:\\secret" not in err_resp.text
+
+
+def test_public_profile_rate_limit_and_xss_payload_safety(monkeypatch):
+    import database as db
+
+    with main._PUBLIC_PROFILE_RATE_LOCK:
+        main._PUBLIC_PROFILE_RATE_BUCKETS.clear()
+
+    # XSS in username/tier must never execute or leak unescaped in SVG badge
+    xss_name = "<img src=x onerror=alert(1)>"
+    monkeypatch.setattr(
+        main,
+        "fetch_public_profile_by_username",
+        lambda u: {"username": u, "tier": xss_name, "score": 100, "solves": 1, "streak": 1},
+    )
+    svg_resp = client.get("/badge/<img src=x onerror=alert(1)>.svg")
+    assert svg_resp.status_code == 200
+    assert "<img" not in svg_resp.text
+    assert "&lt;img" in svg_resp.text
+    assert "&lt;IMG" in svg_resp.text
+
+    # Public dossier rate limit triggers 429 after 60 requests/min
+    monkeypatch.setattr(db, "_lookup_public_user_row", lambda ident: None)
+    with main._PUBLIC_PROFILE_RATE_LOCK:
+        main._PUBLIC_PROFILE_RATE_BUCKETS.clear()
+    for _ in range(main._PUBLIC_PROFILE_MAX_PER_MIN):
+        r = client.get("/api/users/00000000-0000-0000-0000-000000000404/public-profile")
+        assert r.status_code == 404
+    capped = client.get("/api/users/00000000-0000-0000-0000-000000000404/public-profile")
+    assert capped.status_code == 429
+    with main._PUBLIC_PROFILE_RATE_LOCK:
+        main._PUBLIC_PROFILE_RATE_BUCKETS.clear()

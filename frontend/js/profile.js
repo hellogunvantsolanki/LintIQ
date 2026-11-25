@@ -542,7 +542,8 @@ async function loadProfilePage() {
     console.warn("Catalog lookup fallback:", err);
   }
 
-  const publicUsername = new URLSearchParams(window.location.search).get("u")?.trim() || "";
+  const rawPublicUsername = new URLSearchParams(window.location.search).get("u") || "";
+  const publicUsername = rawPublicUsername.replace(/[\x00-\x1f\x7f<>\"'`;/\\]/g, "").trim().slice(0, 64);
   if (publicUsername) {
     await loadPublicProfileMode(publicUsername, catalogMap);
     return;

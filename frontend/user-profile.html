@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LintIQ – Public Engineer Profile</title>
+  <meta name="description" content="Read-only public debugging dossier on LintIQ: verified Arcade Score, streaks, difficulty breakdown, 12-week activity matrix, and solved challenges." />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="js/tailwind-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    html, body {
+      min-height: 100vh;
+      background-color: #0a0e16 !important;
+      color: #e2e8f0;
+      font-family: 'Geist', sans-serif;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f131c; }
+    ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #333c52; }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen antialiased">
+
+  <!-- SHARED NAVBAR -->
+  <nav id="lintiq-navbar" data-page="public-profile"></nav>
+
+  <main class="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 lg:py-6 space-y-5">
+
+    <!-- TOP BREADCRUMB BAR -->
+    <div id="up-breadcrumb" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+      <div class="flex items-center gap-2 font-mono text-gray-400 min-w-0 flex-wrap">
+        <a href="leaderboard.html" class="inline-flex items-center gap-1.5 text-gray-300 hover:text-emerald-400 transition whitespace-nowrap">
+          <span>←</span><span>Back to Global Leaderboard</span>
+        </a>
+        <span class="text-gray-600">/</span>
+        <span class="text-white font-semibold truncate">Engineer Dossier</span>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap shrink-0">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-mono font-semibold text-emerald-300 uppercase tracking-wider whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Live Arcade Telemetry</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-border text-[10px] font-mono text-gray-300 whitespace-nowrap">
+          <span>🔒</span><span>Public Profile · Read-Only</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- LOADING STATE -->
+    <div id="up-loading" class="bg-surface border border-surface-border rounded-xl p-10 text-center space-y-3 shadow-xl">
+      <div class="w-7 h-7 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin mx-auto"></div>
+      <div class="text-xs font-mono text-gray-400">Loading public engineer dossier...</div>
+    </div>
+
+    <!-- ERROR / 404 STATE -->
+    <div id="up-error" class="hidden bg-surface border border-surface-border rounded-xl p-10 text-center space-y-4 shadow-xl">
+      <div id="up-error-code" class="text-3xl font-mono font-bold text-gray-500">404</div>
+      <h1 id="up-error-title" class="text-xl font-bold text-white">Engineer profile not found</h1>
+      <p id="up-error-desc" class="text-xs text-gray-400 max-w-md mx-auto">
+        No public dossier matches that user identifier. Select an engineer from the Global Leaderboard to inspect their telemetry.
+      </p>
+      <div class="pt-2">
+        <a href="leaderboard.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-black text-xs font-semibold transition">
+          <span>← Back to Global Leaderboard</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- DOSSIER CONTENT -->
+    <div id="up-content" class="hidden space-y-5">
+
+      <!-- HERO CARD -->
+      <section class="bg-surface border border-surface-border rounded-xl p-5 sm:p-6 shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+        <div class="flex items-start sm:items-center gap-4 min-w-0">
+          <div class="relative shrink-0">
+            <div id="up-avatar-box" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 border-2 border-emerald-500/40 flex items-center justify-center text-emerald-300 text-2xl sm:text-3xl font-bold font-mono">
+              LQ
+            </div>
+            <span id="up-rank-badge" class="absolute -bottom-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-[#141822] border border-amber-400/50 text-[10px] font-mono font-bold text-amber-300 shadow">
+              #1
+            </span>
+          </div>
+
+          <div class="min-w-0 space-y-1.5">
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <h1 id="up-display-name" class="text-xl sm:text-2xl font-bold text-white tracking-tight truncate">Engineer</h1>
+              <span id="up-rank-pill" class="px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded bg-amber-500/15 text-amber-300 border border-amber-500/35 whitespace-nowrap">
+                #1 Global
+              </span>
+            </div>
+            <div id="up-meta-row" class="flex items-center gap-2 flex-wrap text-xs font-mono text-gray-400"></div>
+            <div id="up-delta-row" class="hidden"></div>
+          </div>
+        </div>
+
+        <!-- 3 MONOSPACE STAT TILES -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0 xl:min-w-[490px]">
+          <div class="bg-surface-container/70 border border-surface-border rounded-xl px-4 py-3 font-mono">
+            <div class="text-[10px] uppercase tracking-wider text-gray-400">Arcade Score</div>
+            <div class="mt-1 flex items-baseline gap-1">
+              <span id="up-stat-score" class="text-2xl font-bold text-emerald-400">0</span>
+              <span class="text-xs text-emerald-300/80">pts</span>
+            </div>
+            <div id="up-stat-tier" class="text-[11px] text-gray-500 mt-1 truncate">Bug Hunter I</div>
+          </div>
+
+          <div class="bg-surface-container/70 border border-surface-border rounded-xl px-4 py-3 font-mono">
+            <div class="text-[10px] uppercase tracking-wider text-gray-400">Active Streak</div>
+            <div class="mt-1 flex items-baseline gap-1.5">
+              <span class="text-amber-400 text-lg">⚡</span>
+              <span id="up-stat-streak" class="text-2xl font-bold text-white">0</span>
+              <span id="up-stat-streak-unit" class="text-xs text-gray-400">days</span>
+            </div>
+            <div id="up-stat-best-streak" class="text-[11px] text-gray-500 mt-1">Best record: 0 days</div>
+          </div>
+
+          <div class="bg-surface-container/70 border border-surface-border rounded-xl px-4 py-3 font-mono">
+            <div class="text-[10px] uppercase tracking-wider text-gray-400">Bugs Resolved</div>
+            <div class="mt-1 flex items-baseline gap-1">
+              <span id="up-stat-solved" class="text-2xl font-bold text-white">0</span>
+              <span id="up-stat-total" class="text-xs text-gray-400">/ 0</span>
+            </div>
+            <div id="up-stat-pct" class="text-[11px] text-cyan-400 mt-1">0.0% catalog</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ANALYTICS ROW (12-COL GRID, 7/5 SPLIT) -->
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- LEFT (7 COLS): DIFFICULTY & CORE DIAGNOSTICS -->
+        <div class="lg:col-span-7 bg-surface border border-surface-border rounded-xl p-5 sm:p-6 shadow-xl flex flex-col justify-between gap-5">
+          <div class="space-y-4">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <span class="text-emerald-400 font-mono">▤</span>
+                <span>Difficulty &amp; Core Diagnostics</span>
+              </h2>
+              <span id="up-total-patches-badge" class="text-xs font-mono text-gray-400">0 Patches Total</span>
+            </div>
+
+            <div class="space-y-3.5 text-xs font-mono">
+              <!-- Easy -->
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>Easy Tier</span></span>
+                  <span id="up-diff-easy-text" class="text-gray-300">0 / 0 (0.0%)</span>
+                </div>
+                <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                  <div id="up-diff-easy-bar" class="h-full bg-emerald-400 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Medium -->
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span>Medium Tier</span></span>
+                  <span id="up-diff-med-text" class="text-gray-300">0 / 0 (0.0%)</span>
+                </div>
+                <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                  <div id="up-diff-med-bar" class="h-full bg-amber-400 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Hard -->
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center gap-2 text-gray-200"><span class="w-2 h-2 rounded-full bg-rose-400"></span><span>Hard Tier</span></span>
+                  <span id="up-diff-hard-text" class="text-gray-300">0 / 0 (0.0%)</span>
+                </div>
+                <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                  <div id="up-diff-hard-bar" class="h-full bg-rose-400 rounded-full transition-all duration-300" style="width: 0%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-surface-border/70 space-y-2.5">
+            <div class="text-[10px] uppercase font-mono tracking-wider text-gray-400">Top Category Specializations</div>
+            <div id="up-specialization-pills" class="flex items-center gap-2 flex-wrap text-xs font-mono"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT (5 COLS): 12-WEEK ROLLING ACTIVITY HEATMAP -->
+        <div class="lg:col-span-5 bg-surface border border-surface-border rounded-xl p-5 sm:p-6 shadow-xl flex flex-col justify-between gap-4">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              <span class="text-amber-400 font-mono">▦</span>
+              <span>12-Week Rolling Matrix</span>
+            </h2>
+            <span id="up-momentum-label" class="text-[11px] font-mono text-emerald-400">0 solves / 12w</span>
+          </div>
+
+          <div class="overflow-x-auto pb-1">
+            <div id="up-heatmap-grid" class="grid grid-flow-col grid-rows-7 gap-1.5 w-max mx-auto sm:mx-0"></div>
+          </div>
+
+          <div class="space-y-3 pt-2 border-t border-surface-border/70 text-[11px] font-mono">
+            <div class="flex items-center justify-between gap-2 flex-wrap text-gray-400">
+              <span id="up-heatmap-summary">0 patches verified in last 84 days</span>
+              <div class="flex items-center gap-1 text-[10px]">
+                <span>Less</span>
+                <span class="w-2.5 h-2.5 rounded-[2px] border border-white/5 inline-block" style="background-color: #161b22;"></span>
+                <span class="w-2.5 h-2.5 rounded-[2px] border border-white/5 inline-block" style="background-color: #0e4429;"></span>
+                <span class="w-2.5 h-2.5 rounded-[2px] border border-white/5 inline-block" style="background-color: #006d32;"></span>
+                <span class="w-2.5 h-2.5 rounded-[2px] border border-white/5 inline-block" style="background-color: #26a641;"></span>
+                <span class="w-2.5 h-2.5 rounded-[2px] border border-white/5 inline-block" style="background-color: #39d353;"></span>
+                <span>More</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-gray-400">
+              <span>Longest Streak: <strong id="up-matrix-best-streak" class="text-white">0 days</strong></span>
+              <span>Current Velocity: <strong id="up-matrix-velocity" class="text-emerald-400">0.0 bugs/wk</strong></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SOLVED CHALLENGES TABLE -->
+      <section class="bg-surface border border-surface-border rounded-xl overflow-hidden shadow-xl">
+        <div class="px-5 py-3.5 border-b border-surface-border flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <h2 class="text-sm font-bold text-white">Solved Challenges</h2>
+            <span id="up-solved-table-count" class="px-2 py-0.5 text-[11px] font-mono rounded bg-surface-container border border-surface-border text-gray-300">0</span>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs">
+            <div class="relative flex-1 sm:w-56">
+              <input id="up-search" type="text" placeholder="Search by title or #id..." oninput="handlePublicSolvedFilter()"
+                class="w-full bg-surface-container border border-surface-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent" />
+              <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <div class="flex items-center gap-2">
+              <select id="up-diff-filter" onchange="handlePublicSolvedFilter()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer">
+                <option value="All">All Difficulties</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+              <select id="up-cat-filter" onchange="handlePublicSolvedFilter()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer">
+                <option value="All">All Categories</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anti-Cheat Banner -->
+        <div class="px-5 py-2.5 bg-[#0e131d] border-b border-surface-border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-amber-300/90">
+          <div class="flex items-center gap-2">
+            <span>ⓘ</span>
+            <span>Public telemetry displays challenge verification metadata only. Source code patches remain encrypted.</span>
+          </div>
+          <span class="text-gray-500 shrink-0">Verified with LintIQ Engine v1.6</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-surface-container/60 text-gray-400 uppercase tracking-wider text-[10px] font-mono border-b border-surface-border">
+              <tr>
+                <th class="py-3 px-4 w-16">#</th>
+                <th class="py-3 px-4">Challenge Title</th>
+                <th class="py-3 px-4">Category</th>
+                <th class="py-3 px-4">Difficulty</th>
+                <th class="py-3 px-4">Solved On</th>
+                <th id="up-viewer-status-col" class="py-3 px-4 text-right">Your Status</th>
+              </tr>
+            </thead>
+            <tbody id="up-solved-rows" class="divide-y divide-surface-border/50 text-gray-300">
+              <tr><td colspan="6" class="py-10 text-center text-gray-400 font-mono">Loading solved challenges...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Bar -->
+        <div class="px-4 sm:px-5 py-3 bg-surface-container/50 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
+          <span id="up-page-range" class="font-mono text-[11px]">Showing 0–0 of 0 solved verified challenges</span>
+          <div id="up-pagination" class="flex items-center gap-1 font-mono"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Floating Heatmap Tooltip -->
+  <div id="heatmap-tooltip" class="hidden fixed pointer-events-none z-50 px-2.5 py-1.5 rounded-md bg-[#0d1117] border border-surface-border shadow-xl text-[11px] font-mono text-white whitespace-nowrap"></div>
+
+  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0 mt-auto">
+    <div>LintIQ IDE • ARCADE V1.6</div>
+    <div class="font-mono">Public Engineer Profile • Read-Only</div>
+  </footer>
+
+  <!-- INJECTED COMPONENTS -->
+  <div id="lintiq-auth-modal"></div>
+
+  <!-- Shared JS -->
+  <script src="js/shared.js"></script>
+  <script src="components/navbar.js"></script>
+  <script src="components/auth-modal.js"></script>
+
+  <!-- Public Profile Logic -->
+  <script src="js/user-profile.js"></script>
+</body>
+</html>
