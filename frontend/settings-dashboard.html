@@ -30,26 +30,26 @@
   <nav id="lintiq-navbar" data-page="settings"></nav>
 
   <!-- MAIN CONTAINER -->
-  <main class="flex-1 flex items-center justify-center p-4 md:p-6">
-    <div class="w-full max-w-5xl bg-surface border border-surface-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+  <main class="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 lg:py-6 flex flex-col">
+    <div class="w-full flex-1 bg-surface border border-surface-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
 
       <!-- CONTROL CENTER HEADER -->
-      <div class="px-6 py-4 border-b border-surface-border flex items-center justify-between">
-        <div class="flex items-center space-x-2 text-white font-semibold text-sm">
+      <div class="px-5 sm:px-6 py-4 border-b border-surface-border flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-2 text-white font-semibold text-sm min-w-0">
           <span class="text-emerald-400">⚙</span>
-          <span>LintIQ Control Center — Dashboard &amp; Graph</span>
+          <span class="truncate">LintIQ Control Center — Dashboard &amp; Graph</span>
         </div>
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-3 shrink-0">
           <span id="dashboard-session-badge" class="text-[11px] font-mono text-gray-500">CHECKING SESSION...</span>
           <a href="index.html" class="text-gray-400 hover:text-white transition text-lg leading-none" title="Return to Workspace">✕</a>
         </div>
       </div>
 
       <!-- TAB BODY: DASHBOARD & GRAPH -->
-      <div class="p-6 md:p-8 space-y-6">
+      <div class="p-5 sm:p-6 lg:p-8 space-y-6 flex-1 flex flex-col">
 
         <!-- SIGNED-OUT GATE -->
-        <div id="dashboard-logged-out" class="hidden py-14 px-6 text-center bg-surface-container/40 border border-surface-border rounded-xl">
+        <div id="dashboard-logged-out" class="hidden py-16 sm:py-24 px-6 my-auto text-center bg-surface-container/40 border border-surface-border rounded-xl">
           <div class="text-3xl mb-3">🔒</div>
           <h3 class="text-base font-bold text-white mb-1">Sign in to view your Telemetry Dashboard</h3>
           <p class="text-xs text-gray-400 max-w-md mx-auto mb-5">Your 7-day bug-hunt telemetry, pass rate, runtime latency, and streak history are tracked per signed-in account.</p>
@@ -59,10 +59,10 @@
         </div>
 
         <!-- AUTHENTICATED TELEMETRY CONTENT -->
-        <div id="dashboard-auth-content" class="hidden space-y-6">
+        <div id="dashboard-auth-content" class="hidden space-y-6 flex-1 flex-col">
 
           <!-- 4 KPI CARDS -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
 
             <div class="bg-surface-container/50 border border-surface-border rounded-xl p-4 flex items-center justify-between">
               <div>
@@ -103,22 +103,22 @@
           </div>
 
           <!-- TELEMETRY GRAPH & SIDEBAR -->
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
 
             <!-- LEFT: 7-DAY BUG HUNT CHART.JS GRAPH -->
-            <div class="md:col-span-8 bg-surface-container/40 border border-surface-border rounded-xl p-5 space-y-4">
-              <div class="flex items-center justify-between">
+            <div class="lg:col-span-8 bg-surface-container/40 border border-surface-border rounded-xl p-5 sm:p-6 space-y-4 flex flex-col">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                   <h3 class="text-xs uppercase tracking-wider font-mono text-white">7-Day Bug-Hunt & Latency Graph</h3>
                   <p class="text-[11px] text-gray-400 mt-0.5">Execution runs mapped against solved bugs</p>
                 </div>
-                <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center space-x-1">
+                <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center space-x-1 shrink-0">
                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
                   <span>Live Telemetry</span>
                 </span>
               </div>
 
-              <div class="relative h-56 w-full">
+              <div class="relative h-64 sm:h-72 lg:h-80 xl:h-96 w-full flex-1 min-h-[250px]">
                 <canvas id="settings-activity-chart"></canvas>
               </div>
 
@@ -129,7 +129,7 @@
             </div>
 
             <!-- RIGHT: ACCOUNT TELEMETRY SIDEBAR -->
-            <div class="md:col-span-4 bg-surface-container/40 border border-surface-border rounded-xl p-5 flex flex-col justify-between space-y-4">
+            <div class="lg:col-span-4 bg-surface-container/40 border border-surface-border rounded-xl p-5 sm:p-6 flex flex-col justify-between space-y-4">
               <div class="space-y-4">
                 <div class="flex items-center space-x-2 text-xs font-mono uppercase tracking-wider text-gray-300">
                   <span>⚙</span>
@@ -174,7 +174,7 @@
       </div>
 
       <!-- MODAL BOTTOM ACTIONS -->
-      <div class="px-6 py-4 bg-surface-container/30 border-t border-surface-border flex items-center justify-between">
+      <div class="mt-auto px-5 sm:px-6 py-4 bg-surface-container/30 border-t border-surface-border flex flex-wrap items-center justify-between gap-3">
         <div id="settings-footer-account" class="text-xs text-gray-500 font-mono">
           Session: Loading...
         </div>
@@ -188,7 +188,7 @@
     </div>
   </main>
 
-  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0">
+  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0 mt-auto">
     <div>LintIQ IDE • ARCADE V1.6</div>
     <div class="font-mono">Telemetry Dashboard</div>
   </footer>

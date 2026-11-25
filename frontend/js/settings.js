@@ -316,6 +316,7 @@ async function initDashboardSettingsPage() {
   if (!currentUser?.id) {
     loggedOutEl?.classList.remove("hidden");
     authContentEl?.classList.add("hidden");
+    authContentEl?.classList.remove("flex");
     if (sessionBadge) sessionBadge.textContent = "GUEST • SIGN IN REQUIRED";
     if (footerMeta) footerMeta.textContent = "Sign in to view account telemetry";
     if (settingsChartInstance) {
@@ -327,6 +328,7 @@ async function initDashboardSettingsPage() {
 
   loggedOutEl?.classList.add("hidden");
   authContentEl?.classList.remove("hidden");
+  authContentEl?.classList.add("flex");
   if (sessionBadge) sessionBadge.textContent = "SESSION: LIVE TELEMETRY";
   if (footerMeta) footerMeta.textContent = `Account: ${currentUser.id.slice(0, 8)}… • Arcade Engine: LintIQ V1.6`;
 

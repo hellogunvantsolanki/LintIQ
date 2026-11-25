@@ -32,7 +32,7 @@
   <!-- SHARED NAVBAR -->
   <nav id="lintiq-navbar" data-page="profile"></nav>
 
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+  <main class="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 lg:py-6 space-y-6">
     <!-- PUBLIC PROFILE 404 STATE -->
     <div id="prof-not-found" class="hidden bg-surface border border-surface-border rounded-xl p-10 text-center space-y-4 shadow-xl">
       <div class="text-3xl font-mono text-gray-500">404</div>
@@ -159,13 +159,13 @@
     </section>
 
     <!-- TELEMETRY & BREAKDOWN CHARTS (dynamic) -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
       <div class="bg-surface border border-surface-border rounded-xl p-5 shadow-xl">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm font-bold text-white">7-Day Debugging Activity</h2>
           <span class="text-[10px] font-mono text-gray-500 uppercase">Verified Solves</span>
         </div>
-        <div class="h-48 relative">
+        <div class="h-56 sm:h-64 lg:h-72 relative">
           <canvas id="prof-activity-chart"></canvas>
         </div>
       </div>
@@ -174,7 +174,7 @@
           <h2 class="text-sm font-bold text-white">Solved by Difficulty</h2>
           <span id="prof-catalog-total" class="text-[10px] font-mono text-gray-500">Catalog</span>
         </div>
-        <div class="h-48 relative">
+        <div class="h-56 sm:h-64 lg:h-72 relative">
           <canvas id="prof-difficulty-chart"></canvas>
         </div>
       </div>

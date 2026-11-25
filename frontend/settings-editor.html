@@ -32,29 +32,29 @@
   <nav id="lintiq-navbar" data-page="settings"></nav>
 
   <!-- MAIN CONTAINER -->
-  <main class="flex-1 flex items-center justify-center p-4 md:p-6">
-    <div class="w-full max-w-5xl bg-surface border border-surface-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+  <main class="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 lg:py-6 flex flex-col">
+    <div class="w-full flex-1 bg-surface border border-surface-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
 
       <!-- CONTROL CENTER HEADER -->
-      <div class="px-6 py-4 border-b border-surface-border flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <div class="flex items-center space-x-2 text-white font-semibold text-sm">
+      <div class="px-5 sm:px-6 py-4 border-b border-surface-border flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-3 min-w-0">
+          <div class="flex items-center space-x-2 text-white font-semibold text-sm min-w-0">
             <span class="text-emerald-400">⚙</span>
-            <span>LintIQ Control Center — Editor &amp; Sandbox</span>
+            <span class="truncate">LintIQ Control Center — Editor &amp; Sandbox</span>
           </div>
-          <span class="text-[10px] font-mono text-gray-500 bg-surface-container px-2 py-0.5 rounded border border-surface-border">V1.6_CONFIG</span>
+          <span class="hidden sm:inline-block text-[10px] font-mono text-gray-500 bg-surface-container px-2 py-0.5 rounded border border-surface-border shrink-0">V1.6_CONFIG</span>
         </div>
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-3 shrink-0">
           <span id="editor-session-badge" class="text-[11px] text-emerald-400 font-mono">LOCAL SESSION</span>
           <a href="index.html" class="text-gray-400 hover:text-white transition text-lg leading-none" title="Return to Workspace">✕</a>
         </div>
       </div>
 
       <!-- TAB BODY: EDITOR & SANDBOX -->
-      <div class="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="p-5 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 flex-1">
 
         <!-- LEFT BOX: MONACO EDITOR CONFIG -->
-        <div class="bg-surface-container/40 border border-surface-border rounded-xl p-6 space-y-6">
+        <div class="bg-surface-container/40 border border-surface-border rounded-xl p-6 space-y-6 flex flex-col justify-between">
           <div class="flex items-center justify-between">
             <h3 class="text-xs uppercase tracking-wider font-mono text-gray-400">Monaco Editor Configuration</h3>
             <span class="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">SYNTAX ENGINE</span>
@@ -172,7 +172,7 @@
       </div>
 
       <!-- MODAL BOTTOM ACTIONS -->
-      <div class="px-6 py-4 bg-surface-container/30 border-t border-surface-border flex flex-wrap items-center justify-between gap-3">
+      <div class="mt-auto px-5 sm:px-6 py-4 bg-surface-container/30 border-t border-surface-border flex flex-wrap items-center justify-between gap-3">
         <div id="settings-footer-account" class="text-xs text-gray-400 font-mono">
           Session: Local Guest
         </div>
@@ -187,7 +187,7 @@
     </div>
   </main>
 
-  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0">
+  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0 mt-auto">
     <div>LintIQ IDE • ARCADE V1.6</div>
     <div class="font-mono">Editor & Sandbox</div>
   </footer>
