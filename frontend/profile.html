@@ -19,12 +19,19 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="js/tailwind-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="style.css" />
   <style>
-    html, body { min-height: 100vh; background-color: #0a0e16; color: #e2e8f0; font-family: 'Geist', sans-serif; }
+    html, body {
+      min-height: 100vh;
+      background-color: #090b0f;
+      color: #e2e8f0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
   </style>
 </head>
 <body class="flex flex-col min-h-screen antialiased">
@@ -47,61 +54,61 @@
 
     <div id="prof-content-wrapper" class="space-y-6">
     <!-- USER CARD (dynamic) -->
-    <div id="prof-user-card" class="bg-surface border border-surface-border rounded-xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+    <div id="prof-user-card" class="bg-surface border border-white/[0.07] rounded-xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
       <div class="flex items-center gap-4">
-        <div id="prof-avatar-box" class="w-16 h-16 rounded-2xl bg-surface-container border border-surface-border flex items-center justify-center text-accent text-2xl font-mono shrink-0">&lt;/&gt;</div>
+        <div id="prof-avatar-box" class="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-accent text-xl font-mono shrink-0">&lt;/&gt;</div>
         <div class="min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <h1 id="prof-name" class="text-2xl font-bold text-white truncate">Loading...</h1>
-            <span id="prof-tier-badge" class="px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">★ Bug Hunter I</span>
-            <span id="prof-public-badge" class="hidden px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase">Public Profile</span>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h1 id="prof-name" class="text-xl sm:text-2xl font-semibold tracking-[-0.02em] text-white truncate">Loading...</h1>
+            <span id="prof-tier-badge" class="px-2 py-0.5 text-xs font-medium rounded bg-amber-500/10 text-amber-300 border border-amber-500/25">Bug Hunter I</span>
+            <span id="prof-public-badge" class="hidden px-2 py-0.5 text-xs font-medium rounded bg-white/[0.06] text-zinc-300 border border-white/[0.1]">Public Profile</span>
           </div>
-          <p id="prof-bio" class="text-xs text-gray-400 mt-1 max-w-xl">Loading profile data...</p>
+          <p id="prof-bio" class="text-sm font-normal text-zinc-400 leading-relaxed mt-1 max-w-xl">Loading profile data...</p>
         </div>
       </div>
 
       <!-- Share & Embed Controls (shown on user's own signed-in profile) -->
       <div id="prof-share-actions" class="hidden flex flex-wrap items-center gap-2 shrink-0">
         <button id="btn-copy-public-link" type="button" onclick="copyPublicProfileLink()"
-          class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-hover border border-surface-border text-xs font-medium text-gray-200 hover:text-white transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
-          <span>🔗</span><span>Copy Public Link</span>
+          class="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-xs font-medium text-zinc-200 hover:text-white transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+          <span>Copy Public Link</span>
         </button>
         <button id="btn-copy-github-badge" type="button" onclick="copyGitHubBadgeMarkdown()"
-          class="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-medium text-emerald-300 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
-          <span>🏷️</span><span>Copy GitHub Badge</span>
+          class="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-xs font-medium text-zinc-200 hover:text-white transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+          <span>Copy GitHub Badge</span>
         </button>
       </div>
     </div>
 
     <!-- STATS ROW (dynamic) -->
-    <div id="prof-stats-row" class="grid grid-cols-2 md:grid-cols-5 gap-3">
-      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs"><div class="text-[10px] uppercase font-mono text-gray-500">Arcade Score</div><div id="prof-score" class="text-xl font-bold text-emerald-400 mt-1">0</div></div>
-      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs"><div class="text-[10px] uppercase font-mono text-gray-500">Total Solved</div><div id="prof-solves" class="text-xl font-bold text-white mt-1">0</div></div>
-      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs"><div class="text-[10px] uppercase font-mono text-gray-500">Active Streak</div><div id="prof-streak" class="text-xl font-bold text-amber-400 mt-1">0</div></div>
-      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs"><div class="text-[10px] uppercase font-mono text-gray-500">Preferred Language</div><div id="prof-lang" class="text-xl font-bold text-white mt-1">Python</div></div>
-      <div class="bg-surface border border-surface-border rounded-xl p-4 text-xs"><div class="text-[10px] uppercase font-mono text-gray-500">Member Since</div><div id="prof-joined" class="text-xl font-bold text-white mt-1">-</div></div>
+    <div id="prof-stats-row" class="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-4 text-xs"><div class="text-xs font-medium text-zinc-400">Arcade Score</div><div id="prof-score" class="text-xl font-semibold tabular-nums text-emerald-400 mt-1">0</div></div>
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-4 text-xs"><div class="text-xs font-medium text-zinc-400">Total Solved</div><div id="prof-solves" class="text-xl font-semibold tabular-nums text-white mt-1">0</div></div>
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-4 text-xs"><div class="text-xs font-medium text-zinc-400">Active Streak</div><div id="prof-streak" class="text-xl font-semibold tabular-nums text-amber-400 mt-1">0</div></div>
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-4 text-xs"><div class="text-xs font-medium text-zinc-400">Preferred Language</div><div id="prof-lang" class="text-xl font-semibold text-white mt-1">Python</div></div>
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-4 text-xs"><div class="text-xs font-medium text-zinc-400">Member Since</div><div id="prof-joined" class="text-xl font-semibold tabular-nums text-white mt-1">-</div></div>
     </div>
 
     <!-- DEBUGGING ACTIVITY HEATMAP (53x7 Contribution Grid) -->
-    <section class="bg-surface border border-surface-border rounded-xl p-5 shadow-xl space-y-4">
+    <section class="bg-surface border border-white/[0.07] rounded-xl p-6 space-y-4">
       <!-- Card Header -->
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
-          <h2 id="heatmap-headline" class="text-sm sm:text-base font-bold text-white">0 bugs solved in the last year</h2>
-          <p class="text-[11px] text-gray-400 mt-0.5">Daily verified patch cadence in your local timezone</p>
+          <h2 id="heatmap-headline" class="text-base font-semibold tracking-[-0.02em] text-white">0 bugs solved in the last year</h2>
+          <p class="text-xs text-zinc-400 mt-0.5">Daily verified patch cadence in your local timezone</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 sm:gap-4 text-xs">
-          <div class="flex items-center gap-3 font-mono text-[11px] text-gray-400 bg-surface-container/60 border border-surface-border rounded-lg px-3 py-1.5">
-            <span>Active Days: <strong id="heatmap-active-days" class="text-white">0</strong></span>
-            <span class="text-surface-border">|</span>
-            <span>Max Streak: <strong id="heatmap-max-streak" class="text-white">0</strong></span>
-            <span class="text-surface-border">|</span>
-            <span>Current Streak: <strong id="heatmap-current-streak" class="text-emerald-400">0</strong></span>
+          <div class="flex items-center gap-3 text-xs text-zinc-400 bg-white/[0.03] border border-white/[0.07] rounded-lg px-3 py-1.5 tabular-nums">
+            <span>Active Days: <strong id="heatmap-active-days" class="font-semibold text-white">0</strong></span>
+            <span class="text-white/10">|</span>
+            <span>Max Streak: <strong id="heatmap-max-streak" class="font-semibold text-white">0</strong></span>
+            <span class="text-white/10">|</span>
+            <span>Current Streak: <strong id="heatmap-current-streak" class="font-semibold text-emerald-400">0</strong></span>
           </div>
 
           <select id="heatmap-year-select" onchange="onHeatmapYearChange(this.value)" aria-label="Select activity year"
-            class="bg-surface-container border border-surface-border text-gray-200 text-xs rounded-lg px-2.5 py-1.5 font-mono focus:outline-none focus:border-accent cursor-pointer">
+            class="bg-surface border border-white/[0.08] text-zinc-200 text-xs rounded-lg px-2.5 py-1.5 tabular-nums focus:outline-none focus:border-white/25 cursor-pointer">
             <option value="last365">Last 365 Days</option>
           </select>
         </div>
@@ -113,12 +120,12 @@
           <!-- Month Labels Row -->
           <div class="flex items-center mb-1.5">
             <div class="w-8 shrink-0"></div>
-            <div id="heatmap-months" class="grid grid-flow-col gap-[3px] text-[10px] font-mono text-gray-400"></div>
+            <div id="heatmap-months" class="grid grid-flow-col gap-[3px] text-[11px] text-zinc-400"></div>
           </div>
 
           <!-- Weekday Labels + 53x7 Squares -->
           <div class="flex items-start">
-            <div class="w-8 shrink-0 grid grid-rows-7 gap-[3px] text-[10px] font-mono text-gray-500 pr-2 select-none leading-[11px] sm:leading-[12px]">
+            <div class="w-8 shrink-0 grid grid-rows-7 gap-[3px] text-[11px] text-zinc-500 pr-2 select-none leading-[11px] sm:leading-[12px]">
               <span class="h-[11px] sm:h-3"></span>
               <span class="h-[11px] sm:h-3 flex items-center">Mon</span>
               <span class="h-[11px] sm:h-3"></span>
@@ -133,9 +140,9 @@
       </div>
 
       <!-- Footer Legend -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-surface-border/60 text-[11px] text-gray-400">
-        <span class="font-mono text-gray-500">Based on verified LintIQ patch submissions</span>
-        <div class="flex items-center gap-1.5 font-mono text-[10px] text-gray-400">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-white/[0.06] text-xs text-zinc-400">
+        <span class="text-zinc-500">Based on verified LintIQ patch submissions</span>
+        <div class="flex items-center gap-1.5 text-[11px] text-zinc-400">
           <span>Less</span>
           <span class="w-[11px] h-[11px] rounded-[2px] border border-white/5 inline-block" style="background-color: #161b22;" title="0 solves"></span>
           <span class="w-[11px] h-[11px] rounded-[2px] border border-white/5 inline-block" style="background-color: #0e4429;" title="1 solve"></span>
@@ -148,31 +155,31 @@
     </section>
 
     <!-- RECENT PATCH ACTIVITY FEED (directly below heatmap) -->
-    <section class="bg-surface border border-surface-border rounded-xl p-5 shadow-xl">
+    <section class="bg-surface border border-white/[0.07] rounded-xl p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-sm font-bold text-white">Recent Patch Activity</h2>
-        <a href="problem-directory.html" class="text-[11px] font-mono text-emerald-400 hover:underline">Browse Catalog →</a>
+        <h2 class="text-base font-semibold tracking-[-0.02em] text-white">Recent Patch Activity</h2>
+        <a href="problem-directory.html" class="text-xs font-medium text-zinc-400 hover:text-white transition">Browse Catalog →</a>
       </div>
       <div id="prof-recent-patches" class="space-y-2 text-xs">
-        <div class="py-8 text-center text-gray-400 font-mono">Loading solve history...</div>
+        <div class="py-8 text-center text-zinc-400 text-xs">Loading solve history...</div>
       </div>
     </section>
 
     <!-- TELEMETRY & BREAKDOWN CHARTS (dynamic) -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-      <div class="bg-surface border border-surface-border rounded-xl p-5 shadow-xl">
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-6">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-sm font-bold text-white">7-Day Debugging Activity</h2>
-          <span class="text-[10px] font-mono text-gray-500 uppercase">Verified Solves</span>
+          <h2 class="text-base font-semibold tracking-[-0.02em] text-white">7-Day Debugging Activity</h2>
+          <span class="text-xs text-zinc-500">Verified Solves</span>
         </div>
         <div class="h-56 sm:h-64 lg:h-72 relative">
           <canvas id="prof-activity-chart"></canvas>
         </div>
       </div>
-      <div class="bg-surface border border-surface-border rounded-xl p-5 shadow-xl">
+      <div class="bg-surface border border-white/[0.07] rounded-xl p-6">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-sm font-bold text-white">Solved by Difficulty</h2>
-          <span id="prof-catalog-total" class="text-[10px] font-mono text-gray-500">Catalog</span>
+          <h2 class="text-base font-semibold tracking-[-0.02em] text-white">Solved by Difficulty</h2>
+          <span id="prof-catalog-total" class="text-xs text-zinc-500 tabular-nums">Catalog</span>
         </div>
         <div class="h-56 sm:h-64 lg:h-72 relative">
           <canvas id="prof-difficulty-chart"></canvas>
@@ -183,11 +190,11 @@
   </main>
 
   <!-- Floating Heatmap Tooltip -->
-  <div id="heatmap-tooltip" class="hidden fixed pointer-events-none z-50 px-2.5 py-1.5 rounded-md bg-[#0d1117] border border-surface-border shadow-xl text-[11px] font-mono text-white whitespace-nowrap"></div>
+  <div id="heatmap-tooltip" class="hidden fixed pointer-events-none z-50 px-2.5 py-1.5 rounded-md bg-[#090b0f] border border-white/[0.1] shadow-xl text-xs text-white whitespace-nowrap tabular-nums"></div>
 
-  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0 mt-auto">
-    <div>LintIQ IDE • ARCADE V1.6</div>
-    <div class="font-mono">Profile Stats</div>
+  <footer class="h-8 bg-surface-dim border-t border-white/[0.06] px-6 flex items-center justify-between text-xs text-zinc-500 shrink-0 mt-auto">
+    <div>LintIQ</div>
+    <div>Profile Stats</div>
   </footer>
 
   <!-- INJECTED COMPONENTS -->

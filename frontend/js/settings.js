@@ -99,8 +99,8 @@ function updateProfileCardUI(profile, cloudStats = null) {
 
   if (el("settings-footer-account")) {
     el("settings-footer-account").textContent = currentUser?.id
-      ? `Account: ${currentUser.id.slice(0, 8)}… • Arcade Engine: LintIQ V1.6`
-      : "Session: Local Guest • Sign in to sync cloud progress";
+      ? `Account: ${currentUser.id.slice(0, 8)}… · LintIQ`
+      : "Session: Local Guest · Sign in to sync cloud progress";
   }
 
   const headerAvatar = el("header-user-avatar");
@@ -226,13 +226,13 @@ function initEditorSettingsPage() {
 
   const sessionBadge = document.getElementById("editor-session-badge");
   if (sessionBadge) {
-    sessionBadge.textContent = currentUser ? "SYNCED ACCOUNT" : "LOCAL SESSION";
+    sessionBadge.textContent = currentUser ? "Synced account" : "Local session";
   }
   const footerMeta = document.getElementById("settings-footer-account");
   if (footerMeta) {
     footerMeta.textContent = currentUser?.id
-      ? `Account: ${currentUser.id.slice(0, 8)}… • Arcade Engine: LintIQ V1.6`
-      : "Session: Local Guest • Preferences saved locally";
+      ? `Account: ${currentUser.id.slice(0, 8)}… · LintIQ`
+      : "Session: Local Guest · Preferences saved locally";
   }
 }
 
@@ -317,7 +317,7 @@ async function initDashboardSettingsPage() {
     loggedOutEl?.classList.remove("hidden");
     authContentEl?.classList.add("hidden");
     authContentEl?.classList.remove("flex");
-    if (sessionBadge) sessionBadge.textContent = "GUEST • SIGN IN REQUIRED";
+    if (sessionBadge) sessionBadge.textContent = "Guest — Sign in required";
     if (footerMeta) footerMeta.textContent = "Sign in to view account telemetry";
     if (settingsChartInstance) {
       settingsChartInstance.destroy();
@@ -329,8 +329,8 @@ async function initDashboardSettingsPage() {
   loggedOutEl?.classList.add("hidden");
   authContentEl?.classList.remove("hidden");
   authContentEl?.classList.add("flex");
-  if (sessionBadge) sessionBadge.textContent = "SESSION: LIVE TELEMETRY";
-  if (footerMeta) footerMeta.textContent = `Account: ${currentUser.id.slice(0, 8)}… • Arcade Engine: LintIQ V1.6`;
+  if (sessionBadge) sessionBadge.textContent = "Live telemetry";
+  if (footerMeta) footerMeta.textContent = `Account: ${currentUser.id.slice(0, 8)}… · LintIQ`;
 
   const displayName = getDisplayUsername(currentUser);
   const acctNameEl = document.getElementById("dashboard-account-name");
@@ -433,6 +433,10 @@ async function bootstrapSettingsPage() {
   await initAuth();
 
   const runPageInit = () => {
+    const pageLogoutBtn = document.getElementById("settings-page-logout-btn");
+    if (pageLogoutBtn) {
+      pageLogoutBtn.classList.toggle("hidden", !currentUser);
+    }
     if (pageType === "profile") initProfileSettingsPage();
     else if (pageType === "editor") initEditorSettingsPage();
     else if (pageType === "dashboard") initDashboardSettingsPage();

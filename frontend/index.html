@@ -1,285 +1,697 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LintIQ – Debug Real Code. Not Just Algorithms.</title>
+  <script>
+    (function () {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var hash = window.location.hash || "";
+        var hasOAuthCallback =
+          params.has("code") ||
+          params.has("error") ||
+          /(?:^|[#&])(access_token|refresh_token|error)=/i.test(hash);
+        if (!hasOAuthCallback && !params.has("mode") && !params.has("id") && !params.has("ai")) {
+          window.__lintiqRedirectingToMode = true;
+          document.documentElement.style.visibility = "hidden";
+          window.location.replace("mode-selector.html");
+        }
+      } catch (_) {}
+    })();
+  </script>
   <meta name="description" content="LintIQ is an interactive, gamified AI code review and bug-hunting arcade for developers." />
 
-  <!-- Open Graph & Twitter / X Preview -->
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://thelintiq.com/" />
-  <meta property="og:title" content="LintIQ – Debug Real Code. Not Just Algorithms." />
-  <meta property="og:description" content="Hunt real bugs, pass hidden assertions, and earn Surgical Patch scores across 1,600+ debugging challenges." />
-  <meta property="og:image" content="https://thelintiq.com/assets/og-card.png" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="LintIQ – Debug Real Code. Not Just Algorithms." />
-  <meta name="twitter:description" content="Hunt real bugs, pass hidden assertions, and earn Surgical Patch scores across 1,600+ debugging challenges." />
-  <meta name="twitter:image" content="https://thelintiq.com/assets/og-card.png" />
+    <!-- Open Graph & Twitter / X Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://thelintiq.com/" />
+    <meta
+      property="og:title"
+      content="LintIQ – Debug Real Code. Not Just Algorithms."
+    />
+    <meta
+      property="og:description"
+      content="Hunt real bugs, pass hidden assertions, and earn Surgical Patch scores across 1,600+ debugging challenges."
+    />
+    <meta
+      property="og:image"
+      content="https://thelintiq.com/assets/og-card.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="LintIQ – Debug Real Code. Not Just Algorithms."
+    />
+    <meta
+      name="twitter:description"
+      content="Hunt real bugs, pass hidden assertions, and earn Surgical Patch scores across 1,600+ debugging challenges."
+    />
+    <meta
+      name="twitter:image"
+      content="https://thelintiq.com/assets/og-card.png"
+    />
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Fonts: Geist & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
 
-  <!-- Shared Tailwind Config (single source of truth) -->
-  <script src="js/tailwind-config.js"></script>
+    <!-- Shared Tailwind Config (single source of truth) -->
+    <script src="js/tailwind-config.js"></script>
 
-  <!-- Supabase JS Client CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase JS Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Chart.js CDN (MUST load BEFORE Monaco's AMD loader) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js CDN (MUST load BEFORE Monaco's AMD loader) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Monaco Editor Loader -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 
-  <!-- External Stylesheet -->
-  <link rel="stylesheet" href="style.css" />
+    <!-- External Stylesheet -->
+    <link rel="stylesheet" href="style.css" />
 
-  <style>
-    html, body {
-      background-color: #0b0e15;
-      color: #e2e8f0;
-      font-family: 'Geist', sans-serif;
-    }
-    /* Zero-scroll locked workspace on desktop; natural scroll on mobile/tablet */
-    @media (min-width: 1024px) {
-      html, body.lintiq-shell { height: 100dvh; overflow: hidden; }
-      main.lintiq-main { min-height: 0; overflow: hidden; }
-    }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0f131c; }
-    ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #333c52; }
-  </style>
-</head>
-<body class="lintiq-shell flex flex-col min-h-[100dvh] w-full overflow-x-hidden antialiased">
+    <style>
+      html,
+      body {
+        background-color: #090b0f;
+        color: #e2e8f0;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      }
+      /* Zero-scroll locked workspace on desktop; natural scroll on mobile/tablet */
+      @media (min-width: 1024px) {
+        html,
+        body.lintiq-shell {
+          height: 100dvh;
+          overflow: hidden;
+        }
+        main.lintiq-main {
+          min-height: 0;
+          overflow: hidden;
+        }
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0f131c;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #232938;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #333c52;
+      }
+    </style>
+  </head>
+  <body
+    class="lintiq-shell flex flex-col min-h-[100dvh] w-full overflow-x-hidden antialiased"
+  >
+    <!-- SHARED NAVBAR (injected by navbar.js) -->
+    <nav id="lintiq-navbar" data-page="workspace"></nav>
 
-  <!-- SHARED NAVBAR (injected by navbar.js) -->
-  <nav id="lintiq-navbar" data-page="workspace"></nav>
-
-  <!-- MAIN SPLIT WORKSPACE (ZERO-SCROLL ON DESKTOP) -->
-  <main class="lintiq-main flex-1 flex flex-col lg:flex-row p-2 gap-2 bg-surface-dim min-h-0">
-
-    <!-- LEFT PANEL: PROBLEM DESCRIPTION & SCRATCHPAD -->
-    <section id="workspace-left-pane" class="w-full lg:w-[46%] xl:w-1/2 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl min-h-[360px] lg:min-h-0">
-      <!-- Left Panel Tabs -->
-      <div class="h-10 bg-surface-container border-b border-surface-border flex items-center justify-between px-2 shrink-0 select-none">
-        <div class="flex items-center gap-1">
-          <button id="left-tab-btn-desc" onclick="switchLeftTab('desc')" class="px-3 py-1.5 text-xs font-semibold text-white bg-surface rounded-t-md border-t-2 border-accent flex items-center gap-1.5 cursor-pointer">
-            <svg class="w-3.5 h-3.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            <span>Description</span>
-          </button>
-          <button id="left-tab-btn-notes" onclick="switchLeftTab('notes')" class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-t-md border-t-2 border-transparent transition flex items-center gap-1.5 cursor-pointer">
-            <span>📝 Scratchpad</span>
-          </button>
-        </div>
-        <!-- Mobile-only compact Streak -->
-        <div class="flex lg:hidden items-center gap-2 text-[11px] font-mono text-gray-400 pr-1">
-          <span class="text-amber-400">⚡<span id="mobile-streak-mirror">0</span></span>
-        </div>
-      </div>
-
-      <!-- TAB CONTENT 1: Description -->
-      <div id="left-tab-panel-desc" class="flex-1 overflow-y-auto p-4 sm:p-5 select-text space-y-4 min-h-0">
-        <div class="flex items-start justify-between gap-2 flex-wrap">
-          <div class="flex items-center gap-2 flex-wrap pt-0.5">
-            <span id="problem-difficulty" class="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-surface-card text-gray-300 border border-surface-border rounded">Loading...</span>
-            <span id="problem-category" class="px-2 py-0.5 text-[11px] font-mono text-sky-300 bg-sky-500/10 border border-sky-500/25 rounded">Track</span>
-            <span id="daily-bug-badge" class="hidden px-2 py-0.5 text-[11px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35 rounded whitespace-nowrap">🔥 Bug of the Day • 2x XP</span>
-          </div>
-          <div class="flex flex-col items-end gap-1 shrink-0">
-            <button id="copy-challenge-link-btn" type="button" onclick="copyChallengeLink()" title="Copy challenge link" aria-label="Copy challenge link" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container hover:bg-surface-hover border border-surface-border hover:border-emerald-500/40 text-[11px] font-mono text-gray-300 hover:text-emerald-300 transition cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-not-allowed">
-              <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    <!-- MAIN SPLIT WORKSPACE (ZERO-SCROLL ON DESKTOP) -->
+    <main
+      class="lintiq-main flex-1 flex flex-col lg:flex-row p-2 gap-2 bg-surface-dim min-h-0"
+    >
+      <!-- LEFT PANEL: PROBLEM DESCRIPTION & SCRATCHPAD -->
+      <section
+        id="workspace-left-pane"
+        class="w-full lg:w-[46%] xl:w-1/2 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl min-h-[360px] lg:min-h-0"
+      >
+        <!-- Left Panel Tabs -->
+        <div
+          class="h-10 bg-surface-container border-b border-surface-border flex items-center justify-between px-2 shrink-0 select-none"
+        >
+          <div class="flex items-center gap-1">
+            <button
+              id="left-tab-btn-desc"
+              onclick="switchLeftTab('desc')"
+              class="px-3 py-1.5 text-xs font-semibold text-white bg-surface rounded-t-md border-t-2 border-accent flex items-center gap-1.5 cursor-pointer"
+            >
+              <svg
+                class="w-3.5 h-3.5 text-accent"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
               </svg>
-              <span>Copy Link</span>
+              <span>Description</span>
             </button>
-            <span id="problem-id" class="text-xs text-gray-500 font-mono font-semibold">#0</span>
-          </div>
-        </div>
-        <h1 id="problem-title" class="text-lg sm:text-xl font-bold text-white tracking-tight break-words">Connecting to challenge bank...</h1>
-        <div id="problem-tags" class="flex flex-wrap gap-1.5"></div>
-        <div class="text-sm text-gray-300 leading-relaxed"><p id="problem-desc" class="whitespace-pre-line break-words"></p></div>
-        <div id="hint-box" class="hidden p-3.5 bg-amber-500/10 border border-amber-500/35 rounded-lg text-xs text-amber-200 leading-relaxed break-words">
-          <div class="font-bold text-amber-300 mb-1 flex items-center gap-1.5"><span>💡 AI Diagnostic Hint</span></div>
-          <span id="hint-text"></span>
-        </div>
-      </div>
-
-      <!-- TAB CONTENT 2: Personal Scratchpad -->
-      <div id="left-tab-panel-notes" class="hidden flex-1 flex flex-col p-4 min-h-0">
-        <div class="flex items-center justify-between mb-2 text-xs text-gray-400">
-          <span>Personal Debugging Notes (auto-saved locally)</span>
-          <button onclick="clearWorkspaceNotes()" class="text-[11px] text-gray-500 hover:text-rose-400 transition cursor-pointer">Clear</button>
-        </div>
-        <textarea id="workspace-notes-input" placeholder="Jot down edge cases, variable traces, or complexity notes here..." class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"></textarea>
-      </div>
-
-      <!-- Left Panel Footer -->
-      <div class="h-10 bg-surface-container border-t border-surface-border px-4 flex items-center justify-between gap-2 shrink-0 text-xs text-gray-400 select-none">
-        <span id="test-case-count" class="font-mono text-emerald-400 font-medium whitespace-nowrap">🧪 0 Test Assertions</span>
-        <div class="flex items-center gap-2 shrink-0">
-          <button id="ai-generate-btn" onclick="generateAIChallenge()" class="flex items-center gap-1.5 bg-surface-card border border-emerald-500/30 hover:bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-md transition text-xs font-semibold cursor-pointer whitespace-nowrap">
-            <span>✨ Generate AI Bug</span>
-          </button>
-          <button id="analyze-patch-btn" type="button" onclick="openPatchReviewModal()" disabled title="Submit a passing patch to unlock Senior Engineer Review" class="flex items-center gap-1.5 bg-surface-card border border-surface-border text-gray-400 opacity-45 cursor-not-allowed px-2.5 py-1 rounded-md transition text-xs font-semibold whitespace-nowrap">
-            <span>🔍 Analyze My Patch</span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- RIGHT PANEL: MONACO EDITOR & TESTCASE / SANDBOX TRAY -->
-    <section id="workspace-right-pane" class="w-full lg:w-[54%] xl:w-1/2 flex flex-col gap-2 min-h-0 min-w-0">
-      <!-- TOP CARD: MONACO CODE EDITOR -->
-      <div class="flex-1 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl min-h-[340px] lg:min-h-0">
-        <div class="h-10 bg-surface-container border-b border-surface-border px-3 flex items-center justify-between gap-2 shrink-0 select-none">
-          <div class="flex items-center gap-2 min-w-0">
-            <span id="editor-filename" class="text-xs font-mono font-semibold text-gray-100 truncate">solution.py</span>
-            <span class="hidden sm:inline text-[10px] bg-surface border border-surface-border text-gray-400 px-1.5 py-0.5 rounded font-mono">Editable Patch</span>
-          </div>
-          <div class="flex items-center gap-1.5 shrink-0">
-            <select id="language-select" onchange="switchLanguage(this.value)" class="bg-surface border border-surface-border text-emerald-400 font-mono text-xs rounded px-2 py-1 outline-none focus:border-accent cursor-pointer">
-              <option value="python">Python 3.11</option>
-              <option value="cpp">C++20</option>
-              <option value="javascript">JavaScript (Node)</option>
-            </select>
-            <button onclick="formatWorkspaceCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs font-mono transition cursor-pointer" title="Format Code (Shift+Alt+F)">{ }</button>
-            <button onclick="resetStarterCode()" class="px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Reset Starter Code">↺</button>
-            <button id="btn-fullscreen-editor" onclick="toggleEditorFullscreen()" class="hidden lg:inline-flex px-1.5 py-1 hover:text-white text-gray-400 hover:bg-surface-hover rounded text-xs transition cursor-pointer" title="Toggle Focus Mode">⛶</button>
-            <button id="share-patch-btn" type="button" onclick="copySharePatchSummary()" disabled class="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-medium bg-surface border border-surface-border text-gray-400 opacity-45 cursor-not-allowed transition whitespace-nowrap" title="Solve this bug to unlock Share Patch">
-              <span>🔗</span><span>Share Patch</span>
+            <button
+              id="left-tab-btn-notes"
+              onclick="switchLeftTab('notes')"
+              class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 rounded-t-md border-t-2 border-transparent transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>📝 Scratchpad</span>
             </button>
           </div>
+          <!-- Mobile-only compact Streak -->
+          <div
+            class="flex lg:hidden items-center gap-2 text-[11px] font-mono text-gray-400 pr-1"
+          >
+            <span class="text-amber-400"
+              >⚡<span id="mobile-streak-mirror">0</span></span
+            >
+          </div>
         </div>
-        <div id="editor-container" class="flex-1 w-full min-h-[280px] lg:min-h-0 overflow-hidden bg-[#0a0d14]"></div>
-      </div>
 
-      <!-- BOTTOM CARD: TESTCASE & SANDBOX OUTPUT TRAY -->
-      <div id="workspace-tray" class="h-52 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl shrink-0 transition-all duration-150">
-        <div class="h-9 bg-surface-container border-b border-surface-border px-3 flex items-center justify-between gap-2 shrink-0 select-none">
-          <div class="flex items-center gap-3">
-            <button id="tray-tab-btn-testcase" onclick="switchTrayTab('testcase')" class="text-xs font-semibold text-white border-b-2 border-accent py-2 flex items-center gap-1.5 cursor-pointer">
-              <span>☑ Testcase</span>
-              <span id="stdin-mode-badge" class="text-[10px] font-mono bg-surface border border-surface-border text-sky-400 px-1.5 py-0.2 rounded">Sample #1</span>
-            </button>
-            <button id="tray-tab-btn-output" onclick="switchTrayTab('output')" class="text-xs text-gray-400 hover:text-gray-200 border-b-2 border-transparent py-2 flex items-center gap-1.5 transition cursor-pointer">
-              <span>💻 Sandbox Output</span>
-              <span id="status-tag" class="text-[10px] font-mono bg-surface-border text-gray-300 px-1.5 py-0.2 rounded">Idle</span>
-            </button>
-            <button type="button" id="btn-toggle-stdin" onclick="toggleCustomInput()" class="hidden"><span id="stdin-caret">▾</span></button>
-          </div>
-          <div class="flex items-center gap-2 text-xs">
-            <button type="button" onclick="switchTrayTab('testcase'); fillSampleInput();" class="text-emerald-400 hover:underline cursor-pointer" title="Load first sample test input">Use Sample</button>
-            <span class="text-gray-600">•</span>
-            <button type="button" onclick="switchTrayTab('testcase'); clearCustomInput();" class="text-gray-400 hover:text-rose-400 transition cursor-pointer" title="Clear custom input">Clear</button>
-            <button type="button" id="btn-collapse-tray" onclick="toggleTrayCollapse()" class="ml-1 px-1.5 py-0.5 text-gray-400 hover:text-white hover:bg-surface-hover rounded transition cursor-pointer" title="Collapse / Expand Console">▾</button>
-          </div>
-        </div>
-        <div id="workspace-tray-body" class="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div id="tray-panel-testcase" class="flex-1 p-3 overflow-y-auto min-h-0">
-            <div id="custom-stdin-wrapper" class="h-full flex flex-col gap-1.5">
-              <label for="custom-stdin" class="text-[10px] uppercase font-mono tracking-wider text-gray-400">Custom Input (stdin) – Safe Test Run does not affect your streak</label>
-              <textarea id="custom-stdin" rows="3" placeholder="Type custom stdin for Test Run (leave empty or click 'Use Sample')..." class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-2.5 font-mono text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"></textarea>
+        <!-- TAB CONTENT 1: Description -->
+        <div
+          id="left-tab-panel-desc"
+          class="flex-1 overflow-y-auto p-5 sm:p-6 select-text space-y-4 min-h-0"
+        >
+          <div class="flex items-start justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap pt-0.5">
+              <span
+                id="problem-difficulty"
+                class="px-2 py-0.5 text-xs font-medium bg-surface-card text-zinc-300 border border-white/[0.08] rounded"
+                >Loading...</span
+              >
+              <span
+                id="problem-category"
+                class="px-2 py-0.5 text-xs font-medium text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded"
+                >Track</span
+              >
+              <span
+                id="daily-bug-badge"
+                class="hidden px-2 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/25 rounded whitespace-nowrap"
+                >Bug of the Day · 2x XP</span
+              >
+            </div>
+            <div class="flex flex-col items-end gap-1 shrink-0">
+              <button
+                id="copy-challenge-link-btn"
+                type="button"
+                onclick="copyChallengeLink()"
+                title="Copy challenge link"
+                aria-label="Copy challenge link"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-not-allowed"
+              >
+                <svg
+                  class="w-3 h-3 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                  />
+                </svg>
+                <span>Copy Link</span>
+              </button>
             </div>
           </div>
-          <div id="tray-panel-output" class="hidden flex-1 p-3 overflow-y-auto min-h-0 bg-[#090d13]">
-            <pre id="console-output" class="font-mono text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed">Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.</pre>
+          <h1
+            id="problem-title"
+            class="text-lg sm:text-xl font-semibold text-white tracking-[-0.02em] break-words"
+          >
+            Connecting to challenge bank...
+          </h1>
+          <div id="problem-tags" class="flex flex-wrap gap-1.5"></div>
+          <div class="text-sm font-normal text-zinc-300 leading-relaxed">
+            <p id="problem-desc" class="whitespace-pre-line break-words"></p>
           </div>
         </div>
-        <div class="h-11 bg-surface-container border-t border-surface-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 select-none">
-          <button onclick="resetStarterCode()" class="px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white border border-surface-border rounded-md hover:bg-surface-hover transition cursor-pointer whitespace-nowrap">↺ Reset</button>
+
+        <!-- TAB CONTENT 2: Scratchpad -->
+        <div
+          id="left-tab-panel-notes"
+          class="hidden flex-1 flex flex-col p-4 min-h-0"
+        >
+          <div class="flex items-center justify-between mb-2 text-xs text-gray-400">
+            <span>Personal Debugging Notes (auto-saved locally)</span>
+            <button
+              onclick="clearWorkspaceNotes()"
+              class="text-[11px] text-gray-500 hover:text-rose-400 transition cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+          <textarea
+            id="workspace-notes-input"
+            placeholder="Jot down edge cases, variable traces, or complexity notes here..."
+            class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"
+          ></textarea>
+        </div>
+
+        <!-- Left Panel Footer -->
+        <div
+          class="min-h-[2.5rem] py-1.5 sm:py-0 sm:h-10 bg-surface-container border-t border-white/[0.07] px-3 sm:px-4 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 shrink-0 text-xs text-zinc-400 select-none"
+        >
+          <span
+            id="test-case-count"
+            class="text-xs font-medium text-zinc-300 tabular-nums whitespace-nowrap"
+            >0 Test Assertions</span
+          >
+          <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            <button
+              id="ai-generate-btn"
+              onclick="generateAIChallenge()"
+              class="flex items-center gap-1.5 bg-white/[0.05] border border-emerald-500/30 hover:bg-emerald-500/15 text-emerald-300 px-2 sm:px-2.5 py-1 rounded-md transition text-[11px] sm:text-xs font-medium cursor-pointer whitespace-nowrap"
+            >
+              <span>✨ Generate AI Bug</span>
+            </button>
+            <button
+              id="analyze-patch-btn"
+              type="button"
+              onclick="openPatchReviewModal()"
+              disabled
+              title="Submit a passing patch to unlock Senior Engineer Review"
+              class="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.08] text-zinc-400 opacity-50 cursor-not-allowed px-2 sm:px-2.5 py-1 rounded-md transition text-[11px] sm:text-xs font-medium whitespace-nowrap"
+            >
+              <span>🔍 Analyze My Patch</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT PANEL: MONACO EDITOR & TESTCASE / SANDBOX TRAY -->
+      <section
+        id="workspace-right-pane"
+        class="w-full lg:w-[54%] xl:w-1/2 flex flex-col gap-2 min-h-0 min-w-0"
+      >
+        <!-- TOP CARD: MONACO CODE EDITOR -->
+        <div
+          class="flex-1 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl min-h-[340px] lg:min-h-0"
+        >
+          <div
+            class="h-10 bg-surface-container border-b border-white/[0.07] px-3 flex items-center justify-between gap-2 flex-nowrap min-w-0 shrink-0 select-none"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span
+                id="editor-filename"
+                class="text-xs font-mono font-semibold text-gray-100 whitespace-nowrap shrink-0"
+                >solution.py</span
+              >
+              <span
+                id="patch-budget-pill"
+                title="Minimal patch budget: edits vs. starter code"
+                class="inline-flex items-center text-[11px] bg-white/[0.04] border border-white/[0.08] text-zinc-400 px-2 py-0.5 rounded font-medium tabular-nums whitespace-nowrap shrink-0"
+                >Patch: 0/3 lines</span
+              >
+              <span
+                id="lang-status-pill"
+                class="hidden inline-flex items-center gap-1 text-[11px] bg-sky-500/10 border border-sky-500/25 text-sky-300 px-2 py-0.5 rounded font-medium whitespace-nowrap shrink-0"
+              ></span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <select
+                id="language-select"
+                onchange="switchLanguage(this.value)"
+                aria-label="Editor Language"
+                class="bg-[#121620] hover:border-white/20 border border-white/[0.08] text-emerald-400 font-medium text-xs rounded px-2 py-1 outline-none focus:border-white/25 cursor-pointer transition shrink-0"
+              >
+                <option value="python" class="bg-[#121620] text-zinc-100" selected>Python 3.11</option>
+                <option value="java" class="bg-[#121620] text-zinc-100">Java 21</option>
+                <option value="cpp" class="bg-[#121620] text-zinc-100">C++20</option>
+                <option value="javascript" class="bg-[#121620] text-zinc-100">JavaScript</option>
+                <option value="typescript" class="bg-[#121620] text-zinc-100">TypeScript</option>
+                <option value="go" class="bg-[#121620] text-zinc-100">Go 1.22</option>
+              </select>
+              <button
+                onclick="formatWorkspaceCode()"
+                class="px-1.5 py-1 hover:text-white text-zinc-400 hover:bg-white/[0.05] rounded text-xs font-mono transition cursor-pointer shrink-0"
+                title="Format Code (Shift+Alt+F)"
+              >
+                { }
+              </button>
+              <button
+                onclick="resetStarterCode()"
+                class="px-1.5 py-1 hover:text-white text-zinc-400 hover:bg-white/[0.05] rounded text-xs transition cursor-pointer shrink-0"
+                title="Reset Starter Code"
+              >
+                ↺
+              </button>
+              <button
+                id="btn-fullscreen-editor"
+                onclick="toggleEditorFullscreen()"
+                class="hidden lg:inline-flex px-1.5 py-1 hover:text-white text-zinc-400 hover:bg-white/[0.05] rounded text-xs transition cursor-pointer shrink-0"
+                title="Toggle Focus Mode"
+              >
+                ⛶
+              </button>
+              <button
+                id="share-patch-btn"
+                type="button"
+                onclick="copySharePatchSummary()"
+                disabled
+                class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-surface border border-white/[0.08] text-zinc-400 opacity-50 cursor-not-allowed transition whitespace-nowrap shrink-0"
+                title="Solve this bug to unlock Share Patch"
+              >
+                <span>🔗</span><span>Share Patch</span>
+              </button>
+            </div>
+          </div>
+          <div
+            id="editor-container"
+            class="flex-1 w-full min-h-[280px] lg:min-h-0 overflow-hidden bg-[#0a0d14]"
+          ></div>
+        </div>
+
+        <!-- BOTTOM CARD: TESTCASE & SANDBOX OUTPUT TRAY -->
+        <div
+          id="workspace-tray"
+          class="h-52 flex flex-col bg-surface border border-surface-border rounded-lg overflow-hidden shadow-xl shrink-0 transition-all duration-150"
+        >
+          <div
+            class="h-9 bg-surface-container border-b border-surface-border px-3 flex items-center justify-between gap-2 shrink-0 select-none"
+          >
+            <div class="flex items-center gap-3">
+              <button
+                id="tray-tab-btn-testcase"
+                onclick="switchTrayTab('testcase')"
+                class="text-xs font-semibold text-white border-b-2 border-accent py-2 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>☑ Testcase</span>
+              </button>
+              <button
+                id="tray-tab-btn-output"
+                onclick="switchTrayTab('output')"
+                class="text-xs text-gray-400 hover:text-gray-200 border-b-2 border-transparent py-2 flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <span>💻 Sandbox Output</span>
+              </button>
+              <button
+                type="button"
+                id="btn-toggle-stdin"
+                onclick="toggleCustomInput()"
+                class="hidden"
+              >
+                <span id="stdin-caret">▾</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <button
+                type="button"
+                onclick="
+                  switchTrayTab('testcase');
+                  fillSampleInput();
+                "
+                class="text-emerald-400 hover:underline cursor-pointer"
+                title="Load first sample test input"
+              >
+                Use Sample
+              </button>
+              <span class="text-gray-600">•</span>
+              <button
+                type="button"
+                onclick="
+                  switchTrayTab('testcase');
+                  clearCustomInput();
+                "
+                class="text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                title="Clear custom input"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                id="btn-collapse-tray"
+                onclick="toggleTrayCollapse()"
+                class="ml-1 px-1.5 py-0.5 text-gray-400 hover:text-white hover:bg-surface-hover rounded transition cursor-pointer"
+                title="Collapse / Expand Console"
+              >
+                ▾
+              </button>
+            </div>
+          </div>
+          <div
+            id="workspace-tray-body"
+            class="flex-1 min-h-0 overflow-hidden flex flex-col"
+          >
+            <div
+              id="tray-panel-testcase"
+              class="flex-1 p-3 overflow-y-auto min-h-0"
+            >
+              <div
+                id="custom-stdin-wrapper"
+                class="h-full flex flex-col gap-1.5"
+              >
+                <label
+                  for="custom-stdin"
+                  class="text-[10px] uppercase font-mono tracking-wider text-gray-400"
+                  >Custom Input (stdin) – Safe Test Run does not affect your
+                  streak</label
+                >
+                <textarea
+                  id="custom-stdin"
+                  rows="3"
+                  placeholder="Type custom stdin for Test Run (leave empty or click 'Use Sample')..."
+                  class="flex-1 w-full bg-surface-card border border-surface-border rounded-lg p-2.5 font-mono text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent resize-none"
+                ></textarea>
+              </div>
+            </div>
+            <div
+              id="tray-panel-output"
+              class="hidden flex-1 p-3 overflow-y-auto min-h-0 bg-[#090d13]"
+            >
+              <pre
+                id="console-output"
+                class="font-mono text-xs text-gray-300 whitespace-pre-wrap break-words leading-relaxed"
+              >
+Click inside the code editor to start timing and solve the bug. Use ▶ Test Run anytime without risking your streak.</pre
+              >
+              <div id="console-action-bar" class="hidden mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  id="btn-console-reset-code"
+                  onclick="resetStarterCode()"
+                  class="inline-flex items-center gap-1 text-xs font-mono font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2 cursor-pointer"
+                >↺ Reset Code</button>
+              </div>
+            </div>
+          </div>
+          <div
+            class="h-11 bg-surface-container border-t border-surface-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 select-none"
+          >
+            <button
+              onclick="resetStarterCode()"
+              class="px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white border border-surface-border rounded-md hover:bg-surface-hover transition cursor-pointer whitespace-nowrap"
+            >
+              ↺ Reset
+            </button>
+            <div class="flex items-center gap-2">
+              <button
+                id="btn-test-run"
+                onclick="
+                  switchTrayTab('output');
+                  runTestCode();
+                "
+                title="Run code safely in cloud sandbox without affecting your streak (Ctrl + ')"
+                class="px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 rounded-md transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <span>▶</span><span>Test Run</span>
+              </button>
+              <button
+                id="btn-submit"
+                onclick="
+                  switchTrayTab('output');
+                  submitPatch();
+                "
+                title="Grade against all hidden tests (Ctrl + Enter)"
+                class="px-4 sm:px-5 py-1.5 text-xs font-semibold text-black bg-accent hover:bg-accent-hover rounded-md shadow-lg shadow-accent/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <span>Submit Patch</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- STATUS FOOTER -->
+    <footer
+      class="h-6 bg-surface-dim border-t border-white/[0.06] px-3 flex items-center justify-between text-[11px] text-zinc-500 shrink-0 select-none"
+    >
+      <div>LintIQ</div>
+      <div class="flex items-center gap-2.5">
+        <span class="hidden sm:inline"
+          ><kbd class="font-mono text-zinc-300">Ctrl+'</kbd> Test Run · <kbd class="font-mono text-zinc-300">Ctrl+Enter</kbd> Submit</span
+        >
+        <button
+          id="btn-shortcuts-help"
+          type="button"
+          onclick="openShortcutsModal()"
+          title="View keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts help"
+          class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-surface-container hover:bg-surface-hover border border-white/[0.08] text-[10px] text-zinc-300 hover:text-white transition cursor-pointer"
+        >
+          <span class="font-mono text-emerald-400 font-semibold">?</span
+          ><span>Shortcuts</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- INJECTED COMPONENTS -->
+    <div id="lintiq-problem-drawer"></div>
+    <div id="lintiq-settings-modal"></div>
+    <div id="lintiq-auth-modal"></div>
+
+    <!-- SENIOR ENGINEER CODE REVIEW MODAL -->
+    <div
+      id="patch-review-modal"
+      onclick="closePatchReviewModal()"
+      class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-modal-title"
+    >
+      <div
+        onclick="event.stopPropagation()"
+        class="bg-surface border border-surface-border w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl flex flex-col"
+      >
+        <div
+          class="px-5 py-4 bg-surface-dim border-b border-surface-border flex items-center justify-between gap-3 shrink-0"
+        >
+          <div class="flex items-center gap-2.5 min-w-0 flex-wrap">
+            <span class="text-cyan-400 text-base">🔍</span>
+            <h2
+              id="review-modal-title"
+              class="text-sm sm:text-base font-bold text-white tracking-wide"
+            >
+              Senior Engineer Code Review
+            </h2>
+            <span
+              id="review-problem-badge"
+              class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 truncate max-w-[260px]"
+              >Challenge</span
+            >
+          </div>
+          <button
+            type="button"
+            onclick="closePatchReviewModal()"
+            class="text-gray-400 hover:text-white hover:bg-surface-hover text-base px-2 py-0.5 rounded transition cursor-pointer shrink-0"
+            aria-label="Close Review Modal"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="p-5 space-y-4">
+          <div
+            id="review-loading"
+            class="hidden py-10 flex flex-col items-center justify-center gap-3 text-xs font-mono text-gray-300"
+          >
+            <div
+              class="w-6 h-6 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"
+            ></div>
+            <span>Analyzing your patch diff...</span>
+          </div>
+
+          <div
+            id="review-error"
+            class="hidden p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs font-mono text-rose-300"
+          ></div>
+
+          <div id="review-cards" class="hidden space-y-3.5"></div>
+        </div>
+
+        <div
+          class="px-5 py-3 bg-surface-dim border-t border-surface-border flex items-center justify-between text-[11px] font-mono text-gray-500 shrink-0"
+        >
+          <span>LintIQ Automated Staff Review</span>
+          <button
+            type="button"
+            onclick="closePatchReviewModal()"
+            class="px-3 py-1 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white transition cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KEYBOARD SHORTCUTS HELP MODAL -->
+    <div
+      id="shortcuts-modal"
+      onclick="closeShortcutsModal()"
+      class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shortcuts-modal-title"
+    >
+      <div
+        onclick="event.stopPropagation()"
+        class="bg-surface border border-surface-border w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        <div
+          class="px-5 py-3.5 bg-surface-dim border-b border-surface-border flex items-center justify-between gap-3 shrink-0"
+        >
           <div class="flex items-center gap-2">
-            <button id="btn-test-run" onclick="switchTrayTab('output'); runTestCode();" title="Run code safely in cloud sandbox without affecting your streak (Ctrl + ')" class="px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/35 rounded-md transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><span>▶</span><span>Test Run</span></button>
-            <button id="btn-submit" onclick="switchTrayTab('output'); submitPatch();" title="Grade against all hidden tests (Ctrl + Enter)" class="px-4 sm:px-5 py-1.5 text-xs font-semibold text-black bg-accent hover:bg-accent-hover rounded-md shadow-lg shadow-accent/20 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"><span>Submit Patch</span></button>
+            <span class="text-emerald-400 text-sm font-mono">⌨</span>
+            <h2
+              id="shortcuts-modal-title"
+              class="text-sm font-bold text-white tracking-wide"
+            >
+              Workspace Keyboard Shortcuts
+            </h2>
           </div>
+          <button
+            type="button"
+            onclick="closeShortcutsModal()"
+            class="text-gray-400 hover:text-white hover:bg-surface-hover text-base px-2 py-0.5 rounded transition cursor-pointer"
+            aria-label="Close Shortcuts Modal"
+          >
+            ×
+          </button>
         </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- STATUS FOOTER -->
-  <footer class="h-6 bg-surface-dim border-t border-surface-border/60 px-3 flex items-center justify-between text-[11px] text-gray-500 shrink-0 select-none">
-    <div>LintIQ IDE • ARCADE V1.6</div>
-    <div class="flex items-center gap-2.5 font-mono">
-      <span class="hidden sm:inline">Ctrl+' Test Run • Ctrl+Enter Submit</span>
-      <button id="btn-shortcuts-help" type="button" onclick="openShortcutsModal()" title="View keyboard shortcuts (?)" aria-label="Keyboard shortcuts help" class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-[10px] text-gray-300 hover:text-emerald-300 transition cursor-pointer">
-        <span class="text-emerald-400 font-bold">?</span><span>Shortcuts</span>
-      </button>
-    </div>
-  </footer>
-
-  <!-- INJECTED COMPONENTS -->
-  <div id="lintiq-problem-drawer"></div>
-  <div id="lintiq-settings-modal"></div>
-  <div id="lintiq-auth-modal"></div>
-
-  <!-- SENIOR ENGINEER CODE REVIEW MODAL -->
-  <div id="patch-review-modal" onclick="closePatchReviewModal()" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
-    <div onclick="event.stopPropagation()" class="bg-surface border border-surface-border w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl flex flex-col">
-      <div class="px-5 py-4 bg-surface-dim border-b border-surface-border flex items-center justify-between gap-3 shrink-0">
-        <div class="flex items-center gap-2.5 min-w-0 flex-wrap">
-          <span class="text-cyan-400 text-base">🔍</span>
-          <h2 id="review-modal-title" class="text-sm sm:text-base font-bold text-white tracking-wide">Senior Engineer Code Review</h2>
-          <span id="review-problem-badge" class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 truncate max-w-[260px]">Challenge</span>
+        <div id="shortcuts-list-rows" class="p-4 space-y-2.5 text-xs"></div>
+        <div
+          class="px-5 py-2.5 bg-surface-dim border-t border-surface-border flex items-center justify-between text-[11px] font-mono text-gray-500"
+        >
+          <span
+            >Press
+            <kbd
+              class="px-1.5 py-0.5 rounded bg-surface-container border border-surface-border text-gray-300"
+              >?</kbd
+            >
+            anytime outside inputs</span
+          >
+          <button
+            type="button"
+            onclick="closeShortcutsModal()"
+            class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white transition cursor-pointer"
+          >
+            Close
+          </button>
         </div>
-        <button type="button" onclick="closePatchReviewModal()" class="text-gray-400 hover:text-white hover:bg-surface-hover text-base px-2 py-0.5 rounded transition cursor-pointer shrink-0" aria-label="Close Review Modal">×</button>
-      </div>
-
-      <div class="p-5 space-y-4">
-        <div id="review-loading" class="hidden py-10 flex flex-col items-center justify-center gap-3 text-xs font-mono text-gray-300">
-          <div class="w-6 h-6 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>
-          <span>Analyzing your patch diff...</span>
-        </div>
-
-        <div id="review-error" class="hidden p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs font-mono text-rose-300"></div>
-
-        <div id="review-cards" class="hidden space-y-3.5"></div>
-      </div>
-
-      <div class="px-5 py-3 bg-surface-dim border-t border-surface-border flex items-center justify-between text-[11px] font-mono text-gray-500 shrink-0">
-        <span>LintIQ Automated Staff Review</span>
-        <button type="button" onclick="closePatchReviewModal()" class="px-3 py-1 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white transition cursor-pointer">Close</button>
       </div>
     </div>
-  </div>
 
-  <!-- KEYBOARD SHORTCUTS HELP MODAL -->
-  <div id="shortcuts-modal" onclick="closeShortcutsModal()" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
-    <div onclick="event.stopPropagation()" class="bg-surface border border-surface-border w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
-      <div class="px-5 py-3.5 bg-surface-dim border-b border-surface-border flex items-center justify-between gap-3 shrink-0">
-        <div class="flex items-center gap-2">
-          <span class="text-emerald-400 text-sm font-mono">⌨</span>
-          <h2 id="shortcuts-modal-title" class="text-sm font-bold text-white tracking-wide">Workspace Keyboard Shortcuts</h2>
-        </div>
-        <button type="button" onclick="closeShortcutsModal()" class="text-gray-400 hover:text-white hover:bg-surface-hover text-base px-2 py-0.5 rounded transition cursor-pointer" aria-label="Close Shortcuts Modal">×</button>
-      </div>
-      <div id="shortcuts-list-rows" class="p-4 space-y-2.5 text-xs"></div>
-      <div class="px-5 py-2.5 bg-surface-dim border-t border-surface-border flex items-center justify-between text-[11px] font-mono text-gray-500">
-        <span>Press <kbd class="px-1.5 py-0.5 rounded bg-surface-container border border-surface-border text-gray-300">?</kbd> anytime outside inputs</span>
-        <button type="button" onclick="closeShortcutsModal()" class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-hover border border-surface-border text-gray-300 hover:text-white transition cursor-pointer">Close</button>
-      </div>
-    </div>
-  </div>
+    <!-- Shared JS (API, Supabase, Auth) -->
+    <script src="js/shared.js"></script>
 
-  <!-- Shared JS (API, Supabase, Auth) -->
-  <script src="js/shared.js"></script>
+    <!-- Component Injectors -->
+    <script src="components/navbar.js"></script>
+    <script src="components/auth-modal.js"></script>
+    <script src="components/settings-modal.js"></script>
+    <script src="components/problem-drawer.js"></script>
 
-  <!-- Component Injectors -->
-  <script src="components/navbar.js"></script>
-  <script src="components/auth-modal.js"></script>
-  <script src="components/settings-modal.js"></script>
-  <script src="components/problem-drawer.js"></script>
+    <!-- Core Workspace Logic -->
+    <script src="js/workspace.js"></script>
 
-  <!-- Core Workspace Logic -->
-  <script src="js/workspace.js"></script>
-
-  <!-- Workspace UI Controller (tabs, settings, prefs, analytics, scratchpad) -->
-  <script src="js/workspace-ui.js"></script>
-</body>
+    <!-- Workspace UI Controller (tabs, settings, prefs, analytics, scratchpad) -->
+    <script src="js/workspace-ui.js"></script>
+  </body>
 </html>

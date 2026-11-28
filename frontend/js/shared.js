@@ -29,6 +29,38 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+function normalizeAppMode(rawMode) {
+  return String(rawMode || "").trim().toLowerCase() === "interview"
+    ? "interview"
+    : "practice";
+}
+
+function getActiveMode() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const urlMode = String(params.get("mode") || "").trim().toLowerCase();
+    if (urlMode === "practice" || urlMode === "interview") {
+      try {
+        sessionStorage.setItem("lintiq_mode", urlMode);
+      } catch (_) {}
+      return urlMode;
+    }
+  } catch (_) {}
+  try {
+    const saved = String(sessionStorage.getItem("lintiq_mode") || "").trim().toLowerCase();
+    if (saved === "practice" || saved === "interview") {
+      return saved;
+    }
+  } catch (_) {}
+  return "practice";
+}
+
+function appendModeParam(url, mode = getActiveMode()) {
+  const norm = normalizeAppMode(mode);
+  const sep = String(url).includes("?") ? "&" : "?";
+  return `${url}${sep}mode=${encodeURIComponent(norm)}`;
+}
+
 function getDisplayUsername(user) {
   if (!user) return "Engineer";
   return (
@@ -88,7 +120,7 @@ function clearUserScopedStorage() {
   const toDelete = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && k.startsWith("lintiq_solved_map_")) {
+    if (k && (k.startsWith("lintiq_solved_map_") || k.startsWith("lintiq_last_active_problem_"))) {
       toDelete.push(k);
     }
   }
@@ -192,10 +224,14 @@ function closeAuthModal() {
 }
 
 // ─── 7. AUTH: OAUTH + EMAIL MAGIC LINK ───────────────────────────────────────
+function getCurrentAuthRedirectUrl() {
+  return window.location.origin + window.location.pathname + window.location.search;
+}
+
 async function loginWithOAuth(provider) {
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: window.location.origin }
+    options: { redirectTo: getCurrentAuthRedirectUrl() }
   });
   if (error) showToast(`${provider} sign-in error: ${error.message}`, "error");
 }
@@ -213,7 +249,7 @@ async function handleEmailAuth(event) {
 
   const { error } = await supabaseClient.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.origin }
+    options: { emailRedirectTo: getCurrentAuthRedirectUrl() }
   });
 
   btn.disabled = false;
@@ -231,20 +267,29 @@ async function handleEmailAuth(event) {
 // ─── 8. AUTH: LOGOUT ─────────────────────────────────────────────────────────
 async function logout() {
   clearUserScopedStorage();
-  if (currentUser) {
-    await supabaseClient.auth.signOut();
+  try {
+    if (window.supabaseClient?.auth) {
+      await window.supabaseClient.auth.signOut();
+    }
+  } catch (_) {}
+  currentSession = null;
+  currentUser = null;
+  if (typeof updateAuthUI === "function") {
+    updateAuthUI(null);
   }
   window.location.reload();
 }
 
 // ─── 9. AUTH UI UPDATE (called by navbar.js after injection) ─────────────────
 function updateAuthUI(user) {
+  currentUser = user || null;
   const loginBtn = document.getElementById("btn-login");
   const userProfile = document.getElementById("user-profile");
   const userDisplayName = document.getElementById("user-display-name");
   const headerAvatar = document.getElementById("header-user-avatar");
   const settingsLogoutBtn = document.getElementById("settings-logout-btn");
   const settingsLogoutDivider = document.getElementById("settings-logout-divider");
+  const settingsPageLogoutBtn = document.getElementById("settings-page-logout-btn");
 
   if (user) {
     closeAuthModal();
@@ -252,6 +297,7 @@ function updateAuthUI(user) {
     userProfile?.classList.remove("hidden");
     settingsLogoutBtn?.classList.remove("hidden");
     settingsLogoutDivider?.classList.remove("hidden");
+    settingsPageLogoutBtn?.classList.remove("hidden");
 
     const name = getDisplayUsername(user);
     if (userDisplayName) {
@@ -266,6 +312,7 @@ function updateAuthUI(user) {
     userProfile?.classList.add("hidden");
     settingsLogoutBtn?.classList.add("hidden");
     settingsLogoutDivider?.classList.add("hidden");
+    settingsPageLogoutBtn?.classList.add("hidden");
   }
 
   if (typeof window.syncSettingsModalAuth === "function") {
@@ -274,6 +321,8 @@ function updateAuthUI(user) {
 }
 
 // ─── 10. BOOTSTRAP AUTH (called by each page's main JS) ──────────────────────
+let _authListenerRegistered = false;
+
 async function initAuth() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   currentSession = session || null;
@@ -290,21 +339,24 @@ async function initAuth() {
 
   updateAuthUI(currentUser);
 
-  supabaseClient.auth.onAuthStateChange((event, newSession) => {
-    const previousStored = localStorage.getItem("lintiq_active_user_id");
-    currentSession = newSession || null;
-    currentUser = newSession?.user || null;
-    const incomingUid = currentUser?.id || null;
+  if (!_authListenerRegistered) {
+    _authListenerRegistered = true;
+    supabaseClient.auth.onAuthStateChange((event, newSession) => {
+      const previousStored = localStorage.getItem("lintiq_active_user_id");
+      currentSession = newSession || null;
+      currentUser = newSession?.user || null;
+      const incomingUid = currentUser?.id || null;
 
-    if (event === "SIGNED_OUT" || (previousStored && previousStored !== incomingUid)) {
-      clearUserScopedStorage();
-    }
-    if (incomingUid) {
-      localStorage.setItem("lintiq_active_user_id", incomingUid);
-    }
+      if (event === "SIGNED_OUT" || (previousStored && previousStored !== incomingUid)) {
+        clearUserScopedStorage();
+      }
+      if (incomingUid) {
+        localStorage.setItem("lintiq_active_user_id", incomingUid);
+      }
 
-    updateAuthUI(currentUser);
-  });
+      updateAuthUI(currentUser);
+    });
+  }
 
   return { user: currentUser, session: currentSession };
 }
@@ -385,6 +437,9 @@ window.supabaseClient = supabaseClient;
 window.currentUser = null;        // Will be kept in sync via initAuth
 window.currentSession = null;
 window.escapeHtml = escapeHtml;
+window.normalizeAppMode = normalizeAppMode;
+window.getActiveMode = getActiveMode;
+window.appendModeParam = appendModeParam;
 window.getDisplayUsername = getDisplayUsername;
 window.getInitials = getInitials;
 window.showToast = showToast;

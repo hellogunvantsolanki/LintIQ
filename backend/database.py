@@ -19,7 +19,22 @@ from problems_data import CURATED_PROBLEMS
 logger = logging.getLogger(__name__)
 
 DB_PATH = Path("problems.db")
+INTERVIEW_DB_PATH = Path("interview_problems.db")
+LANGUAGE_VARIANTS_DB_PATH = Path("language_variants.db")
 AI_PROBLEM_ID_THRESHOLD = 100000
+_LANG_VARIANTS_INIT_LOCK = threading.Lock()
+_LANG_VARIANTS_WAL_INITIALIZED_PATHS: Set[str] = set()
+_SUPABASE_TRANSLATIONS_DISABLED = False
+
+
+def normalize_mode(mode: Optional[str]) -> str:
+    """Canonicalizes catalog mode to 'interview' or 'practice' (default)."""
+    return "interview" if str(mode or "").strip().lower() == "interview" else "practice"
+
+
+def get_problem_db_path(mode: Optional[str] = None) -> Path:
+    """Returns the SQLite catalog Path corresponding to the active mode."""
+    return INTERVIEW_DB_PATH if normalize_mode(mode) == "interview" else DB_PATH
 
 # Strict allow-lists (eliminates PostgREST filter / wildcard injection — Bug #4)
 ALLOWED_CATEGORIES: Dict[str, str] = {
@@ -30,13 +45,36 @@ ALLOWED_CATEGORIES: Dict[str, str] = {
     "type coercion": "Type Coercion",
     "memory & state": "Memory & State",
     "concurrency": "Concurrency",
+    "variables & basic math": "Variables & Basic Math",
+    "if / elif / else & conditions": "If / Elif / Else & Conditions",
+    "basic loops": "Basic Loops",
+    "simple strings": "Simple Strings",
+    "simple lists": "Simple Lists",
+    "basic functions": "Basic Functions",
 }
 
 ALLOWED_DIFFICULTIES: Dict[str, str] = {
+    "very easy": "Very Easy",
     "easy": "Easy",
     "medium": "Medium",
     "hard": "Hard",
 }
+
+DIFFICULTY_ORDER: Dict[str, int] = {
+    "Very Easy": 0,
+    "Easy": 1,
+    "Medium": 2,
+    "Hard": 3,
+}
+
+
+def normalize_difficulty_label(raw: Optional[str], default: str = "Medium") -> str:
+    """Canonicalizes difficulty strings without mangling multi-word tiers like 'Very Easy'."""
+    norm = str(raw or "").strip().lower()
+    if norm in ALLOWED_DIFFICULTIES:
+        return ALLOWED_DIFFICULTIES[norm]
+    fallback = str(default or "Medium").strip().lower()
+    return ALLOWED_DIFFICULTIES.get(fallback, "Medium")
 
 _UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -215,6 +253,14 @@ def verify_supabase_token(access_token: Optional[str]) -> Optional[Dict[str, Any
 
 def get_connection() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH, timeout=10.0)
+
+
+def get_catalog_connection(mode: Optional[str] = None) -> sqlite3.Connection:
+    """Opens the selected problem catalog SQLite database strictly read-only."""
+    db_path = get_problem_db_path(mode)
+    if not db_path.exists():
+        raise FileNotFoundError(f"Catalog database not found: {db_path}")
+    return sqlite3.connect(f"file:{db_path.resolve().as_posix()}?mode=ro", uri=True, timeout=10.0)
 
 
 def _supabase_headers(
@@ -587,14 +633,14 @@ def _fetch_supabase_ai_problem_by_id(problem_id: int) -> Optional[Dict[str, Any]
 # Problem Catalog Queries (Local Curated SQLite + Supabase AI Pool)
 # ---------------------------------------------------------------------------
 
-def fetch_categories_summary() -> Dict[str, Any]:
+def fetch_categories_summary(mode: Optional[str] = None) -> Dict[str, Any]:
     """
-    Returns deduplicated track counts from the static problems.db catalog
+    Returns deduplicated track counts from the selected mode's catalog
     (matching GET /problems COUNT(DISTINCT title) so counts are 100% identical
     across problem-directory.html, index.html, and profile.html).
     """
     counts: Dict[str, int] = {}
-    conn = get_connection()
+    conn = get_catalog_connection(mode)
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -616,11 +662,12 @@ def fetch_random_problem(
     category: Optional[str] = None,
     difficulty: Optional[str] = None,
     exclude_id: Optional[int] = None,
+    mode: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     safe_cat = validate_category_filter(category)
     safe_diff = validate_difficulty_filter(difficulty)
 
-    conn = get_connection()
+    conn = get_catalog_connection(mode)
     try:
         cursor = conn.cursor()
 
@@ -677,8 +724,11 @@ def fetch_random_problem(
     }
 
 
-def fetch_problem_eval_data(problem_id: int) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Fetches test_cases + buggy_code from Supabase (AI IDs >= 100000) or SQLite (< 100000)."""
+def fetch_problem_eval_data(
+    problem_id: int,
+    mode: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Fetches test_cases + buggy_code from Supabase (AI IDs >= 100000) or selected catalog (< 100000)."""
     pid = int(problem_id)
     if pid >= AI_PROBLEM_ID_THRESHOLD:
         prob = _fetch_supabase_ai_problem_by_id(pid)
@@ -686,7 +736,7 @@ def fetch_problem_eval_data(problem_id: int) -> Tuple[List[Dict[str, Any]], Opti
             return prob.get("test_cases", []), prob.get("buggy_code")
         return [], None
 
-    conn = get_connection()
+    conn = get_catalog_connection(mode)
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT test_cases, buggy_code FROM problems WHERE id = ?", (pid,))
@@ -700,13 +750,13 @@ def fetch_problem_eval_data(problem_id: int) -> Tuple[List[Dict[str, Any]], Opti
     return tests, starter_code
 
 
-def fetch_problem_hint(problem_id: int) -> Optional[str]:
+def fetch_problem_hint(problem_id: int, mode: Optional[str] = None) -> Optional[str]:
     pid = int(problem_id)
     if pid >= AI_PROBLEM_ID_THRESHOLD:
         prob = _fetch_supabase_ai_problem_by_id(pid)
         return prob.get("hint") if prob else None
 
-    conn = get_connection()
+    conn = get_catalog_connection(mode)
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT hint FROM problems WHERE id = ?", (pid,))
@@ -1114,7 +1164,7 @@ def _enrich_recent_solves_metadata(solve_rows: List[Dict[str, Any]]) -> List[Dic
             for r_id, title, diff, cat in rows:
                 meta_map[int(r_id)] = {
                     "title": str(title or f"Challenge #{r_id}"),
-                    "difficulty": str(diff or "Medium").capitalize(),
+                    "difficulty": normalize_difficulty_label(diff, default="Medium"),
                     "category": str(cat or "General"),
                 }
         except Exception as exc:
@@ -1132,7 +1182,7 @@ def _enrich_recent_solves_metadata(solve_rows: List[Dict[str, Any]]) -> List[Dic
             if ai_prob:
                 meta = {
                     "title": str(ai_prob.get("title") or f"Challenge #{pid}"),
-                    "difficulty": str(ai_prob.get("difficulty") or "Medium").capitalize(),
+                    "difficulty": normalize_difficulty_label(ai_prob.get("difficulty"), default="Medium"),
                     "category": str(ai_prob.get("category") or "General"),
                 }
         enriched.append({
@@ -1421,7 +1471,7 @@ def fetch_public_profile_dossier(identifier: str) -> Optional[Dict[str, Any]]:
     # Query catalog metadata once for problem totals, difficulty counts, categories, and tags
     problem_meta: Dict[int, Dict[str, Any]] = {}
     seen_titles: Set[str] = set()
-    diff_totals: Dict[str, int] = {"Easy": 0, "Medium": 0, "Hard": 0}
+    diff_totals: Dict[str, int] = {"Very Easy": 0, "Easy": 0, "Medium": 0, "Hard": 0}
     total_problems = 0
 
     conn = None
@@ -1432,9 +1482,7 @@ def fetch_public_profile_dossier(identifier: str) -> Optional[Dict[str, Any]]:
         ).fetchall()
         for r_id, title, diff, cat, raw_tags in rows:
             pid = int(r_id)
-            norm_diff = str(diff or "Medium").strip().capitalize()
-            if norm_diff not in ("Easy", "Medium", "Hard"):
-                norm_diff = "Medium"
+            norm_diff = normalize_difficulty_label(diff, default="Medium")
             norm_cat = str(cat or "Algorithms").strip() or "Algorithms"
             parsed_tags: List[str] = []
             if isinstance(raw_tags, str):
@@ -1476,7 +1524,7 @@ def fetch_public_profile_dossier(identifier: str) -> Optional[Dict[str, Any]]:
         seen_pids.add(pid)
         dedup_solves.append(row)
 
-    diff_solved: Dict[str, int] = {"Easy": 0, "Medium": 0, "Hard": 0}
+    diff_solved: Dict[str, int] = {"Very Easy": 0, "Easy": 0, "Medium": 0, "Hard": 0}
     cat_counts: Dict[str, int] = {}
     tag_counts: Dict[str, int] = {}
     solved_challenges: List[Dict[str, Any]] = []
@@ -1492,9 +1540,7 @@ def fetch_public_profile_dossier(identifier: str) -> Optional[Dict[str, Any]]:
         if not meta and pid >= AI_PROBLEM_ID_THRESHOLD:
             ai_prob = _fetch_supabase_ai_problem_by_id(pid)
             if ai_prob:
-                norm_d = str(ai_prob.get("difficulty") or "Medium").strip().capitalize()
-                if norm_d not in ("Easy", "Medium", "Hard"):
-                    norm_d = "Medium"
+                norm_d = normalize_difficulty_label(ai_prob.get("difficulty"), default="Medium")
                 raw_ai_tags = ai_prob.get("tags") or []
                 meta = {
                     "title": str(ai_prob.get("title") or f"Challenge #{pid}"),
@@ -1568,6 +1614,7 @@ def fetch_public_profile_dossier(identifier: str) -> Optional[Dict[str, Any]]:
         },
         "breakdown": {
             "difficulty": {
+                "Very Easy": {"solved": diff_solved["Very Easy"], "total": diff_totals["Very Easy"]},
                 "Easy": {"solved": diff_solved["Easy"], "total": diff_totals["Easy"]},
                 "Medium": {"solved": diff_solved["Medium"], "total": diff_totals["Medium"]},
                 "Hard": {"solved": diff_solved["Hard"], "total": diff_totals["Hard"]},
@@ -1933,3 +1980,210 @@ def fetch_top_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
     finally:
         if conn:
             conn.close()
+
+
+def get_language_variants_connection() -> sqlite3.Connection:
+    """Opens language_variants.db with busy_timeout=10000 and WAL mode enabled."""
+    db_path = Path(LANGUAGE_VARIANTS_DB_PATH)
+    resolved_key = str(db_path.resolve())
+    conn = sqlite3.connect(db_path, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout=10000;")
+    if resolved_key not in _LANG_VARIANTS_WAL_INITIALIZED_PATHS:
+        with _LANG_VARIANTS_INIT_LOCK:
+            if resolved_key not in _LANG_VARIANTS_WAL_INITIALIZED_PATHS:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+                _LANG_VARIANTS_WAL_INITIALIZED_PATHS.add(resolved_key)
+    return conn
+
+
+def ensure_language_variants_db() -> None:
+    """Initializes the local SQLite translation cache table in WAL mode if missing."""
+    with _LANG_VARIANTS_INIT_LOCK:
+        conn = sqlite3.connect(LANGUAGE_VARIANTS_DB_PATH, timeout=10.0)
+        try:
+            conn.execute("PRAGMA busy_timeout=10000;")
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS problem_translations (
+                    mode TEXT NOT NULL,
+                    problem_id INTEGER NOT NULL,
+                    language TEXT NOT NULL,
+                    buggy_code TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    PRIMARY KEY (mode, problem_id, language)
+                )
+                """
+            )
+            conn.commit()
+            _LANG_VARIANTS_WAL_INITIALIZED_PATHS.add(str(Path(LANGUAGE_VARIANTS_DB_PATH).resolve()))
+        finally:
+            conn.close()
+
+
+def fetch_sqlite_cached_translation_keys() -> Set[Tuple[str, int, str]]:
+    """Loads all permanently cached (mode, problem_id, language) keys from language_variants.db."""
+    ensure_language_variants_db()
+    conn = get_language_variants_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT mode, problem_id, language
+            FROM problem_translations
+            WHERE TRIM(COALESCE(buggy_code, '')) != ''
+            """
+        ).fetchall()
+        return {
+            (normalize_mode(row[0]), int(row[1]), str(row[2] or "").strip().lower())
+            for row in rows
+            if row[1] is not None and row[2]
+        }
+    except Exception as exc:
+        logger.warning("SQLite translation key listing failed: %s", exc)
+        return set()
+    finally:
+        conn.close()
+
+
+def fetch_sqlite_problem_translation(mode: str, problem_id: int, language: str) -> Optional[str]:
+    """Reads a permanently cached translated starter snippet from local SQLite."""
+    ensure_language_variants_db()
+    norm_mode = normalize_mode(mode)
+    norm_lang = str(language or "").strip().lower()
+    if not norm_lang:
+        return None
+    conn = get_language_variants_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT buggy_code
+            FROM problem_translations
+            WHERE mode = ? AND problem_id = ? AND language = ?
+            """,
+            (norm_mode, int(problem_id), norm_lang),
+        ).fetchone()
+        if row and isinstance(row[0], str) and row[0].strip():
+            return row[0]
+        return None
+    except Exception as exc:
+        logger.warning("SQLite translation cache read failed: %s", exc)
+        return None
+    finally:
+        conn.close()
+
+
+def save_sqlite_problem_translation(mode: str, problem_id: int, language: str, buggy_code: str) -> bool:
+    """Persists a translated starter snippet into local SQLite permanent cache."""
+    if not isinstance(buggy_code, str) or not buggy_code.strip():
+        return False
+    ensure_language_variants_db()
+    norm_mode = normalize_mode(mode)
+    norm_lang = str(language or "").strip().lower()
+    if not norm_lang:
+        return False
+    conn = get_language_variants_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO problem_translations (mode, problem_id, language, buggy_code)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(mode, problem_id, language)
+            DO UPDATE SET buggy_code = excluded.buggy_code
+            """,
+            (norm_mode, int(problem_id), norm_lang, buggy_code),
+        )
+        conn.commit()
+        return True
+    except Exception as exc:
+        logger.warning("SQLite translation cache write failed: %s", exc)
+        return False
+    finally:
+        conn.close()
+
+
+def _should_disable_supabase_translations(status_code: int, body_text: str) -> bool:
+    if status_code == 404:
+        return True
+    lowered = (body_text or "").lower()
+    return "pgrst205" in lowered or (
+        "problem_translations" in lowered
+        and ("does not exist" in lowered or "could not find the table" in lowered)
+    )
+
+
+def fetch_supabase_problem_translation(mode: str, problem_id: int, language: str) -> Optional[str]:
+    """Reads a cached translation from Supabase Postgres if configured and table exists."""
+    global _SUPABASE_TRANSLATIONS_DISABLED
+    if _SUPABASE_TRANSLATIONS_DISABLED or not (SUPABASE_URL and SUPABASE_KEY):
+        return None
+    norm_mode = normalize_mode(mode)
+    norm_lang = str(language or "").strip().lower()
+    if not norm_lang:
+        return None
+    try:
+        resp = _SUPABASE_HTTP.get(
+            "/rest/v1/problem_translations",
+            params={
+                "select": "buggy_code",
+                "mode": f"eq.{norm_mode}",
+                "problem_id": f"eq.{int(problem_id)}",
+                "language": f"eq.{norm_lang}",
+                "limit": "1",
+            },
+            headers=_supabase_headers(use_service_role=has_supabase_service_key()),
+        )
+        if resp.status_code == 200:
+            rows = resp.json()
+            if isinstance(rows, list) and rows:
+                code = rows[0].get("buggy_code")
+                if isinstance(code, str) and code.strip():
+                    return code
+            return None
+        if _should_disable_supabase_translations(resp.status_code, resp.text):
+            _SUPABASE_TRANSLATIONS_DISABLED = True
+            logger.info("Supabase problem_translations table unavailable; using local SQLite translation cache.")
+    except Exception as exc:
+        logger.debug("Supabase translation read skipped: %s", exc)
+    return None
+
+
+def save_supabase_problem_translation(mode: str, problem_id: int, language: str, buggy_code: str) -> bool:
+    """Stores a translated snippet in Supabase Postgres when service credentials are configured."""
+    global _SUPABASE_TRANSLATIONS_DISABLED
+    if (
+        _SUPABASE_TRANSLATIONS_DISABLED
+        or not (SUPABASE_URL and SUPABASE_KEY)
+        or not has_supabase_service_key()
+        or not isinstance(buggy_code, str)
+        or not buggy_code.strip()
+    ):
+        return False
+    norm_mode = normalize_mode(mode)
+    norm_lang = str(language or "").strip().lower()
+    if not norm_lang:
+        return False
+    try:
+        resp = _SUPABASE_HTTP.post(
+            "/rest/v1/problem_translations",
+            params={"on_conflict": "mode,problem_id,language"},
+            headers=_supabase_headers(
+                prefer="resolution=merge-duplicates,return=minimal",
+                use_service_role=True,
+            ),
+            json={
+                "mode": norm_mode,
+                "problem_id": int(problem_id),
+                "language": norm_lang,
+                "buggy_code": buggy_code,
+            },
+        )
+        if resp.status_code in (200, 201, 204):
+            return True
+        if _should_disable_supabase_translations(resp.status_code, resp.text):
+            _SUPABASE_TRANSLATIONS_DISABLED = True
+            logger.info("Supabase problem_translations table unavailable; skipping cloud write.")
+    except Exception as exc:
+        logger.debug("Supabase translation write skipped: %s", exc)
+    return False

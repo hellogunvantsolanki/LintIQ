@@ -3,12 +3,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Deque, Set, Tuple
 import hashlib
 import html
+import io
 import json
 import logging
 import os
 import sqlite3
 import threading
 import time
+import tokenize
 
 from fastapi import FastAPI, HTTPException, Query, Header, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,8 @@ from fastapi.responses import JSONResponse
 from schemas import SubmitPatchRequest, RunCodeRequest, HintRequest, ReviewPatchRequest
 from database import (
     init_db,
+    normalize_mode,
+    get_catalog_connection,
     fetch_categories_summary,
     fetch_random_problem,
     fetch_problem_eval_data,
@@ -39,8 +43,18 @@ from database import (
     verify_supabase_token,
     validate_category_filter,
     validate_difficulty_filter,
+    normalize_difficulty_label,
+    DIFFICULTY_ORDER,
 )
-from runner import evaluate_patch, run_custom_code
+from runner import (
+    _resolve_language_config,
+    evaluate_patch,
+    normalize_language_key,
+    run_custom_code,
+    strip_language_comments,
+    validate_minimal_patch,
+)
+from translator import get_cached_translation, get_or_translate_problem_code_async
 from ai_generator import generate_ai_bug_challenge, review_user_patch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -91,7 +105,7 @@ _PUBLIC_PROFILE_MAX_PER_MIN = 60
 # Bounded server-side solve-start tracker (prevents client-forged time_seconds speed bonuses)
 _SOLVE_START_LOCK = threading.Lock()
 _SOLVE_START_MAX_SIZE = 5000
-_solve_start_times: "OrderedDict[Tuple[str, int], float]" = OrderedDict()
+_solve_start_times: "OrderedDict[Tuple[str, str, int], float]" = OrderedDict()
 _DEFAULT_NO_BONUS_SECONDS = 60
 
 # Single-flight lock so at most 1 background AI refill runs at a time
@@ -103,9 +117,9 @@ _AI_CACHE_LOCK = threading.Lock()
 _AI_CACHE_MAX_SIZE = 300
 _ai_problems_cache: "OrderedDict[int, Dict[str, Any]]" = OrderedDict()
 
-# Category summary cache with 60s TTL
-_categories_cache: Optional[Dict[str, Any]] = None
-_categories_cache_ts: float = 0.0
+# Category summary cache keyed by mode with 60s TTL
+_categories_cache: Dict[str, Dict[str, Any]] = {}
+_categories_cache_ts: Dict[str, float] = {}
 _CATEGORIES_CACHE_TTL = 60.0
 
 
@@ -131,12 +145,12 @@ def _get_cached_ai_problem(problem_id: int) -> Optional[Dict[str, Any]]:
         return prob
 
 
-def _record_solve_start(actor_key: str, problem_id: Any) -> None:
+def _record_solve_start(actor_key: str, problem_id: Any, mode: str = "practice") -> None:
     try:
         pid = int(problem_id)
     except (TypeError, ValueError):
         return
-    key = (actor_key, pid)
+    key = (actor_key, normalize_mode(mode), pid)
     now = time.monotonic()
     with _SOLVE_START_LOCK:
         _solve_start_times[key] = now
@@ -149,12 +163,17 @@ def _consume_solve_elapsed_seconds(
     primary_key: str,
     problem_id: int,
     fallback_key: Optional[str] = None,
+    mode: str = "practice",
 ) -> int:
     """Computes authoritative elapsed seconds from server start timestamp; clamps <2s or missing to 0 bonus (60s)."""
     now = time.monotonic()
+    norm_mode = normalize_mode(mode)
     started_at: Optional[float] = None
     with _SOLVE_START_LOCK:
-        for key in ((primary_key, problem_id), (fallback_key, problem_id) if fallback_key else None):
+        for key in (
+            (primary_key, norm_mode, problem_id),
+            (fallback_key, norm_mode, problem_id) if fallback_key else None,
+        ):
             if key and key in _solve_start_times:
                 started_at = _solve_start_times.pop(key)
                 break
@@ -166,12 +185,141 @@ def _consume_solve_elapsed_seconds(
     return int(round(elapsed))
 
 
+def _scan_python_comment_cols(lines: list[str]) -> Dict[int, int]:
+    """String- and triple-quote-aware fallback scanner for # comments when tokenize fails mid-file."""
+    comment_cols: Dict[int, int] = {}
+    triple_delim: Optional[str] = None
+
+    for row_idx, line in enumerate(lines, start=1):
+        i = 0
+        n = len(line)
+        single_delim: Optional[str] = None
+        while i < n:
+            ch = line[i]
+            if triple_delim is not None:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if line.startswith(triple_delim, i):
+                    triple_delim = None
+                    i += 3
+                    continue
+                i += 1
+                continue
+
+            if single_delim is not None:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == single_delim:
+                    single_delim = None
+                i += 1
+                continue
+
+            if line.startswith("'''", i) or line.startswith('"""', i):
+                triple_delim = line[i : i + 3]
+                i += 3
+                continue
+            if ch in ("'", '"'):
+                single_delim = ch
+                i += 1
+                continue
+            if ch == "#":
+                comment_cols[row_idx] = i
+                break
+            i += 1
+
+    return comment_cols
+
+
+def _strip_python_comments(code: str, language: str = "python") -> str:
+    """Safely strip ALL Python # comments via tokenize (with lexer fallback) without corrupting string literals."""
+    if not isinstance(code, str) or not code.strip():
+        return code
+    if (language or "python").strip().lower() not in ("python", "python3"):
+        return code
+
+    working = code
+    if "\n" not in working and "\\n" in working:
+        working = working.replace("\\r\\n", "\n").replace("\\n", "\n")
+
+    lines = working.splitlines()
+    comment_cols: Dict[int, int] = {}
+    tokenize_ok = True
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(working).readline):
+            if tok.type == tokenize.COMMENT:
+                row = tok.start[0]
+                if row not in comment_cols or tok.start[1] < comment_cols[row]:
+                    comment_cols[row] = tok.start[1]
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        tokenize_ok = False
+
+    if not tokenize_ok:
+        scanned_cols = _scan_python_comment_cols(lines)
+        for row, col in scanned_cols.items():
+            if row not in comment_cols:
+                comment_cols[row] = col
+
+    if not comment_cols:
+        return working
+
+    orig_compiles = False
+    try:
+        compile(working, "solution.py", "exec")
+        orig_compiles = True
+    except SyntaxError:
+        orig_compiles = False
+
+    cleaned_lines = []
+    last_dropped_comment = False
+    for idx, line in enumerate(lines, start=1):
+        col = comment_cols.get(idx)
+        if col is not None:
+            prefix = line[:col].rstrip()
+            if not prefix:
+                last_dropped_comment = True
+                continue
+            cleaned_lines.append(prefix)
+            last_dropped_comment = False
+        else:
+            stripped = line.rstrip()
+            if not stripped and (not cleaned_lines or cleaned_lines[-1] == "" or last_dropped_comment):
+                last_dropped_comment = False
+                continue
+            cleaned_lines.append(stripped)
+            last_dropped_comment = False
+
+    while cleaned_lines and cleaned_lines[-1] == "":
+        cleaned_lines.pop()
+
+    cleaned = "\n".join(cleaned_lines)
+    if (working.endswith("\n") or code.endswith("\n")) and cleaned:
+        cleaned += "\n"
+
+    if orig_compiles:
+        try:
+            compile(cleaned, "solution.py", "exec")
+        except SyntaxError:
+            return working
+    return cleaned
+
+
 def _sanitize_problem_for_client(problem: Dict[str, Any]) -> Dict[str, Any]:
-    """Strips hidden grading test cases, keeping only Sample #1 and total test_count."""
+    """Strips hidden grading test cases and comments from starter code."""
     all_tests = problem.get("test_cases") or []
     if not isinstance(all_tests, list):
         all_tests = []
     sanitized = dict(problem)
+    lang = sanitized.get("language", "python") or "python"
+    if isinstance(sanitized.get("buggy_code"), str):
+        sanitized["buggy_code"] = strip_language_comments(sanitized["buggy_code"], lang)
+    if isinstance(sanitized.get("starter_code"), dict):
+        cleaned_starter = dict(sanitized["starter_code"])
+        for k, v in list(cleaned_starter.items()):
+            if isinstance(v, str):
+                cleaned_starter[k] = strip_language_comments(v, k)
+        sanitized["starter_code"] = cleaned_starter
     sanitized["test_count"] = len(all_tests)
     sanitized["test_cases"] = all_tests[:1]
     return sanitized
@@ -352,7 +500,7 @@ def _get_daily_problem(conn: sqlite3.Connection) -> Optional[Dict[str, Any]]:
     return {
         "id": int(row[0]),
         "title": str(row[1] or f"Challenge #{daily_id}"),
-        "difficulty": str(row[2] or "Hard").capitalize(),
+        "difficulty": normalize_difficulty_label(row[2], default="Hard"),
         "category": str(row[3] or "General"),
         "tags": parsed_tags[:4] if isinstance(parsed_tags, list) else [],
     }
@@ -414,7 +562,6 @@ def ensure_db_indexes() -> None:
 
 def _bg_refill_ai_pool(category: Optional[str], difficulty: Optional[str]) -> None:
     """Single-flight background refill: adds 1 verified AI bug into Supabase without blocking users."""
-    global _categories_cache
     if not has_supabase_service_key():
         return
     if not _AI_REFILL_LOCK.acquire(blocking=False):
@@ -422,7 +569,8 @@ def _bg_refill_ai_pool(category: Optional[str], difficulty: Optional[str]) -> No
     try:
         new_prob = generate_ai_bug_challenge(category=category, difficulty=difficulty)
         _cache_ai_problem(new_prob)
-        _categories_cache = None
+        _categories_cache.clear()
+        _categories_cache_ts.clear()
     except Exception as exc:
         logger.warning("Background AI pool refill failed: %s", exc)
     finally:
@@ -554,20 +702,27 @@ def root():
 
 
 @app.get("/categories")
-def get_categories():
-    global _categories_cache, _categories_cache_ts
+def get_categories(mode: str = Query("practice", max_length=32)):
+    norm_mode = normalize_mode(mode)
     now = time.monotonic()
-    if _categories_cache is None or (now - _categories_cache_ts) > _CATEGORIES_CACHE_TTL:
-        _categories_cache = fetch_categories_summary()
-        _categories_cache_ts = now
-    return _categories_cache
+    cached = _categories_cache.get(norm_mode)
+    cached_ts = _categories_cache_ts.get(norm_mode, 0.0)
+    if cached is None or (now - cached_ts) > _CATEGORIES_CACHE_TTL:
+        cached = fetch_categories_summary(mode=norm_mode)
+        _categories_cache[norm_mode] = cached
+        _categories_cache_ts[norm_mode] = now
+    return cached
 
 
 @app.get("/daily-challenge")
-def get_daily_challenge(authorization: Optional[str] = Header(None, alias="Authorization")):
+def get_daily_challenge(
+    mode: str = Query("practice", max_length=32),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
     """Returns today's deterministic Bug of the Day, IST midnight reset timestamps, and completion status."""
+    norm_mode = normalize_mode(mode)
     date_ist, resets_at_utc, resets_at_ist = _get_daily_window_ist()
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_catalog_connection(norm_mode)
     try:
         daily_problem = _get_daily_problem(conn)
     finally:
@@ -581,7 +736,7 @@ def get_daily_challenge(authorization: Optional[str] = Header(None, alias="Autho
             ist_date_str=date_ist,
             access_token=access_token,
         )
-        if (verified_user and daily_problem)
+        if (norm_mode == "practice" and verified_user and daily_problem)
         else False
     )
 
@@ -603,13 +758,16 @@ def get_problem(
     category: Optional[str] = Query(None, max_length=64, description="Filter by problem domain category"),
     difficulty: Optional[str] = Query(None, max_length=32, description="Filter by Easy, Medium, or Hard"),
     exclude_id: Optional[int] = Query(None, description="Exclude current problem ID to avoid immediate repeats"),
+    mode: str = Query("practice", max_length=32, description="Catalog mode: practice or interview"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
+    norm_mode = normalize_mode(mode)
     safe_cat, safe_diff = _validate_filters_or_400(category, difficulty)
     problem = fetch_random_problem(
         category=safe_cat,
         difficulty=safe_diff,
         exclude_id=exclude_id,
+        mode=norm_mode,
     )
     if not problem:
         raise HTTPException(
@@ -618,7 +776,7 @@ def get_problem(
         )
     verified_user, _ = _get_optional_verified_user(authorization)
     actor_key = f"u:{verified_user['id']}" if verified_user else f"ip:{_get_client_ip(request)}"
-    _record_solve_start(actor_key, problem["id"])
+    _record_solve_start(actor_key, problem["id"], mode=norm_mode)
     return _sanitize_problem_for_client(problem)
 
 
@@ -626,17 +784,20 @@ def get_problem(
 def list_problems_sequential(
     category: str = Query("All", max_length=64),
     difficulty: str = Query("All", max_length=32),
+    mode: str = Query("practice", max_length=32),
+    sort: Optional[str] = Query(None, max_length=32),
     user_id: Optional[str] = Query(None, max_length=128),  # Ignored in favor of verified JWT to prevent IDOR
     limit: int = Query(100, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
+    norm_mode = normalize_mode(mode)
     safe_cat, safe_diff = _validate_filters_or_400(category, difficulty)
     verified_user, access_token = _get_optional_verified_user(authorization)
     verified_uid = verified_user["id"] if verified_user else None
 
     solved_ids: Set[int] = set()
-    if verified_uid:
+    if norm_mode == "practice" and verified_uid:
         try:
             solve_history = fetch_user_solve_history(
                 verified_uid,
@@ -647,10 +808,12 @@ def list_problems_sequential(
         except Exception:
             solved_ids = set()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_catalog_connection(norm_mode)
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
+        table_cols = {c[1] for c in cur.execute("PRAGMA table_info(problems)").fetchall()}
+        lang_select = "language" if "language" in table_cols else "'python' AS language"
 
         where_clauses = []
         params = []
@@ -664,18 +827,25 @@ def list_problems_sequential(
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
+        order_sql = (
+            "CASE LOWER(COALESCE(difficulty, 'medium')) "
+            "WHEN 'very easy' THEN 0 WHEN 'easy' THEN 1 WHEN 'medium' THEN 2 WHEN 'hard' THEN 3 ELSE 4 END ASC, id ASC"
+            if str(sort or "").strip().lower() == "difficulty"
+            else "id ASC"
+        )
+
         # Deduplicate by title (keeping the lowest ID) so the directory & sequence stay clean
         query = f"""
-            SELECT MIN(id) AS id, title, difficulty, category, language, tags, test_cases, description
+            SELECT MIN(id) AS id, title, difficulty, category, {lang_select}, tags, test_cases, description
             FROM problems
             {where_sql}
             GROUP BY title
-            ORDER BY id ASC
+            ORDER BY {order_sql}
             LIMIT ? OFFSET ?
         """
         rows = cur.execute(query, params + [limit, offset]).fetchall()
 
-        if verified_uid:
+        if norm_mode == "practice" and verified_uid:
             try:
                 local_solved_rows = cur.execute(
                     "SELECT problem_id FROM user_solves WHERE user_id = ?", (verified_uid,)
@@ -718,7 +888,7 @@ def list_problems_sequential(
             {
                 "id": r["id"],
                 "title": r["title"],
-                "difficulty": r["difficulty"].capitalize() if r["difficulty"] else "Medium",
+                "difficulty": normalize_difficulty_label(r["difficulty"], default="Medium"),
                 "category": r["category"] or "General",
                 "language": r["language"] or "python",
                 "tags": parsed_tags[:4] if isinstance(parsed_tags, list) else [],
@@ -735,12 +905,20 @@ def list_problems_sequential(
 
 
 @app.get("/problems/{problem_id}")
-def get_problem_by_id(
+async def get_problem_by_id(
     problem_id: int,
     request: Request,
+    mode: str = Query("practice", max_length=32),
+    lang: str = Query("python", max_length=32),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
-    conn = sqlite3.connect(DB_PATH)
+    try:
+        canonical_lang, _ = _resolve_language_config(lang)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    norm_mode = normalize_mode(mode)
+    conn = get_catalog_connection(norm_mode)
     conn.row_factory = sqlite3.Row
     try:
         row = conn.execute("SELECT * FROM problems WHERE id = ?", (problem_id,)).fetchone()
@@ -752,19 +930,50 @@ def get_problem_by_id(
 
     verified_user, _ = _get_optional_verified_user(authorization)
     actor_key = f"u:{verified_user['id']}" if verified_user else f"ip:{_get_client_ip(request)}"
-    _record_solve_start(actor_key, row["id"])
+    _record_solve_start(actor_key, row["id"], mode=norm_mode)
+
+    row_keys = set(row.keys())
+    base_lang = row["language"] if ("language" in row_keys and row["language"]) else "python"
+    parsed_tests = json.loads(row["test_cases"]) if isinstance(row["test_cases"], str) else (row["test_cases"] or [])
+    raw_buggy_code = row["buggy_code"] or ""
+
+    if canonical_lang != normalize_language_key(base_lang):
+        try:
+            active_code = await get_or_translate_problem_code_async(
+                mode=norm_mode,
+                problem_id=row["id"],
+                language=canonical_lang,
+                python_buggy_code=raw_buggy_code,
+                title=row["title"] or "",
+                description=row["description"] or "",
+                test_cases=parsed_tests,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Translation unavailable for problem %s (%s -> %s): %s",
+                row["id"],
+                norm_mode,
+                canonical_lang,
+                exc,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not translate problem into {canonical_lang} right now. Please try again shortly.",
+            )
+    else:
+        active_code = raw_buggy_code
 
     return _sanitize_problem_for_client({
         "id": row["id"],
         "title": row["title"],
         "description": row["description"],
-        "difficulty": row["difficulty"].capitalize() if row["difficulty"] else "",
-        "buggy_code": row["buggy_code"],
-        "test_cases": json.loads(row["test_cases"]) if isinstance(row["test_cases"], str) else (row["test_cases"] or []),
-        "hint": row["hint"],
+        "difficulty": normalize_difficulty_label(row["difficulty"], default="Medium") if row["difficulty"] else "",
+        "buggy_code": active_code,
+        "test_cases": parsed_tests,
+        "hint": row["hint"] if "hint" in row_keys else None,
         "category": row["category"],
         "tags": json.loads(row["tags"] or "[]") if isinstance(row["tags"], str) else (row["tags"] or []),
-        "language": row["language"] or "python",
+        "language": canonical_lang,
     })
 
 
@@ -829,7 +1038,8 @@ def create_ai_problem(
         problem = generate_ai_bug_challenge(category=safe_cat, difficulty=target_diff)
         if safe_cat:
             problem["category"] = safe_cat
-        _categories_cache = None
+        _categories_cache.clear()
+        _categories_cache_ts.clear()
         _cache_ai_problem(problem)
         if "id" in problem:
             _record_solve_start(actor_key, problem["id"])
@@ -846,9 +1056,10 @@ def create_ai_problem(
 
 
 @app.post("/run-code")
-def run_code(payload: RunCodeRequest, request: Request):
+@app.post("/run")
+async def run_code(payload: RunCodeRequest, request: Request):
     """
-    Safe Test Run sandbox: executes user code with custom stdin inside OnlineCompiler.io.
+    Safe Test Run sandbox: executes user code with custom stdin inside the multi-runtime sandbox.
     Never modifies streaks or writes to Supabase.
     """
     _check_bucket_rate_limit(
@@ -861,17 +1072,49 @@ def run_code(payload: RunCodeRequest, request: Request):
         cap_msg="Test Run rate limit reached (25/min). Wait a few seconds and try again.",
     )
     try:
-        return run_custom_code(
+        run_lang = payload.language or "python"
+        canonical_lang = normalize_language_key(run_lang)
+        run_res = run_custom_code(
             user_code=payload.user_code,
             stdin_data=payload.stdin or "",
-            language=payload.language or "python",
+            language=run_lang,
         )
+        if payload.problem_id and isinstance(run_res, dict):
+            try:
+                run_mode = normalize_mode(getattr(payload, "mode", None))
+                cached = _get_cached_ai_problem(payload.problem_id) if payload.problem_id >= 100000 else None
+                starter = cached.get("buggy_code") if cached else None
+                eval_tests = cached.get("test_cases") if cached else None
+                if starter is None:
+                    db_tests, starter = fetch_problem_eval_data(payload.problem_id, mode=run_mode)
+                    if eval_tests is None:
+                        eval_tests = db_tests
+                if canonical_lang != "python":
+                    translated_starter = get_cached_translation(run_mode, payload.problem_id, canonical_lang)
+                    if not translated_starter and isinstance(starter, str) and starter.strip():
+                        translated_starter = await get_or_translate_problem_code_async(
+                            mode=run_mode,
+                            problem_id=payload.problem_id,
+                            language=canonical_lang,
+                            python_buggy_code=starter,
+                            test_cases=eval_tests,
+                        )
+                    starter = translated_starter
+                if isinstance(starter, str) and starter.strip():
+                    starter = strip_language_comments(starter, canonical_lang)
+                    patch_check = validate_minimal_patch(starter, payload.user_code, language=canonical_lang)
+                    if not patch_check["valid"]:
+                        run_res["patch_warning"] = patch_check["message"]
+            except Exception:
+                pass
+        return run_res
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/submit-patch")
-def submit_patch(
+@app.post("/submit")
+async def submit_patch(
     payload: SubmitPatchRequest,
     request: Request,
     background_tasks: BackgroundTasks,
@@ -900,16 +1143,17 @@ def submit_patch(
     verified_user, verified_token = _require_verified_user(authorization)
 
     # Always fetch authoritative test cases & starter code from server-side cache/DB
+    submit_mode = normalize_mode(getattr(payload, "mode", None))
     test_cases = None
     starter_code: Optional[str] = None
 
-    cached_prob = _get_cached_ai_problem(payload.problem_id)
+    cached_prob = _get_cached_ai_problem(payload.problem_id) if payload.problem_id >= 100000 else None
     if cached_prob:
         test_cases = cached_prob.get("test_cases")
         starter_code = cached_prob.get("buggy_code")
 
     if not test_cases or starter_code is None:
-        db_tests, db_starter = fetch_problem_eval_data(payload.problem_id)
+        db_tests, db_starter = fetch_problem_eval_data(payload.problem_id, mode=submit_mode)
         if not test_cases:
             test_cases = db_tests
         if starter_code is None:
@@ -918,11 +1162,58 @@ def submit_patch(
     if not test_cases:
         raise HTTPException(status_code=404, detail="Problem test cases not found on server.")
 
+    submit_lang = getattr(payload, "language", "python") or "python"
+    try:
+        canonical_lang, _ = _resolve_language_config(submit_lang)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if canonical_lang != "python":
+        translated_starter = get_cached_translation(submit_mode, payload.problem_id, canonical_lang)
+        if not translated_starter and isinstance(starter_code, str) and starter_code.strip():
+            try:
+                translated_starter = await get_or_translate_problem_code_async(
+                    mode=submit_mode,
+                    problem_id=payload.problem_id,
+                    language=canonical_lang,
+                    python_buggy_code=starter_code,
+                    test_cases=test_cases,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Could not resolve translated starter for problem %s (%s): %s",
+                    payload.problem_id,
+                    canonical_lang,
+                    exc,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Could not prepare {canonical_lang} baseline for grading right now. Please retry shortly.",
+                )
+        starter_code = translated_starter or starter_code
+
+    if isinstance(starter_code, str):
+        starter_code = strip_language_comments(starter_code, canonical_lang)
+
+    if isinstance(starter_code, str) and starter_code.strip():
+        patch_validation = validate_minimal_patch(
+            original_code=starter_code,
+            submitted_code=payload.user_code,
+            language=canonical_lang,
+        )
+        if not patch_validation["valid"]:
+            return {
+                "passed": False,
+                "rejected_reason": patch_validation["reason"],
+                "message": patch_validation["message"],
+                "patch_validation": patch_validation,
+            }
+
     try:
         result = evaluate_patch(
             user_code=payload.user_code,
             test_cases=test_cases,
-            language=getattr(payload, "language", "python") or "python",
+            language=canonical_lang,
             starter_code=starter_code,
         )
     except ValueError as exc:
@@ -936,20 +1227,22 @@ def submit_patch(
             primary_key=f"u:{verified_uid}",
             problem_id=payload.problem_id,
             fallback_key=f"ip:{client_ip}",
+            mode=submit_mode,
         )
         patch_metrics = result.get("patch_metrics") or {}
 
         ist_date_str, _, _ = _get_daily_window_ist()
         daily_prob: Optional[Dict[str, Any]] = None
-        daily_conn = None
-        try:
-            daily_conn = sqlite3.connect(DB_PATH)
-            daily_prob = _get_daily_problem(daily_conn)
-        except Exception:
-            daily_prob = None
-        finally:
-            if daily_conn:
-                daily_conn.close()
+        if submit_mode == "practice":
+            daily_conn = None
+            try:
+                daily_conn = get_catalog_connection("practice")
+                daily_prob = _get_daily_problem(daily_conn)
+            except Exception:
+                daily_prob = None
+            finally:
+                if daily_conn:
+                    daily_conn.close()
 
         is_daily_target = bool(daily_prob and int(payload.problem_id) == int(daily_prob["id"]))
         already_claimed_daily = (
@@ -1002,11 +1295,12 @@ def get_hint(payload: HintRequest, request: Request):
         cap_msg="Hint rate limit reached (20/min). Try again in a minute.",
     )
     if payload.problem_id:
-        cached_prob = _get_cached_ai_problem(payload.problem_id)
+        hint_mode = normalize_mode(getattr(payload, "mode", None))
+        cached_prob = _get_cached_ai_problem(payload.problem_id) if payload.problem_id >= 100000 else None
         if cached_prob and cached_prob.get("hint"):
             return {"hint": cached_prob["hint"]}
 
-        hint = fetch_problem_hint(payload.problem_id)
+        hint = fetch_problem_hint(payload.problem_id, mode=hint_mode)
         if hint:
             return {"hint": hint}
 
@@ -1026,8 +1320,9 @@ def review_patch(payload: ReviewPatchRequest, request: Request):
         cap_msg="Review rate limit reached (15/min). Try again in a minute.",
     )
 
+    rev_mode = normalize_mode(getattr(payload, "mode", None))
     problem_meta: Optional[Dict[str, Any]] = None
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_catalog_connection(rev_mode)
     conn.row_factory = sqlite3.Row
     try:
         row = conn.execute(
@@ -1059,14 +1354,16 @@ def review_patch(payload: ReviewPatchRequest, request: Request):
     if not problem_meta:
         raise HTTPException(status_code=404, detail="Problem not found.")
 
+    rev_lang = payload.language or "python"
+    clean_buggy = strip_language_comments(problem_meta["buggy_code"], rev_lang)
     return review_user_patch(
         title=problem_meta["title"],
         difficulty=problem_meta["difficulty"],
         category=problem_meta["category"],
         description=problem_meta["description"],
-        buggy_code=problem_meta["buggy_code"],
+        buggy_code=clean_buggy,
         user_code=payload.user_code,
-        language=payload.language or "python",
+        language=rev_lang,
     )
 
 

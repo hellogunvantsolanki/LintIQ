@@ -8,17 +8,17 @@ tailwind.config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Geist', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],
       },
       colors: {
         surface: {
-          DEFAULT: '#0f131c',
-          dim: '#0b0e15',
-          container: '#141822',
-          card: '#181d2a',
-          border: '#232938',
-          hover: '#1e2434',
+          DEFAULT: '#10131a',
+          dim: '#090b0f',
+          container: '#151922',
+          card: '#191e29',
+          border: 'rgba(255, 255, 255, 0.08)',
+          hover: '#1c212c',
         },
         accent: {
           DEFAULT: '#10b981',

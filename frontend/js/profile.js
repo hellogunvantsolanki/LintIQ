@@ -297,7 +297,7 @@ function renderDifficultyChart(solvedIds, catalogMap) {
   const canvas = document.getElementById("prof-difficulty-chart");
   if (!canvas || typeof Chart === "undefined") return;
 
-  const counts = { Easy: 0, Medium: 0, Hard: 0 };
+  const counts = { "Very Easy": 0, Easy: 0, Medium: 0, Hard: 0 };
   solvedIds.forEach(id => {
     const prob = catalogMap.get(Number(id));
     const diff = prob?.difficulty || "Medium";
@@ -309,11 +309,11 @@ function renderDifficultyChart(solvedIds, catalogMap) {
   difficultyChartInstance = new Chart(canvas, {
     type: "doughnut",
     data: {
-      labels: ["Easy", "Medium", "Hard"],
+      labels: ["Very Easy", "Easy", "Medium", "Hard"],
       datasets: [{
-        data: [counts.Easy, counts.Medium, counts.Hard],
-        backgroundColor: ["rgba(16, 185, 129, 0.75)", "rgba(245, 158, 11, 0.75)", "rgba(244, 63, 94, 0.75)"],
-        borderColor: ["#10b981", "#f59e0b", "#f43f5e"],
+        data: [counts["Very Easy"], counts.Easy, counts.Medium, counts.Hard],
+        backgroundColor: ["rgba(34, 211, 238, 0.75)", "rgba(16, 185, 129, 0.75)", "rgba(245, 158, 11, 0.75)", "rgba(244, 63, 94, 0.75)"],
+        borderColor: ["#22d3ee", "#10b981", "#f59e0b", "#f43f5e"],
         borderWidth: 1.5
       }]
     },
@@ -359,11 +359,13 @@ function renderRecentPatchesFeed(recentSolves, catalogMap, isSignedIn) {
     const title = row.title || prob?.title || `Challenge #${pid}`;
     const diff = row.difficulty || prob?.difficulty || "";
     const cat = row.category || prob?.category || "";
-    const diffClass = diff === "Easy"
-      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-      : diff === "Hard"
-        ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
-        : "bg-amber-500/10 text-amber-400 border-amber-500/25";
+    const diffClass = diff === "Very Easy"
+      ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/25"
+      : diff === "Easy"
+        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+        : diff === "Hard"
+          ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+          : "bg-amber-500/10 text-amber-400 border-amber-500/25";
 
     const ts = row.solved_at || row.created_at;
     const when = ts
@@ -371,19 +373,19 @@ function renderRecentPatchesFeed(recentSolves, catalogMap, isSignedIn) {
       : "";
     const gradeLabel = row.best_grade || row.patch_grade || "";
     const grade = gradeLabel
-      ? `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono text-[10px]">${escapeHtml(gradeLabel)}</span>`
+      ? `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-medium">${escapeHtml(gradeLabel)}</span>`
       : "";
 
     return `
-      <a href="index.html?id=${encodeURIComponent(pid)}" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg bg-surface-container/60 border border-surface-border hover:border-emerald-500/40 transition">
+      <a href="index.html?id=${encodeURIComponent(pid)}" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.07] hover:border-white/20 transition">
         <div class="flex items-center gap-2.5 flex-wrap min-w-0">
-          <span class="text-emerald-400 font-mono font-bold shrink-0">#${escapeHtml(pid)}</span>
-          <span class="font-semibold text-white truncate">${escapeHtml(title)}</span>
-          ${diff ? `<span class="text-[10px] font-mono px-1.5 py-0.5 rounded border ${diffClass}">${escapeHtml(diff)}</span>` : ""}
-          ${cat ? `<span class="text-[10px] font-mono text-sky-400">${escapeHtml(cat)}</span>` : ""}
+          <span class="text-zinc-500 tabular-nums shrink-0">${escapeHtml(pid)}.</span>
+          <span class="font-medium text-zinc-100 truncate">${escapeHtml(title)}</span>
+          ${diff ? `<span class="text-[11px] font-medium px-1.5 py-0.5 rounded border ${diffClass}">${escapeHtml(diff)}</span>` : ""}
+          ${cat ? `<span class="text-[11px] text-sky-400">${escapeHtml(cat)}</span>` : ""}
           ${grade}
         </div>
-        <span class="text-[11px] text-gray-500 font-mono shrink-0">${escapeHtml(when)}</span>
+        <span class="text-xs text-zinc-500 tabular-nums shrink-0">${escapeHtml(when)}</span>
       </a>
     `;
   }).join("");

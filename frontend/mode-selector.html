@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LintIQ - Choose Your Mode</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="js/tailwind-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: #090b0f;
+      color: #ffffff;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    .mode-fade-out {
+      opacity: 0 !important;
+      transform: scale(0.92) !important;
+      pointer-events: none !important;
+      transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1), transform 240ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+    .mode-selected-glide {
+      position: relative;
+      z-index: 40;
+      pointer-events: none !important;
+      will-change: transform, opacity;
+      transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out !important;
+    }
+    .mode-circle-glow-practice {
+      border-color: rgba(78, 222, 163, 0.85) !important;
+      box-shadow: 0 0 42px rgba(78, 222, 163, 0.44), 0 0 18px rgba(78, 222, 163, 0.28) !important;
+    }
+    .mode-circle-glow-interview {
+      border-color: rgba(255, 185, 95, 0.85) !important;
+      box-shadow: 0 0 42px rgba(255, 185, 95, 0.44), 0 0 18px rgba(255, 185, 95, 0.28) !important;
+    }
+  </style>
+</head>
+<body class="w-full min-h-screen overflow-x-hidden flex flex-col justify-between p-8 md:p-12 relative bg-[#090b0f]">
+
+  <!-- TOP BAR -->
+  <header id="mode-top-header" class="w-full flex items-center justify-between shrink-0 z-10">
+    <!-- Top Left: Green dot + LintIQ -->
+    <a href="problem-directory.html" class="flex items-center space-x-2.5 text-white hover:opacity-90 transition">
+      <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] inline-block shadow-[0_0_8px_#10b981]"></span>
+      <span class="text-base font-semibold tracking-tight">LintIQ</span>
+    </a>
+
+    <!-- Top Right: Avatar when signed in / Sign In when logged out -->
+    <div id="auth-section" class="flex items-center shrink-0">
+      <button id="btn-login" type="button" onclick="openAuthModal()"
+        class="text-xs md:text-sm text-gray-500 hover:text-gray-300 transition duration-150 cursor-pointer">
+        Sign In
+      </button>
+      <div id="user-profile" class="hidden flex items-center shrink-0">
+        <a href="profile.html" class="flex items-center hover:opacity-85 transition" title="Profile &amp; Settings" aria-label="Profile &amp; Settings">
+          <span id="header-user-avatar" class="w-7 h-7 rounded-full bg-white/[0.08] border border-white/[0.14] flex items-center justify-center text-white text-xs font-semibold shrink-0">LQ</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- CENTER STAGE: Heading & 2 Circular Mode Selectors -->
+  <main class="w-full flex-1 flex flex-col items-center justify-center py-8 sm:-translate-y-4 md:-translate-y-6">
+    <!-- Upper-center Heading -->
+    <h1 id="mode-heading" class="text-2xl md:text-[28px] font-semibold text-white tracking-tight mb-12 md:mb-16 text-center">
+      Choose your mode
+    </h1>
+
+    <!-- 2 Large Modes Side-by-Side -->
+    <div class="flex flex-col sm:flex-row items-center gap-10 sm:gap-14 md:gap-20">
+
+      <!-- OPTION 1: PRACTICE -->
+      <a id="btn-mode-practice" href="problem-directory.html?mode=practice" onclick="return enterMode(event, 'practice')"
+        class="group flex flex-col items-center cursor-pointer no-underline">
+        <div id="circle-mode-practice" class="w-[140px] h-[140px] md:w-[150px] md:h-[150px] rounded-full bg-[#161b22] border border-[#232a36] flex items-center justify-center transition-all duration-300 ease-out group-hover:scale-105 group-hover:border-[#4edea3]/60 group-hover:shadow-[0_0_28px_rgba(78,222,163,0.22)]">
+          <!-- Practice / Bug Glyph in Emerald Green (#4edea3) -->
+          <svg class="w-12 h-12 md:w-14 md:h-14 text-[#4edea3] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect width="8" height="14" x="8" y="6" rx="4" />
+            <path d="m19 7-3 2" />
+            <path d="m5 7 3 2" />
+            <path d="m19 19-3-2" />
+            <path d="m5 19 3-2" />
+            <path d="M20 13h-4" />
+            <path d="M4 13h4" />
+            <path d="m10 4 1 2" />
+            <path d="m14 4-1 2" />
+          </svg>
+        </div>
+        <span class="mt-4 text-base md:text-lg font-medium text-gray-300 group-hover:text-white transition-colors duration-200">
+          Practice
+        </span>
+      </a>
+
+      <!-- OPTION 2: INTERVIEW -->
+      <a id="btn-mode-interview" href="problem-directory.html?mode=interview" onclick="return enterMode(event, 'interview')"
+        class="group flex flex-col items-center cursor-pointer no-underline">
+        <div id="circle-mode-interview" class="w-[140px] h-[140px] md:w-[150px] md:h-[150px] rounded-full bg-[#161b22] border border-[#232a36] flex items-center justify-center transition-all duration-300 ease-out group-hover:scale-105 group-hover:border-[#ffb95f]/60 group-hover:shadow-[0_0_28px_rgba(255,185,95,0.22)]">
+          <!-- Interview / Stopwatch Glyph in Amber (#ffb95f) -->
+          <svg class="w-12 h-12 md:w-14 md:h-14 text-[#ffb95f] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="10" x2="14" y1="2" y2="2" />
+            <line x1="12" x2="12" y1="14" y2="9" />
+            <circle cx="12" cy="14" r="8" />
+          </svg>
+        </div>
+        <span class="mt-4 text-base md:text-lg font-medium text-gray-300 group-hover:text-white transition-colors duration-200">
+          Interview
+        </span>
+      </a>
+
+    </div>
+  </main>
+
+  <!-- Empty bottom balancing spacer for dead-center alignment -->
+  <div class="w-full shrink-0 h-6"></div>
+
+  <div id="lintiq-auth-modal"></div>
+
+  <script src="js/shared.js"></script>
+  <script src="components/auth-modal.js"></script>
+  <script>
+    let isEnteringMode = false;
+    let modeTransitionTimers = [];
+
+    function resetModeSelectionState() {
+      modeTransitionTimers.forEach((id) => clearTimeout(id));
+      modeTransitionTimers = [];
+      isEnteringMode = false;
+      document.body.style.overflow = "";
+
+      [
+        "mode-top-header",
+        "mode-heading",
+        "btn-mode-practice",
+        "btn-mode-interview",
+        "circle-mode-practice",
+        "circle-mode-interview",
+      ].forEach((elId) => {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.classList.remove(
+          "mode-fade-out",
+          "mode-selected-glide",
+          "mode-circle-glow-practice",
+          "mode-circle-glow-interview",
+        );
+        el.style.transform = "";
+        el.style.transformOrigin = "";
+        el.style.opacity = "";
+        el.style.transition = "";
+      });
+    }
+
+    function enterMode(event, mode) {
+      if (event) event.preventDefault();
+      if (isEnteringMode) return false;
+
+      const targetMode = mode === "interview" ? "interview" : "practice";
+      const targetUrl = `problem-directory.html?mode=${encodeURIComponent(targetMode)}`;
+      try {
+        sessionStorage.setItem("lintiq_mode", targetMode);
+      } catch (_) {}
+
+      const prefersReduced =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (prefersReduced) {
+        window.location.href = targetUrl;
+        return false;
+      }
+
+      const selectedBtn = document.getElementById(`btn-mode-${targetMode}`);
+      const selectedCircle = document.getElementById(`circle-mode-${targetMode}`);
+      const otherMode = targetMode === "interview" ? "practice" : "interview";
+      const otherBtn = document.getElementById(`btn-mode-${otherMode}`);
+      const topHeader = document.getElementById("mode-top-header");
+      const heading = document.getElementById("mode-heading");
+
+      if (!selectedBtn || !selectedCircle) {
+        window.location.href = targetUrl;
+        return false;
+      }
+
+      isEnteringMode = true;
+      document.body.style.overflow = "hidden";
+
+      const btnRect = selectedBtn.getBoundingClientRect();
+      const circleRect = selectedCircle.getBoundingClientRect();
+      const circleCx = circleRect.left + circleRect.width / 2;
+      const circleCy = circleRect.top + circleRect.height / 2;
+      const dx = window.innerWidth / 2 - circleCx;
+      const dy = window.innerHeight / 2 - circleCy;
+
+      selectedBtn.style.transformOrigin = `${circleCx - btnRect.left}px ${circleCy - btnRect.top}px`;
+      selectedBtn.classList.add("mode-selected-glide");
+      selectedCircle.classList.add(
+        targetMode === "interview"
+          ? "mode-circle-glow-interview"
+          : "mode-circle-glow-practice",
+      );
+
+      [topHeader, heading, otherBtn].forEach((el) => {
+        if (el) el.classList.add("mode-fade-out");
+      });
+
+      requestAnimationFrame(() => {
+        selectedBtn.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.18)`;
+      });
+
+      modeTransitionTimers.push(
+        setTimeout(() => {
+          selectedBtn.style.transition =
+            "transform 100ms ease-in-out, opacity 180ms ease-out";
+          selectedBtn.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.22)`;
+        }, 420),
+      );
+
+      modeTransitionTimers.push(
+        setTimeout(() => {
+          selectedBtn.style.transition =
+            "transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out";
+          selectedBtn.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.32)`;
+          selectedBtn.style.opacity = "0";
+        }, 480),
+      );
+
+      modeTransitionTimers.push(
+        setTimeout(() => {
+          window.location.href = targetUrl;
+        }, 650),
+      );
+
+      return false;
+    }
+
+    window.addEventListener("pageshow", (event) => {
+      if (event && event.persisted) {
+        resetModeSelectionState();
+      }
+    });
+    window.addEventListener("DOMContentLoaded", async () => {
+      if (typeof initAuth === "function") {
+        await initAuth();
+      }
+    });
+  </script>
+</body>
+</html>
+

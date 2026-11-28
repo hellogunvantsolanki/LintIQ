@@ -169,7 +169,7 @@ function renderHeroSection(profile) {
   if (rankBadgeEl) rankBadgeEl.textContent = `#${rankNum}`;
   if (nameEl) nameEl.textContent = displayName;
   if (rankPillEl) {
-    rankPillEl.textContent = `#${rankNum} GLOBAL · ${(profile.tier || "Bug Hunter I").toUpperCase()}`;
+    rankPillEl.textContent = `#${rankNum} Global · ${profile.tier || "Bug Hunter I"}`;
   }
 
   if (metaRowEl) {
@@ -191,15 +191,15 @@ function renderHeroSection(profile) {
       const isSelf = currentUser?.id && (viewerRankInfo.id === targetUserParam || displayName.toLowerCase() === getDisplayUsername(currentUser).toLowerCase());
       let deltaHtml = "";
       if (isSelf) {
-        deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[11px] font-mono text-emerald-300">Viewing Your Public Dossier (#${rankNum})</span>`;
+        deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-300 tabular-nums">Your Public Profile (#${rankNum})</span>`;
       } else {
         const diff = viewerRankInfo.rank - rankNum;
         if (diff > 0) {
-          deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-[11px] font-mono text-amber-300">⇅ Delta vs You (${escapeHtml(viewerRankInfo.initials)}: #${viewerRankInfo.rank.toLocaleString()}): +${diff.toLocaleString()} ${diff === 1 ? "Rank" : "Ranks"} Ahead</span>`;
+          deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300 tabular-nums">${diff.toLocaleString()} ${diff === 1 ? "Rank" : "Ranks"} ahead of you (${escapeHtml(viewerRankInfo.initials)}: #${viewerRankInfo.rank.toLocaleString()})</span>`;
         } else if (diff < 0) {
-          deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[11px] font-mono text-emerald-300">⇅ Delta vs You (${escapeHtml(viewerRankInfo.initials)}: #${viewerRankInfo.rank.toLocaleString()}): You are ${Math.abs(diff).toLocaleString()} ${Math.abs(diff) === 1 ? "Rank" : "Ranks"} Ahead</span>`;
+          deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-300 tabular-nums">You are ${Math.abs(diff).toLocaleString()} ${Math.abs(diff) === 1 ? "Rank" : "Ranks"} ahead (${escapeHtml(viewerRankInfo.initials)}: #${viewerRankInfo.rank.toLocaleString()})</span>`;
         } else {
-          deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-sky-500/15 border border-sky-500/35 text-[11px] font-mono text-sky-300">⇅ Tied with You (#${rankNum})</span>`;
+          deltaHtml = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/25 text-xs text-sky-300 tabular-nums">Tied with you (#${rankNum})</span>`;
         }
       }
       deltaRowEl.innerHTML = deltaHtml;
@@ -259,14 +259,14 @@ function renderBreakdownSection(breakdown, solvedCount) {
     }
 
     const catPills = cats.map(c =>
-      `<span class="px-2.5 py-1 rounded-md bg-surface-container border border-surface-border text-gray-200 flex items-center gap-1.5">
+      `<span class="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.08] text-zinc-200 flex items-center gap-1.5 tabular-nums">
         <span>${escapeHtml(c.name)}</span>
-        <span class="text-emerald-400 font-bold">${Number(c.count || 0)}</span>
+        <span class="text-emerald-400 font-semibold">${Number(c.count || 0)}</span>
       </span>`
     );
     const tagPills = tags.slice(0, 4).map(t =>
-      `<span class="px-2 py-1 rounded-md bg-sky-500/10 border border-sky-500/25 text-sky-300 text-[11px]">
-        #${escapeHtml(t.name)} <span class="opacity-75">${Number(t.count || 0)}</span>
+      `<span class="px-2 py-1 rounded-md bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs tabular-nums">
+        ${escapeHtml(String(t.name || "").replace(/^#+/, ""))} <span class="opacity-75">${Number(t.count || 0)}</span>
       </span>`
     );
     pillsEl.innerHTML = catPills.concat(tagPills).join("");
@@ -423,6 +423,7 @@ function renderSolvedTablePage() {
   const slice = filteredChallenges.slice(startIdx, endIdx);
 
   const diffClassMap = {
+    "very easy": "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
     easy: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
     medium: "bg-amber-500/15 text-amber-300 border-amber-500/30",
     hard: "bg-rose-500/15 text-rose-300 border-rose-500/30",
@@ -434,29 +435,29 @@ function renderSolvedTablePage() {
     const diffStyle = diffClassMap[diffNorm.toLowerCase()] || diffClassMap.medium;
     const isViewerSolved = viewerSolvedIds.has(pid);
     const statusHtml = isViewerSolved
-      ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono font-semibold whitespace-nowrap">✓ Solved</span>`
-      : `<a href="index.html?id=${encodeURIComponent(pid)}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-accent hover:bg-accent-hover text-black text-[11px] font-semibold transition whitespace-nowrap">Try Bug →</a>`;
+      ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-medium whitespace-nowrap">✓ Solved</span>`
+      : `<a href="index.html?id=${encodeURIComponent(pid)}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-zinc-100 text-xs font-medium transition whitespace-nowrap">Try Bug →</a>`;
 
     return `
-      <tr class="hover:bg-surface-hover/50 transition">
-        <td class="py-3 px-4 font-mono text-gray-400">#${pid}</td>
-        <td class="py-3 px-4">
-          <a href="index.html?id=${encodeURIComponent(pid)}" class="font-semibold text-white hover:text-emerald-400 transition">
-            ${escapeHtml(ch.title || `Challenge #${pid}`)}
+      <tr class="hover:bg-white/[0.03] transition">
+        <td class="py-3.5 px-4 tabular-nums text-zinc-400">${pid}</td>
+        <td class="py-3.5 px-4">
+          <a href="index.html?id=${encodeURIComponent(pid)}" class="font-medium text-zinc-100 hover:text-emerald-400 transition">
+            ${escapeHtml(ch.title || `Challenge ${pid}`)}
           </a>
         </td>
-        <td class="py-3 px-4">
-          <span class="px-2 py-0.5 rounded bg-surface-container border border-surface-border text-[11px] font-mono text-sky-300 whitespace-nowrap">
+        <td class="py-3.5 px-4">
+          <span class="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.07] text-xs text-sky-300 whitespace-nowrap">
             ${escapeHtml(ch.category || "General")}
           </span>
         </td>
-        <td class="py-3 px-4">
-          <span class="px-2 py-0.5 rounded border text-[11px] font-mono font-semibold whitespace-nowrap ${diffStyle}">
+        <td class="py-3.5 px-4">
+          <span class="px-2 py-0.5 rounded border text-xs font-medium whitespace-nowrap ${diffStyle}">
             ${escapeHtml(diffNorm)}
           </span>
         </td>
-        <td class="py-3 px-4 font-mono text-gray-400 whitespace-nowrap">${escapeHtml(formatRelativeOrDate(ch.solved_at))}</td>
-        <td class="py-3 px-4 text-right">${statusHtml}</td>
+        <td class="py-3.5 px-4 tabular-nums text-zinc-400 whitespace-nowrap">${escapeHtml(formatRelativeOrDate(ch.solved_at))}</td>
+        <td class="py-3.5 px-4 text-right">${statusHtml}</td>
       </tr>
     `;
   }).join("");

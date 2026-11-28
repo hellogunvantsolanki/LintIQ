@@ -7,19 +7,21 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="js/tailwind-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css" />
   <style>
     html, body {
       min-height: 100vh;
-      background-color: #0a0e16;
+      background-color: #090b0f;
       color: #e2e8f0;
-      font-family: 'Geist', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0f131c; }
+    ::-webkit-scrollbar-track { background: #0d1016; }
     ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #333c52; }
   </style>
@@ -40,8 +42,8 @@
           <span class="truncate">LintIQ Control Center — Dashboard &amp; Graph</span>
         </div>
         <div class="flex items-center space-x-3 shrink-0">
-          <span id="dashboard-session-badge" class="text-[11px] font-mono text-gray-500">CHECKING SESSION...</span>
-          <a href="index.html" class="text-gray-400 hover:text-white transition text-lg leading-none" title="Return to Workspace">✕</a>
+          <span id="dashboard-session-badge" class="text-xs text-zinc-500">Checking session...</span>
+          <a href="index.html" class="text-zinc-400 hover:text-white transition text-lg leading-none" title="Return to Workspace">✕</a>
         </div>
       </div>
 
@@ -64,40 +66,40 @@
           <!-- 4 KPI CARDS -->
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
 
-            <div class="bg-surface-container/50 border border-surface-border rounded-xl p-4 flex items-center justify-between">
+            <div class="bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 flex items-center justify-between">
               <div>
-                <div class="text-[10px] uppercase font-mono text-gray-400">Patches Solved</div>
-                <div id="stat-patches" class="text-2xl font-bold text-emerald-400 mt-1">0</div>
-                <div id="stat-patches-sub" class="text-[10px] text-gray-500 mt-0.5">0 pts</div>
+                <div class="text-xs font-medium text-zinc-400">Patches Solved</div>
+                <div id="stat-patches" class="text-2xl font-semibold tabular-nums text-emerald-400 mt-1">0</div>
+                <div id="stat-patches-sub" class="text-xs text-zinc-500 tabular-nums mt-0.5">0 pts</div>
               </div>
-              <div class="text-emerald-400 bg-emerald-500/10 p-2 rounded-lg text-lg">✓</div>
+              <div class="text-emerald-400 bg-emerald-500/10 p-2 rounded-lg text-base">✓</div>
             </div>
 
-            <div class="bg-surface-container/50 border border-surface-border rounded-xl p-4 flex items-center justify-between">
+            <div class="bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 flex items-center justify-between">
               <div>
-                <div class="text-[10px] uppercase font-mono text-gray-400">Avg Runtime</div>
-                <div id="stat-runtime" class="text-2xl font-bold text-cyan-400 mt-1">0 <span class="text-xs text-gray-400 font-normal">ms</span></div>
-                <div class="text-[10px] text-gray-500 mt-0.5">sandbox avg</div>
+                <div class="text-xs font-medium text-zinc-400">Avg Runtime</div>
+                <div id="stat-runtime" class="text-2xl font-semibold tabular-nums text-sky-400 mt-1">0 <span class="text-xs text-zinc-400 font-normal">ms</span></div>
+                <div class="text-xs text-zinc-500 mt-0.5">sandbox avg</div>
               </div>
-              <div class="text-cyan-400 bg-cyan-500/10 p-2 rounded-lg text-lg">⚡</div>
+              <div class="text-sky-400 bg-sky-500/10 p-2 rounded-lg text-base">⚡</div>
             </div>
 
-            <div class="bg-surface-container/50 border border-surface-border rounded-xl p-4 flex items-center justify-between">
+            <div class="bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 flex items-center justify-between">
               <div>
-                <div class="text-[10px] uppercase font-mono text-gray-400">Pass Rate</div>
-                <div id="stat-accuracy" class="text-2xl font-bold text-amber-400 mt-1">0%</div>
-                <div id="stat-accuracy-sub" class="text-[10px] text-gray-500 mt-0.5">0 of 0 runs</div>
+                <div class="text-xs font-medium text-zinc-400">Pass Rate</div>
+                <div id="stat-accuracy" class="text-2xl font-semibold tabular-nums text-amber-400 mt-1">0%</div>
+                <div id="stat-accuracy-sub" class="text-xs text-zinc-500 tabular-nums mt-0.5">0 of 0 runs</div>
               </div>
-              <div class="text-amber-400 bg-amber-500/10 p-2 rounded-lg text-lg">📈</div>
+              <div class="text-amber-400 bg-amber-500/10 p-2 rounded-lg text-base">📈</div>
             </div>
 
-            <div class="bg-surface-container/50 border border-surface-border rounded-xl p-4 flex items-center justify-between">
+            <div class="bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 flex items-center justify-between">
               <div>
-                <div class="text-[10px] uppercase font-mono text-gray-400">Best Streak</div>
-                <div id="stat-best-streak" class="text-2xl font-bold text-purple-400 mt-1">0</div>
-                <div class="text-[10px] text-gray-500 mt-0.5">streak peak</div>
+                <div class="text-xs font-medium text-zinc-400">Best Streak</div>
+                <div id="stat-best-streak" class="text-2xl font-semibold tabular-nums text-purple-400 mt-1">0</div>
+                <div class="text-xs text-zinc-500 mt-0.5">streak peak</div>
               </div>
-              <div class="text-purple-400 bg-purple-500/10 p-2 rounded-lg text-lg">🔥</div>
+              <div class="text-purple-400 bg-purple-500/10 p-2 rounded-lg text-base">🔥</div>
             </div>
 
           </div>
@@ -106,15 +108,15 @@
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
 
             <!-- LEFT: 7-DAY BUG HUNT CHART.JS GRAPH -->
-            <div class="lg:col-span-8 bg-surface-container/40 border border-surface-border rounded-xl p-5 sm:p-6 space-y-4 flex flex-col">
+            <div class="lg:col-span-8 bg-white/[0.02] border border-white/[0.07] rounded-xl p-6 space-y-4 flex flex-col">
               <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <h3 class="text-xs uppercase tracking-wider font-mono text-white">7-Day Bug-Hunt & Latency Graph</h3>
-                  <p class="text-[11px] text-gray-400 mt-0.5">Execution runs mapped against solved bugs</p>
+                  <h3 class="text-base font-semibold tracking-[-0.02em] text-white">7-Day Activity &amp; Latency</h3>
+                  <p class="text-xs text-zinc-400 mt-0.5">Execution runs mapped against solved bugs</p>
                 </div>
-                <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center space-x-1 shrink-0">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span>Live Telemetry</span>
+                <span class="text-xs text-zinc-400 bg-white/[0.04] border border-white/[0.07] px-2.5 py-0.5 rounded flex items-center space-x-1.5 shrink-0">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>Live</span>
                 </span>
               </div>
 
@@ -122,35 +124,32 @@
                 <canvas id="settings-activity-chart"></canvas>
               </div>
 
-              <div class="flex items-center justify-between text-[11px] text-gray-500 pt-2 border-t border-surface-border/40 font-mono">
-                <span>Window: Last 7 calendar days</span>
-                <span id="dashboard-peak-summary" class="text-white">Peak: —</span>
+              <div class="flex items-center justify-between text-xs text-zinc-500 pt-2 border-t border-white/[0.06] tabular-nums">
+                <span>Window: Last 7 days</span>
+                <span id="dashboard-peak-summary" class="text-zinc-200">Peak: —</span>
               </div>
             </div>
 
             <!-- RIGHT: ACCOUNT TELEMETRY SIDEBAR -->
-            <div class="lg:col-span-4 bg-surface-container/40 border border-surface-border rounded-xl p-5 sm:p-6 flex flex-col justify-between space-y-4">
+            <div class="lg:col-span-4 bg-white/[0.02] border border-white/[0.07] rounded-xl p-6 flex flex-col justify-between space-y-4">
               <div class="space-y-4">
-                <div class="flex items-center space-x-2 text-xs font-mono uppercase tracking-wider text-gray-300">
-                  <span>⚙</span>
-                  <span>Account Telemetry</span>
-                </div>
-                <p class="text-xs text-gray-400 leading-relaxed">
-                  Stats update automatically each time you submit a patch while signed in as <strong id="dashboard-account-name" class="text-emerald-400 font-mono">Engineer</strong>.
+                <div class="text-base font-semibold tracking-[-0.02em] text-white">Account Telemetry</div>
+                <p class="text-sm font-normal text-zinc-400 leading-relaxed">
+                  Stats update automatically each time you submit a patch while signed in as <strong id="dashboard-account-name" class="font-medium text-emerald-400">Engineer</strong>.
                 </p>
 
                 <div class="space-y-2.5 text-xs pt-2">
-                  <div class="flex justify-between py-1 border-b border-surface-border/40">
-                    <span class="text-gray-400">Sync Status</span>
-                    <span class="text-emerald-400 font-semibold">Synced</span>
+                  <div class="flex justify-between py-1.5 border-b border-white/[0.06]">
+                    <span class="text-zinc-400">Sync Status</span>
+                    <span class="text-emerald-400 font-medium">Synced</span>
                   </div>
-                  <div class="flex justify-between py-1 border-b border-surface-border/40">
-                    <span class="text-gray-400">Active Stack</span>
-                    <span id="dashboard-active-track" class="font-mono text-white">Python 3.11</span>
+                  <div class="flex justify-between py-1.5 border-b border-white/[0.06]">
+                    <span class="text-zinc-400">Active Stack</span>
+                    <span id="dashboard-active-track" class="text-zinc-100">Python 3.11</span>
                   </div>
-                  <div class="flex justify-between py-1">
-                    <span class="text-gray-400">Storage Mode</span>
-                    <span class="font-mono text-gray-300">Cloud + Local</span>
+                  <div class="flex justify-between py-1.5">
+                    <span class="text-zinc-400">Storage Mode</span>
+                    <span class="text-zinc-300">Cloud + Local</span>
                   </div>
                 </div>
               </div>
@@ -163,6 +162,10 @@
                 <button type="button" onclick="resetSettingsTelemetry()" class="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs text-rose-300 rounded-lg flex items-center justify-center space-x-2 transition cursor-pointer">
                   <span>↺</span>
                   <span>Reset Local Telemetry</span>
+                </button>
+                <button id="settings-page-logout-btn" type="button" onclick="logout()" class="hidden w-full py-2 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-xs font-medium text-rose-300 rounded-lg flex items-center justify-center space-x-2 transition cursor-pointer">
+                  <span>↪</span>
+                  <span>Log Out</span>
                 </button>
               </div>
             </div>

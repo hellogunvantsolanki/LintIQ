@@ -10,8 +10,33 @@ let activeStatus = "All";
 let searchQuery = "";
 let currentPage = 1;
 let pageSize = 25;
+let hasPlayedInitialRowCascade = false;
 
 // --- 2. UTILITIES ---
+function getDirectoryMode() {
+  if (typeof window.getActiveMode === "function") {
+    return window.getActiveMode();
+  }
+  try {
+    const urlMode = new URLSearchParams(window.location.search).get("mode");
+    if (urlMode === "interview" || urlMode === "practice") {
+      sessionStorage.setItem("lintiq_mode", urlMode);
+      return urlMode;
+    }
+    const saved = sessionStorage.getItem("lintiq_mode");
+    if (saved === "interview" || saved === "practice") return saved;
+  } catch (_) {}
+  return "practice";
+}
+
+function buildWorkspaceProblemUrl(problemId = null) {
+  const mode = encodeURIComponent(getDirectoryMode());
+  if (problemId !== null && problemId !== undefined && problemId !== "") {
+    return `index.html?mode=${mode}&id=${encodeURIComponent(problemId)}`;
+  }
+  return `index.html?mode=${mode}`;
+}
+
 function formatTimeAgo(timestampMs) {
   if (!timestampMs) return "Ready";
   const diffSec = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
@@ -25,19 +50,29 @@ function formatTimeAgo(timestampMs) {
 }
 
 function getLastActiveProblem() {
+  const mode = getDirectoryMode();
   try {
-    return JSON.parse(localStorage.getItem("lintiq_last_active_problem") || "null");
-  } catch (_) {
-    return null;
-  }
+    const scoped = localStorage.getItem(`lintiq_last_active_problem_${mode}`);
+    if (scoped) return JSON.parse(scoped);
+    if (mode === "practice") {
+      return JSON.parse(
+        localStorage.getItem("lintiq_last_active_problem") || "null",
+      );
+    }
+  } catch (_) {}
+  return null;
 }
 
 function getLocalSolvedIds() {
   const uid = currentUser?.id || "guest";
+  const mode = getDirectoryMode();
   const ids = new Set();
   try {
-    const map = JSON.parse(localStorage.getItem(`lintiq_solved_map_${uid}`) || "{}") || {};
-    Object.keys(map).forEach(k => {
+    const map =
+      JSON.parse(
+        localStorage.getItem(`lintiq_solved_map_${mode}_${uid}`) || "{}",
+      ) || {};
+    Object.keys(map).forEach((k) => {
       const n = Number(k);
       if (Number.isFinite(n)) ids.add(n);
     });
@@ -47,7 +82,10 @@ function getLocalSolvedIds() {
 
 // --- 3. USER STATS (Auth modals & navbar state handled by shared.js) ---
 async function syncDirUserStats() {
-  let streak = typeof getEffectiveLocalStreak === "function" ? getEffectiveLocalStreak() : 0;
+  let streak =
+    typeof getEffectiveLocalStreak === "function"
+      ? getEffectiveLocalStreak()
+      : 0;
   let score = parseInt(localStorage.getItem("lintiq_score") || "0", 10);
   let solves = parseInt(localStorage.getItem("lintiq_solves") || "0", 10);
 
@@ -55,13 +93,18 @@ async function syncDirUserStats() {
     let usedBackendProfile = false;
     try {
       if (currentSession?.access_token) {
-        const res = await fetch(`${API}/profile/${encodeURIComponent(currentUser.id)}`, {
-          headers: { Authorization: `Bearer ${currentSession.access_token}` }
-        });
+        const res = await fetch(
+          `${API}/profile/${encodeURIComponent(currentUser.id)}`,
+          {
+            headers: { Authorization: `Bearer ${currentSession.access_token}` },
+          },
+        );
         if (res.ok) {
           const backendProfile = await res.json();
           score = Math.max(score, backendProfile.score || 0);
-          streak = Number(backendProfile.current_streak ?? backendProfile.streak ?? 0);
+          streak = Number(
+            backendProfile.current_streak ?? backendProfile.streak ?? 0,
+          );
           solves = Math.max(solves, backendProfile.solves || 0);
           usedBackendProfile = true;
         }
@@ -87,12 +130,19 @@ async function syncDirUserStats() {
         .eq("user_id", currentUser.id);
 
       if (Array.isArray(cloudSolves)) {
-        cloudSolves.forEach(row => {
-          const n = Number(row.problem_id);
-          if (Number.isFinite(n)) solvedIdSet.add(n);
-        });
-        if (!usedBackendProfile && typeof computeIstStreakFromSolveDates === "function") {
-          streak = computeIstStreakFromSolveDates(cloudSolves.map(r => r.solved_at)).currentStreak;
+        if (getDirectoryMode() === "practice") {
+          cloudSolves.forEach((row) => {
+            const n = Number(row.problem_id);
+            if (Number.isFinite(n)) solvedIdSet.add(n);
+          });
+        }
+        if (
+          !usedBackendProfile &&
+          typeof computeIstStreakFromSolveDates === "function"
+        ) {
+          streak = computeIstStreakFromSolveDates(
+            cloudSolves.map((r) => r.solved_at),
+          ).currentStreak;
         }
       }
     } catch (err) {
@@ -102,22 +152,29 @@ async function syncDirUserStats() {
 
   const dirStreakEl = document.getElementById("dir-streak");
   if (dirStreakEl) dirStreakEl.textContent = streak;
-  document.getElementById("stat-streak").textContent = `${streak} ${streak === 1 ? "Day" : "Days"}`;
-  document.getElementById("stat-score").textContent = `${score.toLocaleString()} pts`;
-  document.getElementById("stat-solves").textContent = `${Math.max(solves, solvedIdSet.size)} Bugs`;
+  document.getElementById("stat-streak").textContent =
+    `${streak} ${streak === 1 ? "Day" : "Days"}`;
+  document.getElementById("stat-score").textContent =
+    `${score.toLocaleString()} pts`;
+  document.getElementById("stat-solves").textContent =
+    `${Math.max(solves, solvedIdSet.size)} Bugs`;
 }
 
 // --- 4. FETCH CATEGORIES & FULL PROBLEM CATALOG ---
 async function loadCategories() {
+  const mode = getDirectoryMode();
   try {
-    const res = await fetch(`${API}/categories`);
+    const res = await fetch(
+      `${API}/categories?mode=${encodeURIComponent(mode)}`,
+    );
     if (!res.ok) return;
     const data = await res.json();
 
     const allBadge = document.getElementById("cat-count-All");
-    if (allBadge) allBadge.textContent = Number(data.total || 0).toLocaleString();
+    if (allBadge)
+      allBadge.textContent = Number(data.total || 0).toLocaleString();
 
-    (data.categories || []).forEach(c => {
+    (data.categories || []).forEach((c) => {
       const badge = document.getElementById(`cat-count-${c.name}`);
       if (badge) badge.textContent = Number(c.count || 0).toLocaleString();
     });
@@ -129,6 +186,7 @@ async function loadCategories() {
 async function loadAllProblems() {
   const tbody = document.getElementById("directory-rows");
   const footerStatus = document.getElementById("dir-sync-footer");
+  const mode = getDirectoryMode();
 
   try {
     const headers = {};
@@ -136,18 +194,21 @@ async function loadAllProblems() {
       headers["Authorization"] = `Bearer ${currentSession.access_token}`;
     }
 
-    const res = await fetch(`${API}/problems?category=All&difficulty=All&limit=5000`, { headers });
+    const res = await fetch(
+      `${API}/problems?mode=${encodeURIComponent(mode)}&category=All&difficulty=All&limit=5000`,
+      { headers },
+    );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
     const localSolved = getLocalSolvedIds();
-    localSolved.forEach(id => solvedIdSet.add(id));
+    localSolved.forEach((id) => solvedIdSet.add(id));
 
-    allProblems = (data.problems || []).map(p => {
+    allProblems = (data.problems || []).map((p) => {
       if (p.solved) solvedIdSet.add(Number(p.id));
       return {
         ...p,
-        solved: Boolean(p.solved) || solvedIdSet.has(Number(p.id))
+        solved: Boolean(p.solved) || solvedIdSet.has(Number(p.id)),
       };
     });
 
@@ -187,12 +248,14 @@ function setDirCategory(cat) {
   activeCategory = cat;
   currentPage = 1;
 
-  document.querySelectorAll(".dir-cat-pill").forEach(btn => {
+  document.querySelectorAll(".dir-cat-pill").forEach((btn) => {
     const isMatch = btn.getAttribute("data-cat") === cat;
     if (isMatch) {
-      btn.className = "dir-cat-pill px-3 py-1.5 rounded-full font-semibold bg-accent text-black shrink-0 cursor-pointer transition";
+      btn.className =
+        "dir-cat-pill px-3 py-1.5 rounded-lg font-medium bg-white/[0.08] text-white border border-white/[0.1] shrink-0 cursor-pointer transition";
     } else {
-      btn.className = "dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition";
+      btn.className =
+        "dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition";
     }
   });
 
@@ -201,7 +264,9 @@ function setDirCategory(cat) {
 window.setDirCategory = setDirCategory;
 
 function handleDirFilterChange() {
-  searchQuery = (document.getElementById("dir-search")?.value || "").trim().toLowerCase();
+  searchQuery = (document.getElementById("dir-search")?.value || "")
+    .trim()
+    .toLowerCase();
   activeDifficulty = document.getElementById("dir-difficulty")?.value || "All";
   activeStatus = document.getElementById("dir-status")?.value || "All";
   currentPage = 1;
@@ -223,16 +288,59 @@ function resetDirFilters() {
 }
 window.resetDirFilters = resetDirFilters;
 
+function getDirDifficultyMeta(rawDiff) {
+  const norm = String(rawDiff || "Medium").trim().toLowerCase();
+  if (norm === "very easy") {
+    return {
+      label: "Very Easy",
+      rank: 0,
+      pillClass: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",
+      tableBadgeClass: "bg-cyan-500/10 text-cyan-300",
+    };
+  }
+  if (norm === "easy") {
+    return {
+      label: "Easy",
+      rank: 1,
+      pillClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      tableBadgeClass: "bg-emerald-500/10 text-emerald-400",
+    };
+  }
+  if (norm === "hard") {
+    return {
+      label: "Hard",
+      rank: 3,
+      pillClass: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+      tableBadgeClass: "bg-rose-500/10 text-rose-400",
+    };
+  }
+  return {
+    label: "Medium",
+    rank: 2,
+    pillClass: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    tableBadgeClass: "bg-amber-500/10 text-amber-400",
+  };
+}
+
 function updateProficiencyCard(trackProblems) {
   const total = trackProblems.length;
-  let easyTotal = 0, easySolved = 0;
-  let medTotal = 0, medSolved = 0;
-  let hardTotal = 0, hardSolved = 0;
+  const isInterviewMode = getDirectoryMode() === "interview";
+  let veryEasyTotal = 0,
+    veryEasySolved = 0;
+  let easyTotal = 0,
+    easySolved = 0;
+  let medTotal = 0,
+    medSolved = 0;
+  let hardTotal = 0,
+    hardSolved = 0;
 
-  trackProblems.forEach(p => {
+  trackProblems.forEach((p) => {
     const isSolved = p.solved || solvedIdSet.has(Number(p.id));
     const d = (p.difficulty || "").toLowerCase();
-    if (d === "easy") {
+    if (d === "very easy") {
+      veryEasyTotal++;
+      if (isSolved) veryEasySolved++;
+    } else if (d === "easy") {
       easyTotal++;
       if (isSolved) easySolved++;
     } else if (d === "hard") {
@@ -244,64 +352,105 @@ function updateProficiencyCard(trackProblems) {
     }
   });
 
-  const totalSolved = easySolved + medSolved + hardSolved;
+  const totalSolved = veryEasySolved + easySolved + medSolved + hardSolved;
   const pct = total > 0 ? ((totalSolved / total) * 100).toFixed(1) : "0.0";
 
-  document.getElementById("prog-track-label").textContent = activeCategory === "All" ? "ALL TRACKS" : activeCategory.toUpperCase();
-  document.getElementById("prog-solved").textContent = totalSolved.toLocaleString();
+  document.getElementById("prog-track-label").textContent =
+    activeCategory === "All" ? "ALL TRACKS" : activeCategory.toUpperCase();
+  document.getElementById("prog-solved").textContent =
+    totalSolved.toLocaleString();
   document.getElementById("prog-total").textContent = total.toLocaleString();
   document.getElementById("prog-pct").textContent = `${pct}%`;
 
-  document.getElementById("bar-easy").style.width = total > 0 ? `${(easySolved / total) * 100}%` : "0%";
-  document.getElementById("bar-med").style.width = total > 0 ? `${(medSolved / total) * 100}%` : "0%";
-  document.getElementById("bar-hard").style.width = total > 0 ? `${(hardSolved / total) * 100}%` : "0%";
+  const showVeryEasy = !isInterviewMode;
+  const veryEasyOpt = document.getElementById("dir-opt-very-easy");
+  if (veryEasyOpt) veryEasyOpt.hidden = !showVeryEasy;
+  const veryEasyWrap = document.getElementById("prog-very-easy-wrap");
+  if (veryEasyWrap) veryEasyWrap.classList.toggle("hidden", !showVeryEasy);
+  const barVeryEasy = document.getElementById("bar-very-easy");
+  if (barVeryEasy) {
+    barVeryEasy.classList.toggle("hidden", !showVeryEasy);
+    barVeryEasy.style.width =
+      total > 0 ? `${(veryEasySolved / total) * 100}%` : "0%";
+  }
+  const progVeryEasy = document.getElementById("prog-very-easy");
+  if (progVeryEasy) {
+    progVeryEasy.textContent = `Very Easy: ${veryEasySolved}/${veryEasyTotal}`;
+  }
 
-  document.getElementById("prog-easy").textContent = `Easy: ${easySolved}/${easyTotal}`;
-  document.getElementById("prog-med").textContent = `Medium: ${medSolved}/${medTotal}`;
-  document.getElementById("prog-hard").textContent = `Hard: ${hardSolved}/${hardTotal}`;
-  document.getElementById("prog-remaining").textContent = `${(total - totalSolved).toLocaleString()} Remaining in Track`;
+  document.getElementById("bar-easy").style.width =
+    total > 0 ? `${(easySolved / total) * 100}%` : "0%";
+  document.getElementById("bar-med").style.width =
+    total > 0 ? `${(medSolved / total) * 100}%` : "0%";
+  document.getElementById("bar-hard").style.width =
+    total > 0 ? `${(hardSolved / total) * 100}%` : "0%";
+
+  document.getElementById("prog-easy").textContent =
+    `Easy: ${easySolved}/${easyTotal}`;
+  document.getElementById("prog-med").textContent =
+    `Medium: ${medSolved}/${medTotal}`;
+  document.getElementById("prog-hard").textContent =
+    `Hard: ${hardSolved}/${hardTotal}`;
+  document.getElementById("prog-remaining").textContent =
+    `${(total - totalSolved).toLocaleString()} Remaining in Track`;
 }
 
 function renderActiveSessionCard() {
   const saved = getLastActiveProblem();
-  const fallback = allProblems.find(p => !p.solved && !solvedIdSet.has(Number(p.id))) || allProblems[0];
+  const fallback =
+    allProblems.find((p) => !p.solved && !solvedIdSet.has(Number(p.id))) ||
+    allProblems[0];
   const target = saved && saved.id ? saved : fallback;
   if (!target) return;
 
-  const diff = (target.difficulty || "Easy").toLowerCase();
+  const diffMeta = getDirDifficultyMeta(target.difficulty || "Easy");
   const diffEl = document.getElementById("active-diff");
-  diffEl.textContent = (target.difficulty || "Easy").toUpperCase();
-  diffEl.className = diff === "easy"
-    ? "px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded uppercase"
-    : diff === "hard"
-      ? "px-2 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded uppercase"
-      : "px-2 py-0.5 text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded uppercase";
+  diffEl.textContent = diffMeta.label;
+  diffEl.className = `px-2 py-0.5 text-[11px] font-medium border rounded ${diffMeta.pillClass}`;
 
-  document.getElementById("active-badge-text").textContent = saved ? "ACTIVE SESSION" : "NEXT RECOMMENDED";
-  document.getElementById("active-updated").textContent = saved ? formatTimeAgo(saved.updatedAt) : "Ready to start";
-  document.getElementById("active-meta").textContent = `#${target.id} • ${target.category || "General"}`;
-  document.getElementById("active-title").textContent = target.title || `Problem #${target.id}`;
-  document.getElementById("active-desc").textContent = target.description || target.description_preview || "Inspect the buggy implementation and patch all edge cases.";
+  document.getElementById("active-badge-text").textContent = saved
+    ? "ACTIVE SESSION"
+    : "NEXT RECOMMENDED";
+  document.getElementById("active-updated").textContent = saved
+    ? formatTimeAgo(saved.updatedAt)
+    : "Ready to start";
+  document.getElementById("active-meta").textContent =
+    `${target.id} • ${target.category || "General"}`;
+  document.getElementById("active-title").textContent =
+    target.title || `Problem ${target.id}`;
+  document.getElementById("active-desc").textContent =
+    target.description ||
+    target.description_preview ||
+    "Inspect the buggy implementation and patch all edge cases.";
 
   const resumeBtn = document.getElementById("active-resume-btn");
-  resumeBtn.href = `index.html?id=${encodeURIComponent(target.id)}`;
-  resumeBtn.textContent = saved ? `▶ Resume Problem #${target.id}` : `▶ Start Problem #${target.id}`;
+  resumeBtn.href = buildWorkspaceProblemUrl(target.id);
+  resumeBtn.textContent = saved
+    ? `▶ Resume Problem ${target.id}`
+    : `▶ Start Problem ${target.id}`;
 }
 
 function applyFiltersAndRender() {
   // Refresh solved flag from merged set
-  allProblems.forEach(p => {
+  allProblems.forEach((p) => {
     p.solved = Boolean(p.solved) || solvedIdSet.has(Number(p.id));
   });
 
-  const trackScoped = activeCategory === "All"
-    ? allProblems
-    : allProblems.filter(p => (p.category || "").toLowerCase() === activeCategory.toLowerCase());
+  const trackScoped =
+    activeCategory === "All"
+      ? allProblems
+      : allProblems.filter(
+          (p) =>
+            (p.category || "").toLowerCase() === activeCategory.toLowerCase(),
+        );
 
   updateProficiencyCard(trackScoped);
 
-  filteredProblems = trackScoped.filter(p => {
-    if (activeDifficulty !== "All" && (p.difficulty || "").toLowerCase() !== activeDifficulty.toLowerCase()) {
+  filteredProblems = trackScoped.filter((p) => {
+    if (
+      activeDifficulty !== "All" &&
+      (p.difficulty || "").toLowerCase() !== activeDifficulty.toLowerCase()
+    ) {
       return false;
     }
     if (activeStatus === "Solved" && !p.solved) return false;
@@ -312,7 +461,9 @@ function applyFiltersAndRender() {
       const inId = String(p.id) === cleanQ;
       const inTitle = (p.title || "").toLowerCase().includes(searchQuery);
       const inCat = (p.category || "").toLowerCase().includes(searchQuery);
-      const inTags = Array.isArray(p.tags) && p.tags.some(t => String(t).toLowerCase().includes(cleanQ));
+      const inTags =
+        Array.isArray(p.tags) &&
+        p.tags.some((t) => String(t).toLowerCase().includes(cleanQ));
       if (!inId && !inTitle && !inCat && !inTags) return false;
     }
     return true;
@@ -357,57 +508,70 @@ function renderTablePage() {
     rangeInfo.textContent = `Showing ${startIdx + 1}–${endIdx} of ${filteredProblems.length.toLocaleString()} problems`;
   }
 
-  tbody.innerHTML = pageItems.map(p => {
-    const isActive = lastActiveId && Number(lastActiveId) === Number(p.id);
-    const statusCell = p.solved
-      ? `<span class="text-emerald-400 font-bold" title="Solved">✓</span>`
-      : isActive
-        ? `<span class="text-amber-400 font-bold" title="Active Session">✎</span>`
-        : `<span class="text-gray-600" title="Todo">•</span>`;
+  const shouldCascadeRows = !hasPlayedInitialRowCascade && pageItems.length > 0;
+  if (shouldCascadeRows) {
+    hasPlayedInitialRowCascade = true;
+  }
 
-    const diff = (p.difficulty || "Medium").toLowerCase();
-    const diffBadge = diff === "easy"
-      ? `<span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded">Easy</span>`
-      : diff === "hard"
-        ? `<span class="px-2 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded">Hard</span>`
-        : `<span class="px-2 py-0.5 text-[10px] font-bold bg-amber-500/10 text-amber-400 rounded">Medium</span>`;
+  tbody.innerHTML = pageItems
+    .map((p, idx) => {
+      const isActive = lastActiveId && Number(lastActiveId) === Number(p.id);
+      const statusCell = p.solved
+        ? `<span class="text-emerald-400 font-medium" title="Solved">✓</span>`
+        : isActive
+          ? `<span class="text-amber-400 font-medium" title="Active Session">✎</span>`
+          : `<span class="text-zinc-600" title="Todo">•</span>`;
 
-    const tagsHtml = (Array.isArray(p.tags) ? p.tags.slice(0, 3) : []).map(tag => {
-      const clean = String(tag).startsWith("#") ? tag : `#${tag}`;
-      return `<span class="text-[10px] bg-surface-container border border-surface-border/70 px-1.5 py-0.5 rounded text-gray-400 font-mono">${escapeHtml(clean)}</span>`;
-    }).join(" ");
+      const diffMeta = getDirDifficultyMeta(p.difficulty || "Medium");
+      const diffBadge = `<span class="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-medium rounded whitespace-nowrap ${diffMeta.tableBadgeClass}">${escapeHtml(diffMeta.label)}</span>`;
 
-    const assertsText = p.test_count > 0
-      ? `${p.test_count} Assertion${p.test_count === 1 ? "" : "s"}`
-      : "Sandbox Suite";
+      const tagsHtml = (Array.isArray(p.tags) ? p.tags.slice(0, 3) : [])
+        .map((tag) => {
+          const clean = String(tag).replace(/^#+/, "").trim();
+          return `<span class="text-[11px] bg-white/[0.04] border border-white/[0.07] px-1.5 py-0.5 rounded text-zinc-400">${escapeHtml(clean)}</span>`;
+        })
+        .join(" ");
 
-    const pid = Number(p.id);
-    const actionHtml = isActive && !p.solved
-      ? `<a href="index.html?id=${encodeURIComponent(pid)}" class="text-xs font-semibold text-amber-400 hover:text-amber-300 whitespace-nowrap">Resume →</a>`
-      : p.solved
-        ? `<a href="index.html?id=${encodeURIComponent(pid)}" class="text-xs font-medium text-gray-400 hover:text-white whitespace-nowrap">Review</a>`
-        : `<a href="index.html?id=${encodeURIComponent(pid)}" class="px-2.5 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded transition whitespace-nowrap">Solve</a>`;
+      const assertsText =
+        p.test_count > 0
+          ? `${p.test_count} Assertion${p.test_count === 1 ? "" : "s"}`
+          : "Sandbox Suite";
 
-    const rowBg = isActive ? "bg-amber-500/[0.03]" : "";
+      const pid = Number(p.id);
+      const problemHref = buildWorkspaceProblemUrl(pid);
+      const actionHtml =
+        isActive && !p.solved
+          ? `<a href="${problemHref}" class="inline-flex items-center justify-center text-xs font-medium text-amber-400 hover:text-amber-300 whitespace-nowrap">Resume →</a>`
+          : p.solved
+            ? `<a href="${problemHref}" class="inline-flex items-center justify-center text-xs font-medium text-zinc-400 hover:text-white whitespace-nowrap">Review</a>`
+            : `<a href="${problemHref}" class="inline-flex items-center justify-center px-2.5 py-1 text-xs font-medium text-zinc-200 bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] rounded-md transition whitespace-nowrap">Solve</a>`;
 
-    return `
-      <tr class="hover:bg-surface-hover/60 transition ${rowBg}">
-        <td class="py-3 px-4 text-center">${statusCell}</td>
-        <td class="py-3 px-4">
+      const rowBg = isActive ? "bg-amber-500/[0.03]" : "";
+      const rowEnterClass = shouldCascadeRows && idx < 12 ? " dir-row-enter" : "";
+      const rowEnterStyle =
+        shouldCascadeRows && idx < 12
+          ? ` style="animation-delay: ${idx * 25}ms;"`
+          : "";
+
+      return `
+      <tr class="hover:bg-white/[0.03] transition ${rowBg}${rowEnterClass}"${rowEnterStyle}>
+        <td class="py-3.5 pl-6 pr-3 w-20 text-center">${statusCell}</td>
+        <td class="py-3.5 text-left pl-4 pr-4">
           <div class="flex items-center gap-2 flex-wrap">
-            <a href="index.html?id=${encodeURIComponent(pid)}" class="font-medium text-white hover:text-emerald-400 transition">
-              <span class="text-gray-500 font-mono mr-1">${pid}.</span>${escapeHtml(p.title)}
+            <a href="${problemHref}" class="inline-flex items-baseline gap-4 font-medium text-zinc-100 hover:text-emerald-400 transition">
+              <span class="text-zinc-500 tabular-nums shrink-0">${pid}.</span><span>${escapeHtml(p.title)}</span>
             </a>
             ${tagsHtml}
           </div>
         </td>
-        <td class="py-3 px-4 text-gray-400 font-mono text-[11px] whitespace-nowrap">${escapeHtml(p.category || "General")}</td>
-        <td class="py-3 px-4 whitespace-nowrap">${diffBadge}</td>
-        <td class="py-3 px-4 text-gray-400 font-mono text-[11px] whitespace-nowrap">${assertsText}</td>
-        <td class="py-3 px-4 text-right">${actionHtml}</td>
+        <td class="py-3.5 px-4 text-center text-zinc-400 text-xs whitespace-nowrap">${escapeHtml(p.category || "General")}</td>
+        <td class="py-3.5 px-4 text-center whitespace-nowrap">${diffBadge}</td>
+        <td class="py-3.5 px-4 text-center text-zinc-400 text-xs tabular-nums whitespace-nowrap">${assertsText}</td>
+        <td class="py-3.5 pl-4 pr-6 text-center">${actionHtml}</td>
       </tr>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 function renderPagination(totalPages) {
@@ -415,10 +579,16 @@ function renderPagination(totalPages) {
   if (!container) return;
 
   const pages = [];
-  const addPage = (p) => { if (!pages.includes(p)) pages.push(p); };
+  const addPage = (p) => {
+    if (!pages.includes(p)) pages.push(p);
+  };
 
   addPage(1);
-  for (let p = Math.max(2, currentPage - 1); p <= Math.min(totalPages - 1, currentPage + 1); p++) {
+  for (
+    let p = Math.max(2, currentPage - 1);
+    p <= Math.min(totalPages - 1, currentPage + 1);
+    p++
+  ) {
     addPage(p);
   }
   if (totalPages > 1) addPage(totalPages);
@@ -431,13 +601,14 @@ function renderPagination(totalPages) {
   `;
 
   let prev = 0;
-  pages.forEach(p => {
+  pages.forEach((p) => {
     if (prev && p - prev > 1) {
       html += `<span class="px-1.5 text-gray-600">…</span>`;
     }
-    const activeClass = p === currentPage
-      ? "bg-accent text-black font-bold border-accent"
-      : "bg-surface text-gray-300 border-surface-border hover:bg-surface-hover";
+    const activeClass =
+      p === currentPage
+        ? "bg-white/[0.1] text-white font-medium border-white/[0.16]"
+        : "bg-surface text-zinc-400 border-white/[0.08] hover:bg-white/[0.05] hover:text-white";
     html += `
       <button onclick="goToPage(${p})" class="px-2.5 py-1 rounded border text-xs transition cursor-pointer ${activeClass}">
         ${p}
@@ -478,9 +649,9 @@ function jumpToProblemNumber(event) {
   const id = parseInt(input?.value, 10);
   if (!Number.isFinite(id) || id < 1) return;
 
-  const exists = allProblems.find(p => Number(p.id) === id);
+  const exists = allProblems.find((p) => Number(p.id) === id);
   if (exists) {
-    window.location.href = `index.html?id=${encodeURIComponent(Number(exists.id))}`;
+    window.location.href = buildWorkspaceProblemUrl(Number(exists.id));
   } else {
     showToast(`Problem #${id} was not found in the catalog.`, "warn");
   }
@@ -490,13 +661,13 @@ window.jumpToProblemNumber = jumpToProblemNumber;
 function pickRandomProblem() {
   const pool = filteredProblems.length > 0 ? filteredProblems : allProblems;
   if (pool.length === 0) {
-    window.location.href = "index.html";
+    window.location.href = buildWorkspaceProblemUrl();
     return;
   }
-  const unsolved = pool.filter(p => !p.solved);
+  const unsolved = pool.filter((p) => !p.solved);
   const candidates = unsolved.length > 0 ? unsolved : pool;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  window.location.href = `index.html?id=${encodeURIComponent(pick.id)}`;
+  window.location.href = buildWorkspaceProblemUrl(pick.id);
 }
 window.pickRandomProblem = pickRandomProblem;
 
@@ -543,13 +714,17 @@ function startDailyCountdown(resetsAt) {
 async function loadDailyChallenge() {
   const banner = document.getElementById("daily-bug-banner");
   if (!banner) return;
+  const mode = getDirectoryMode();
 
   try {
     const headers = {};
     if (currentSession?.access_token) {
       headers["Authorization"] = `Bearer ${currentSession.access_token}`;
     }
-    const res = await fetch(`${API}/daily-challenge`, { headers });
+    const res = await fetch(
+      `${API}/daily-challenge?mode=${encodeURIComponent(mode)}`,
+      { headers },
+    );
     if (!res.ok) return;
     const rawText = await res.text();
     const data = rawText ? JSON.parse(rawText) : null;
@@ -560,25 +735,21 @@ async function loadDailyChallenge() {
 
     const prob = data.problem;
     const pid = Number(prob.id);
+    const problemHref = buildWorkspaceProblemUrl(pid);
     const titleLink = document.getElementById("daily-bug-title-link");
     const diffEl = document.getElementById("daily-bug-diff");
     const catEl = document.getElementById("daily-bug-category");
     const actionEl = document.getElementById("daily-bug-action");
 
     if (titleLink) {
-      titleLink.href = `index.html?id=${encodeURIComponent(pid)}`;
-      titleLink.innerHTML = `<span class="text-amber-300 font-mono mr-1.5">#${escapeHtml(pid)}</span>${escapeHtml(prob.title || "Daily Challenge")}`;
+      titleLink.href = problemHref;
+      titleLink.innerHTML = `<span class="text-amber-300 tabular-nums mr-1.5">${escapeHtml(pid)}.</span>${escapeHtml(prob.title || "Daily Challenge")}`;
     }
 
-    const diffLabel = String(prob.difficulty || "Hard");
-    const diffLower = diffLabel.toLowerCase();
+    const dailyDiffMeta = getDirDifficultyMeta(prob.difficulty || "Hard");
     if (diffEl) {
-      diffEl.textContent = diffLabel.toUpperCase();
-      diffEl.className = diffLower === "easy"
-        ? "px-2 py-0.5 text-[10px] font-bold uppercase rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-        : diffLower === "medium"
-          ? "px-2 py-0.5 text-[10px] font-bold uppercase rounded border bg-amber-500/10 text-amber-400 border-amber-500/25"
-          : "px-2 py-0.5 text-[10px] font-bold uppercase rounded border bg-rose-500/10 text-rose-400 border-rose-500/25";
+      diffEl.textContent = dailyDiffMeta.label;
+      diffEl.className = `px-2 py-0.5 text-xs font-medium rounded border ${dailyDiffMeta.pillClass}`;
     }
 
     if (catEl) {
@@ -587,7 +758,8 @@ async function loadDailyChallenge() {
 
     const dailyDateKey = data.date_ist || data.date_utc;
     const localDone = dailyDateKey
-      ? localStorage.getItem(`lintiq_daily_done_${dailyDateKey}`) === String(pid)
+      ? localStorage.getItem(`lintiq_daily_done_${mode}_${dailyDateKey}`) ===
+        String(pid)
       : false;
     const isCompletedToday = Boolean(data.completed_today) || localDone;
 
@@ -595,13 +767,13 @@ async function loadDailyChallenge() {
       if (isCompletedToday) {
         actionEl.innerHTML = `
           <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-bold whitespace-nowrap">✓ Completed Today</span>
-            <a href="index.html?id=${encodeURIComponent(pid)}" class="px-3 py-2 rounded-lg bg-surface-container hover:bg-surface-hover border border-surface-border text-xs text-gray-300 hover:text-white transition whitespace-nowrap">Review →</a>
+            <span class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-medium whitespace-nowrap">✓ Completed Today</span>
+            <a href="${problemHref}" class="px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs text-zinc-200 hover:text-white transition whitespace-nowrap">Review →</a>
           </div>
         `;
       } else {
         actionEl.innerHTML = `
-          <a id="daily-bug-cta" href="index.html?id=${encodeURIComponent(pid)}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-black text-xs font-bold transition shadow-lg shadow-accent/20 whitespace-nowrap">Solve Daily Bug →</a>
+          <a id="daily-bug-cta" href="${problemHref}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.1] text-white text-xs font-medium transition whitespace-nowrap">Solve Daily Bug →</a>
         `;
       }
     }

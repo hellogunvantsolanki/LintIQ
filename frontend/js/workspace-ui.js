@@ -50,13 +50,6 @@ function switchLeftTab(tab) {
   }
 }
 
-function handleHintClick() {
-  switchLeftTab("desc");
-  if (typeof requestHint === "function") requestHint();
-  setTimeout(() => {
-    document.getElementById("hint-box")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, 60);
-}
 
 // ─── TRAY TABS & COLLAPSE ────────────────────────────────────────────────────
 function switchTrayTab(tab) {
@@ -232,7 +225,7 @@ function updateProfileSummaryUI(p) {
   const initials = cleanName.split(/\s+/).filter(Boolean).map(part => part[0]).join("").toUpperCase().slice(0, 2) || "LQ";
   el("profile-initials") && (el("profile-initials").textContent = initials);
   const headerAvatar = el("header-user-avatar");
-  if (headerAvatar) headerAvatar.textContent = initials;
+  if (headerAvatar && currentUser) headerAvatar.textContent = initials;
 }
 
 function loadLocalProfile() {
@@ -430,7 +423,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
 // ─── EXPOSE GLOBALS ──────────────────────────────────────────────────────────
 window.switchLeftTab = switchLeftTab;
-window.handleHintClick = handleHintClick;
 window.switchTrayTab = switchTrayTab;
 window.toggleTrayCollapse = toggleTrayCollapse;
 window.toggleEditorFullscreen = toggleEditorFullscreen;

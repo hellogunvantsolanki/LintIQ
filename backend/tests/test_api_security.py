@@ -328,7 +328,7 @@ def test_unsupported_language_returns_400_and_payload_caps_return_422(monkeypatc
 
     bad_run = client.post(
         "/run-code",
-        json={"problem_id": 1, "user_code": "class Solution {}", "language": "java"},
+        json={"problem_id": 1, "user_code": "puts 1", "language": "ruby"},
     )
     assert bad_run.status_code == 400
     assert "Unsupported language" in bad_run.json()["detail"]
@@ -340,7 +340,7 @@ def test_unsupported_language_returns_400_and_payload_caps_return_422(monkeypatc
     )
     bad_submit = client.post(
         "/submit-patch",
-        json={"problem_id": 1, "user_code": "class Solution {}", "language": "java"},
+        json={"problem_id": 1, "user_code": "puts 1", "language": "ruby"},
         headers={"Authorization": "Bearer valid-mock-token"},
     )
     assert bad_submit.status_code == 400
@@ -519,9 +519,10 @@ def test_daily_challenge_deterministic_and_2x_xp_bonus(monkeypatch):
 
     monkeypatch.setattr(main, "record_user_solve", fake_record)
 
+    daily_starter = client.get(f"/problems/{daily_id}").json().get("buggy_code") or "print('fixed')"
     sub_resp = client.post(
         "/submit-patch",
-        json={"problem_id": daily_id, "user_code": "print('fixed')", "language": "python"},
+        json={"problem_id": daily_id, "user_code": daily_starter + "\n_ = 1\n", "language": "python"},
         headers={"Authorization": "Bearer valid-token"},
     )
     assert sub_resp.status_code == 200
@@ -829,3 +830,32 @@ def test_public_profile_rate_limit_and_xss_payload_safety(monkeypatch):
     assert capped.status_code == 429
     with main._PUBLIC_PROFILE_RATE_LOCK:
         main._PUBLIC_PROFILE_RATE_BUCKETS.clear()
+
+
+def test_local_sandbox_caps_output_and_vercel_security_headers(monkeypatch):
+    import json
+    import runner
+
+    monkeypatch.setenv("ALLOW_LOCAL_SANDBOX", "true")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setattr(runner, "_has_remote_sandbox_config", lambda: False)
+
+    flood_res = runner.run_custom_code(
+        user_code="print('A' * 50000)",
+        stdin_data="",
+        language="python",
+    )
+    assert flood_res["ok"] is True
+    assert len(flood_res["stdout"]) <= 4000
+
+    vercel_path = os.path.join(os.path.dirname(BACKEND_DIR), "frontend", "vercel.json")
+    with open(vercel_path, "r", encoding="utf-8") as fh:
+        cfg = json.load(fh)
+    hdrs = {h["key"]: h["value"] for h in cfg["headers"][0]["headers"]}
+    assert hdrs["X-Content-Type-Options"] == "nosniff"
+    assert hdrs["X-Frame-Options"] == "DENY"
+    assert hdrs["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert "default-src 'self'" in hdrs["Content-Security-Policy"]
+    assert "object-src 'none'" in hdrs["Content-Security-Policy"]
+    assert "form-action 'self'" in hdrs["Content-Security-Policy"]
+

@@ -84,18 +84,18 @@ async function loadLeaderboardPage() {
       userRankBar.classList.remove("hidden");
       userRankBar.innerHTML = `
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-accent/20 border border-accent flex items-center justify-center text-accent font-bold text-sm font-mono">
+          <div class="w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.12] flex items-center justify-center text-white font-semibold text-sm">
             ${escapeHtml(getInitials(myName))}
           </div>
           <div>
-            <div class="text-[10px] uppercase font-mono tracking-wider text-emerald-400">Your Standing</div>
-            <div class="text-sm font-bold text-white">${escapeHtml(myName)} <span class="text-emerald-400 font-mono ml-1">${escapeHtml(myRank)}</span></div>
+            <div class="text-xs font-medium text-zinc-400">Your Standing</div>
+            <div class="text-sm font-semibold text-white">${escapeHtml(myName)} <span class="text-emerald-400 tabular-nums ml-1">${escapeHtml(myRank)}</span></div>
           </div>
         </div>
-        <div class="flex items-center gap-6 text-xs font-mono">
-          <div><span class="text-gray-500 block text-[10px]">SCORE</span><span class="text-emerald-400 font-bold">${Number(myScore).toLocaleString()} pts</span></div>
-          <div><span class="text-gray-500 block text-[10px]">STREAK</span><span class="text-amber-400 font-bold">⚡ ${Number(myStreak)}</span></div>
-          <div><span class="text-gray-500 block text-[10px]">SOLVED</span><span class="text-white font-bold">${Number(mySolves)} bugs</span></div>
+        <div class="flex items-center gap-6 text-xs tabular-nums">
+          <div><span class="text-zinc-400 block text-xs">Score</span><span class="text-emerald-400 font-semibold">${Number(myScore).toLocaleString()} pts</span></div>
+          <div><span class="text-zinc-400 block text-xs">Streak</span><span class="text-amber-400 font-semibold">⚡ ${Number(myStreak)}</span></div>
+          <div><span class="text-zinc-400 block text-xs">Solved</span><span class="text-white font-semibold">${Number(mySolves)} bugs</span></div>
         </div>
       `;
     } else {
@@ -119,26 +119,26 @@ async function loadLeaderboardPage() {
       const profileHref = `user-profile.html?user=${safeUserParam}`;
       const isMe = currentUser?.id && player.id === currentUser.id;
       return `
-        <a href="${escapeHtml(profileHref)}" class="group bg-surface border ${style.border} hover:border-emerald-400/60 hover:-translate-y-0.5 rounded-xl p-5 shadow-xl ${style.glow} flex flex-col justify-between gap-3 transition cursor-pointer">
+        <a href="${escapeHtml(profileHref)}" class="group bg-surface border border-white/[0.08] hover:border-white/20 rounded-xl p-6 flex flex-col justify-between gap-4 transition cursor-pointer">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-mono font-bold ${style.text}">${style.badge}</span>
+            <span class="text-xs font-semibold tabular-nums ${style.text}">${style.badge}</span>
             <div class="flex items-center gap-1.5">
-              ${isMe ? '<span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono uppercase">You</span>' : ''}
-              <span class="text-[10px] font-mono text-gray-500 group-hover:text-emerald-400 transition">View Profile →</span>
+              ${isMe ? '<span class="text-[11px] px-2 py-0.5 rounded bg-white/[0.08] text-zinc-200 font-medium">You</span>' : ''}
+              <span class="text-xs text-zinc-500 group-hover:text-zinc-300 transition">View Profile →</span>
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-full bg-surface-container border border-surface-border group-hover:border-emerald-500/50 flex items-center justify-center text-sm font-bold text-white font-mono transition shrink-0">
+            <div class="w-11 h-11 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-sm font-semibold text-zinc-100 transition shrink-0">
               ${escapeHtml(getInitials(name))}
             </div>
             <div class="min-w-0">
-              <div class="text-base font-bold text-white group-hover:text-emerald-300 transition truncate">${escapeHtml(name)}</div>
-              <div class="text-[11px] text-gray-400 font-mono">⚡ ${Number(player.streak || 0)} streak • ${Number(player.solves || 0)} solved</div>
+              <div class="text-base font-semibold tracking-[-0.01em] text-white group-hover:text-emerald-300 transition truncate">${escapeHtml(name)}</div>
+              <div class="text-xs text-zinc-400 tabular-nums mt-0.5">${Number(player.streak || 0)} streak · ${Number(player.solves || 0)} solved</div>
             </div>
           </div>
-          <div class="pt-3 border-t border-surface-border flex items-center justify-between text-xs font-mono">
-            <span class="text-gray-500">ARCADE SCORE</span>
-            <span class="text-emerald-400 font-bold text-sm">${Number(player.score || 0).toLocaleString()} pts</span>
+          <div class="pt-3.5 border-t border-white/[0.07] flex items-center justify-between text-xs tabular-nums">
+            <span class="text-zinc-400">Score</span>
+            <span class="text-emerald-400 font-semibold text-sm">${Number(player.score || 0).toLocaleString()} pts</span>
           </div>
         </a>
       `;
@@ -155,23 +155,23 @@ async function loadLeaderboardPage() {
       const profileHref = `user-profile.html?user=${safeUserParam}`;
       const isMe = currentUser?.id && player.id === currentUser.id;
       const rankBadge = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
-      const rowBg = isMe ? "bg-emerald-500/10 hover:bg-emerald-500/15" : "hover:bg-surface-hover/70";
+      const rowBg = isMe ? "bg-white/[0.04] hover:bg-white/[0.06]" : "hover:bg-white/[0.03]";
 
       return `
         <tr data-href="${escapeHtml(profileHref)}" onclick="window.location.href=this.getAttribute('data-href')" class="${rowBg} transition cursor-pointer group">
-          <td class="py-3 px-4 font-mono font-bold text-gray-300">${rankBadge}</td>
-          <td class="py-3 px-4">
+          <td class="py-3.5 px-4 font-medium tabular-nums text-zinc-400">${rankBadge}</td>
+          <td class="py-3.5 px-4">
             <div class="flex items-center gap-2.5 min-w-0">
-              <span class="w-7 h-7 rounded-full bg-surface-container border border-surface-border group-hover:border-emerald-500/50 flex items-center justify-center text-[10px] font-bold text-gray-200 font-mono shrink-0 transition">
+              <span class="w-7 h-7 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-[11px] font-medium text-zinc-200 shrink-0 transition">
                 ${escapeHtml(getInitials(name))}
               </span>
-              <a href="${escapeHtml(profileHref)}" onclick="event.stopPropagation()" class="font-semibold text-white group-hover:text-emerald-300 transition truncate">${escapeHtml(name)}</a>
-              ${isMe ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono uppercase shrink-0">You</span>' : ''}
+              <a href="${escapeHtml(profileHref)}" onclick="event.stopPropagation()" class="font-medium text-zinc-100 group-hover:text-white transition truncate">${escapeHtml(name)}</a>
+              ${isMe ? '<span class="text-[11px] px-1.5 py-0.5 rounded bg-white/[0.08] text-zinc-200 font-medium shrink-0">You</span>' : ''}
             </div>
           </td>
-          <td class="py-3 px-4 text-right font-mono font-bold text-emerald-400">${Number(player.score || 0).toLocaleString()}</td>
-          <td class="py-3 px-4 text-center font-mono text-amber-400">⚡ ${Number(player.streak || 0)}</td>
-          <td class="py-3 px-4 text-right font-mono text-gray-300">${Number(player.solves || 0)}</td>
+          <td class="py-3.5 px-4 text-right font-semibold tabular-nums text-emerald-400">${Number(player.score || 0).toLocaleString()}</td>
+          <td class="py-3.5 px-4 text-center tabular-nums text-amber-400">${Number(player.streak || 0)}</td>
+          <td class="py-3.5 px-4 text-right tabular-nums text-zinc-300">${Number(player.solves || 0)}</td>
         </tr>
       `;
     }).join("");

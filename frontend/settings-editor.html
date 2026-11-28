@@ -7,21 +7,23 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="js/tailwind-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="style.css" />
   <style>
     html, body {
       min-height: 100vh;
-      background-color: #0a0e16;
+      background-color: #090b0f;
       color: #e2e8f0;
-      font-family: 'Geist', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     }
     input[type=range] {
       accent-color: #10b981;
     }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0f131c; }
+    ::-webkit-scrollbar-track { background: #0d1016; }
     ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #333c52; }
   </style>
@@ -36,35 +38,32 @@
     <div class="w-full flex-1 bg-surface border border-surface-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
 
       <!-- CONTROL CENTER HEADER -->
-      <div class="px-5 sm:px-6 py-4 border-b border-surface-border flex flex-wrap items-center justify-between gap-2">
+      <div class="px-6 py-4 border-b border-white/[0.07] flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center space-x-3 min-w-0">
-          <div class="flex items-center space-x-2 text-white font-semibold text-sm min-w-0">
-            <span class="text-emerald-400">⚙</span>
-            <span class="truncate">LintIQ Control Center — Editor &amp; Sandbox</span>
+          <div class="flex items-center space-x-2 text-white font-semibold text-base tracking-[-0.02em] min-w-0">
+            <span class="truncate">Editor &amp; Sandbox Settings</span>
           </div>
-          <span class="hidden sm:inline-block text-[10px] font-mono text-gray-500 bg-surface-container px-2 py-0.5 rounded border border-surface-border shrink-0">V1.6_CONFIG</span>
         </div>
         <div class="flex items-center space-x-3 shrink-0">
-          <span id="editor-session-badge" class="text-[11px] text-emerald-400 font-mono">LOCAL SESSION</span>
-          <a href="index.html" class="text-gray-400 hover:text-white transition text-lg leading-none" title="Return to Workspace">✕</a>
+          <span id="editor-session-badge" class="text-xs text-zinc-400">Local session</span>
+          <a href="index.html" class="text-zinc-400 hover:text-white transition text-lg leading-none" title="Return to Workspace">✕</a>
         </div>
       </div>
 
       <!-- TAB BODY: EDITOR & SANDBOX -->
-      <div class="p-5 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 flex-1">
+      <div class="p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 flex-1">
 
         <!-- LEFT BOX: MONACO EDITOR CONFIG -->
-        <div class="bg-surface-container/40 border border-surface-border rounded-xl p-6 space-y-6 flex flex-col justify-between">
+        <div class="bg-white/[0.02] border border-white/[0.07] rounded-xl p-6 space-y-6 flex flex-col justify-between">
           <div class="flex items-center justify-between">
-            <h3 class="text-xs uppercase tracking-wider font-mono text-gray-400">Monaco Editor Configuration</h3>
-            <span class="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">SYNTAX ENGINE</span>
+            <h3 class="text-sm font-semibold text-white">Editor Configuration</h3>
           </div>
 
           <!-- Font Size Slider -->
           <div class="space-y-2">
             <div class="flex justify-between text-xs">
-              <span class="text-gray-300">Font Size</span>
-              <span id="font-size-val" class="font-mono text-emerald-400 font-semibold">14px</span>
+              <span class="text-zinc-300 font-medium">Font Size</span>
+              <span id="font-size-val" class="text-emerald-400 font-semibold tabular-nums">14px</span>
             </div>
             <input
               id="pref-fontsize"
@@ -75,7 +74,7 @@
               oninput="saveEditorPrefsFromControls()"
               class="w-full h-1.5 bg-surface-card rounded-lg appearance-none cursor-pointer"
             />
-            <div class="flex justify-between text-[10px] text-gray-500 font-mono">
+            <div class="flex justify-between text-xs text-zinc-500 tabular-nums">
               <span>12px</span>
               <span>14px default</span>
               <span>20px</span>
@@ -84,8 +83,8 @@
 
           <!-- Indentation Dropdown -->
           <div class="space-y-2">
-            <label for="pref-tabsize" class="text-xs text-gray-300">Indentation Size (Python Standard: 4)</label>
-            <select id="pref-tabsize" onchange="saveEditorPrefsFromControls()" class="w-full bg-surface-container border border-surface-border rounded-lg px-3 py-2 text-xs text-white focus:border-accent focus:outline-none font-mono cursor-pointer">
+            <label for="pref-tabsize" class="text-xs font-medium text-zinc-300">Indentation Size</label>
+            <select id="pref-tabsize" onchange="saveEditorPrefsFromControls()" class="w-full bg-surface border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:border-white/25 focus:outline-none cursor-pointer">
               <option value="4" selected>4 Spaces (Recommended)</option>
               <option value="2">2 Spaces</option>
             </select>
@@ -94,77 +93,75 @@
           <!-- Checkboxes / Toggles -->
           <div class="space-y-4 pt-2">
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-xs text-gray-300 group-hover:text-white flex items-center space-x-2">
+              <span class="text-xs text-zinc-300 group-hover:text-white flex items-center space-x-2">
                 <span>Show Code Minimap</span>
               </span>
               <input id="pref-minimap" type="checkbox" onchange="saveEditorPrefsFromControls()" class="w-4 h-4 rounded bg-surface-container border-surface-border text-emerald-400 focus:ring-0 accent-emerald-500 cursor-pointer" />
             </label>
 
             <label class="flex items-center justify-between cursor-pointer group">
-              <span class="text-xs text-gray-300 group-hover:text-white flex items-center space-x-2">
+              <span class="text-xs text-zinc-300 group-hover:text-white flex items-center space-x-2">
                 <span>Word Wrap Long Lines</span>
               </span>
               <input id="pref-wordwrap" type="checkbox" checked onchange="saveEditorPrefsFromControls()" class="w-4 h-4 rounded bg-surface-container border-surface-border text-emerald-400 focus:ring-0 accent-emerald-500 cursor-pointer" />
             </label>
           </div>
 
-          <div class="pt-4 border-t border-surface-border/60 flex items-center justify-between text-[11px] text-gray-500 font-mono">
-            <span>Editor: Monaco v0.44</span>
-            <span>UTF-8 • LF</span>
+          <div class="pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-500">
+            <span>Editor: Monaco</span>
+            <span>UTF-8 · LF</span>
           </div>
         </div>
 
-        <!-- RIGHT BOX: ARCADE & SANDBOX BEHAVIOR -->
-        <div class="bg-surface-container/40 border border-surface-border rounded-xl p-6 space-y-6 flex flex-col justify-between">
+        <!-- RIGHT BOX: SANDBOX BEHAVIOR -->
+        <div class="bg-white/[0.02] border border-white/[0.07] rounded-xl p-6 space-y-6 flex flex-col justify-between">
           <div class="space-y-6">
             <div class="flex items-center justify-between">
-              <h3 class="text-xs uppercase tracking-wider font-mono text-gray-400">Arcade & Sandbox Behavior</h3>
-              <span class="text-[10px] text-cyan-400 font-mono bg-cyan-500/10 px-2 py-0.5 rounded">HOT-RELOAD</span>
+              <h3 class="text-sm font-semibold text-white">Sandbox Behavior</h3>
             </div>
 
             <!-- Toggles List -->
             <div class="space-y-4 text-xs">
-              <label class="p-3 bg-surface-card border border-surface-border rounded-lg flex items-start justify-between cursor-pointer gap-3">
+              <label class="p-3.5 bg-white/[0.02] border border-white/[0.07] rounded-lg flex items-start justify-between cursor-pointer gap-3">
                 <div>
                   <div class="font-medium text-white">Auto-Start Timer on Keystroke</div>
-                  <div class="text-[11px] text-gray-400 mt-0.5">Starts challenge stopwatch immediately when editing</div>
+                  <div class="text-xs text-zinc-400 mt-0.5">Starts challenge stopwatch immediately when editing</div>
                 </div>
                 <input id="pref-autotimer" type="checkbox" checked onchange="saveEditorPrefsFromControls()" class="w-4 h-4 mt-0.5 rounded bg-surface-container border-surface-border text-emerald-400 focus:ring-0 accent-emerald-500 shrink-0 cursor-pointer" />
               </label>
 
-              <label class="p-3 bg-surface-card border border-surface-border rounded-lg flex items-start justify-between cursor-pointer gap-3">
+              <label class="p-3.5 bg-white/[0.02] border border-white/[0.07] rounded-lg flex items-start justify-between cursor-pointer gap-3">
                 <div>
                   <div class="font-medium text-white">Show AST Safety Warnings</div>
-                  <div class="text-[11px] text-gray-400 mt-0.5">Highlight blocked imports before submitting</div>
+                  <div class="text-xs text-zinc-400 mt-0.5">Highlight blocked imports before submitting</div>
                 </div>
                 <input id="pref-astwarn" type="checkbox" checked onchange="saveEditorPrefsFromControls()" class="w-4 h-4 mt-0.5 rounded bg-surface-container border-surface-border text-emerald-400 focus:ring-0 accent-emerald-500 shrink-0 cursor-pointer" />
               </label>
             </div>
 
             <!-- Keyboard Shortcuts Table -->
-            <div class="bg-surface-dim border border-surface-border rounded-lg p-3 space-y-2 text-xs">
-              <div class="text-[10px] uppercase font-mono tracking-wider text-gray-500 flex justify-between">
+            <div class="bg-surface-dim border border-white/[0.07] rounded-lg p-3.5 space-y-2.5 text-xs">
+              <div class="text-xs font-medium text-zinc-400 flex justify-between">
                 <span>Keyboard Shortcuts</span>
-                <span>Arcade Map</span>
               </div>
-              <div class="space-y-1.5 font-mono text-[11px]">
-                <div class="flex justify-between py-1 border-b border-surface-border/40">
-                  <span class="text-gray-300">Safe Test Run</span>
-                  <kbd class="px-2 py-0.5 bg-surface-container rounded text-emerald-400 border border-surface-border">Ctrl + '</kbd>
+              <div class="space-y-1.5 text-xs">
+                <div class="flex justify-between py-1 border-b border-white/[0.06]">
+                  <span class="text-zinc-300">Safe Test Run</span>
+                  <kbd class="font-mono px-2 py-0.5 bg-surface-container rounded text-emerald-400 border border-white/[0.08]">Ctrl + '</kbd>
                 </div>
-                <div class="flex justify-between py-1 border-b border-surface-border/40">
-                  <span class="text-gray-300">Submit Patch</span>
-                  <kbd class="px-2 py-0.5 bg-surface-container rounded text-emerald-400 border border-surface-border">Ctrl + Enter</kbd>
+                <div class="flex justify-between py-1 border-b border-white/[0.06]">
+                  <span class="text-zinc-300">Submit Patch</span>
+                  <kbd class="font-mono px-2 py-0.5 bg-surface-container rounded text-emerald-400 border border-white/[0.08]">Ctrl + Enter</kbd>
                 </div>
                 <div class="flex justify-between py-1">
-                  <span class="text-gray-300">Format Code</span>
-                  <kbd class="px-2 py-0.5 bg-surface-container rounded text-emerald-400 border border-surface-border">Shift + Alt + F</kbd>
+                  <span class="text-zinc-300">Format Code</span>
+                  <kbd class="font-mono px-2 py-0.5 bg-surface-container rounded text-emerald-400 border border-white/[0.08]">Shift + Alt + F</kbd>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="flex items-center justify-end text-[11px] text-emerald-400 pt-2 font-mono">
+          <div class="flex items-center justify-end text-xs text-emerald-400 pt-2">
             <span id="editor-pref-status">● Preferences applied live</span>
           </div>
         </div>
@@ -172,8 +169,8 @@
       </div>
 
       <!-- MODAL BOTTOM ACTIONS -->
-      <div class="mt-auto px-5 sm:px-6 py-4 bg-surface-container/30 border-t border-surface-border flex flex-wrap items-center justify-between gap-3">
-        <div id="settings-footer-account" class="text-xs text-gray-400 font-mono">
+      <div class="mt-auto px-6 py-4 bg-white/[0.02] border-t border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+        <div id="settings-footer-account" class="text-xs text-zinc-400">
           Session: Local Guest
         </div>
         <div class="flex items-center space-x-3">

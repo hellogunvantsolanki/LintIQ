@@ -1,4 +1,4 @@
-﻿# Python & virtual env
+# Python & virtual env
 venv/
 __pycache__/
 *.pyc
@@ -13,7 +13,15 @@ backend/.env
 problems.db
 backend/problems.db
 *.db
+*.bak*
 
 # OS / Editor
 .DS_Store
 Thumbs.db
+
+backend/.env
+backend/prewarm.log
+backend/prewarm_failed.jsonl
+backend/*.bak
+backend/*-wal
+backend/*-shm

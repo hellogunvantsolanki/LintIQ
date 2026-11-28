@@ -1,243 +1,636 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LintIQ – Problem Directory</title>
-  <meta name="description" content="Browse all LintIQ debugging challenges across 7 engineering tracks and 3 difficulties." />
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LintIQ – Problem Directory</title>
+    <meta
+      name="description"
+      content="Browse all LintIQ debugging challenges across 7 engineering tracks and 3 difficulties."
+    />
 
-  <!-- Open Graph & Twitter / X Preview -->
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://thelintiq.com/problem-directory.html" />
-  <meta property="og:title" content="LintIQ Problem Directory – 1,600+ Real Debugging Challenges" />
-  <meta property="og:description" content="Explore debugging challenges across Algorithms, Data Structures, Off-by-One, Edge Cases, Type Coercion, Memory & State, and Concurrency." />
-  <meta property="og:image" content="https://thelintiq.com/assets/og-card.png" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="LintIQ Problem Directory – 1,600+ Real Debugging Challenges" />
-  <meta name="twitter:description" content="Explore debugging challenges across 7 core engineering tracks and 3 difficulty tiers." />
-  <meta name="twitter:image" content="https://thelintiq.com/assets/og-card.png" />
+    <!-- Open Graph & Twitter / X Preview -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://thelintiq.com/problem-directory.html"
+    />
+    <meta
+      property="og:title"
+      content="LintIQ Problem Directory – 1,600+ Real Debugging Challenges"
+    />
+    <meta
+      property="og:description"
+      content="Explore debugging challenges across Algorithms, Data Structures, Off-by-One, Edge Cases, Type Coercion, Memory & State, and Concurrency."
+    />
+    <meta
+      property="og:image"
+      content="https://thelintiq.com/assets/og-card.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="LintIQ Problem Directory – 1,600+ Real Debugging Challenges"
+    />
+    <meta
+      name="twitter:description"
+      content="Explore debugging challenges across 7 core engineering tracks and 4 difficulty tiers."
+    />
+    <meta
+      name="twitter:image"
+      content="https://thelintiq.com/assets/og-card.png"
+    />
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
 
-  <!-- Shared Tailwind Config -->
-  <script src="js/tailwind-config.js"></script>
+    <!-- Shared Tailwind Config -->
+    <script src="js/tailwind-config.js"></script>
 
-  <!-- Supabase JS Client CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase JS Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css" />
 
-  <style>
-    html, body {
-      min-height: 100vh;
-      background-color: #0a0e16;
-      color: #e2e8f0;
-      font-family: 'Geist', sans-serif;
-    }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0f131c; }
-    ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #333c52; }
-  </style>
-</head>
-<body class="flex flex-col min-h-screen antialiased">
+    <style>
+      html,
+      body {
+        min-height: 100vh;
+        background-color: #090b0f;
+        color: #e2e8f0;
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0d1016;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #232938;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #333c52;
+      }
+    </style>
+  </head>
+  <body class="dir-animate-enter flex flex-col min-h-screen antialiased">
+    <!-- MODE AMBIENT TOP GLOW SWEEP -->
+    <div id="dir-mode-ambient-glow" class="dir-ambient-glow dir-ambient-glow--practice" aria-hidden="true"></div>
+    <script>
+      (function () {
+        var glow = document.getElementById("dir-mode-ambient-glow");
+        if (!glow) return;
+        try {
+          var p = new URLSearchParams(window.location.search).get("mode");
+          var mode = (p === "interview" || p === "practice") ? p : (sessionStorage.getItem("lintiq_mode") || "practice");
+          if (mode === "interview") {
+            glow.classList.remove("dir-ambient-glow--practice");
+            glow.classList.add("dir-ambient-glow--interview");
+          }
+        } catch (_) {}
+        var cleanupGlow = function () {
+          if (glow && glow.parentNode) glow.parentNode.removeChild(glow);
+        };
+        glow.addEventListener("animationend", cleanupGlow, { once: true });
+        setTimeout(cleanupGlow, 800);
+      })();
+    </script>
 
-  <!-- SHARED NAVBAR -->
-  <nav id="lintiq-navbar" data-page="directory"></nav>
+    <!-- SHARED NAVBAR -->
+    <nav id="lintiq-navbar" data-page="directory"></nav>
 
-  <main class="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 lg:py-6 space-y-5 lg:space-y-6">
+    <main
+      class="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-5 lg:py-6 space-y-5 lg:space-y-6"
+    >
+      <!-- BUG OF THE DAY BANNER -->
+      <section
+        id="daily-bug-banner"
+        class="dir-cascade-daily hidden bg-surface border border-white/[0.08] rounded-xl p-6 shadow-lg"
+      >
+        <div
+          class="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        >
+          <div class="space-y-1.5 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap text-xs">
+              <span
+                class="px-2.5 py-0.5 font-medium bg-amber-500/10 text-amber-300 border border-amber-500/25 rounded-full"
+                >Bug of the Day</span
+              >
+              <span
+                class="px-2 py-0.5 font-medium bg-white/[0.05] text-emerald-300 border border-white/[0.08] rounded"
+                >2x XP</span
+              >
+              <span
+                id="daily-bug-diff"
+                class="px-2 py-0.5 text-xs font-medium rounded border"
+                >Hard</span
+              >
+              <span id="daily-bug-category" class="text-xs text-zinc-400"
+                >Algorithms</span
+              >
+            </div>
+            <h2
+              class="text-lg font-semibold text-white tracking-[-0.02em] truncate"
+            >
+              <a
+                id="daily-bug-title-link"
+                href="index.html"
+                class="hover:text-emerald-300 transition"
+                >Loading daily bug...</a
+              >
+            </h2>
+          </div>
 
-    <!-- BUG OF THE DAY BANNER -->
-    <section id="daily-bug-banner" class="hidden bg-gradient-to-r from-[#141923] via-[#111827] to-[#0e1b18] border border-amber-500/35 rounded-xl p-4 sm:p-5 shadow-xl">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div class="space-y-1.5 min-w-0">
+          <div class="flex flex-wrap items-center gap-3 shrink-0">
+            <div
+              class="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.07] text-xs text-zinc-400 tabular-nums whitespace-nowrap"
+            >
+              <span id="daily-bug-countdown">Resets in --h --m --s</span>
+            </div>
+            <div id="daily-bug-action" class="shrink-0">
+              <a
+                id="daily-bug-cta"
+                href="index.html"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.1] text-white text-xs font-medium transition whitespace-nowrap"
+                >Solve Daily Bug →</a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRACK PILLS + SEARCH & FILTERS -->
+      <div class="dir-cascade-filters space-y-3">
+        <div
+          id="dir-category-bar"
+          class="flex items-center gap-1.5 overflow-x-auto pb-1.5 text-[13px]"
+        >
+          <button
+            onclick="setDirCategory('All')"
+            data-cat="All"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-medium bg-white/[0.08] text-white border border-white/[0.1] shrink-0 cursor-pointer transition"
+          >
+            All Tracks
+            <span
+              class="ml-1 opacity-70 font-normal tabular-nums"
+              id="cat-count-All"
+              >...</span
+            >
+          </button>
+          <button
+            onclick="setDirCategory('Algorithms')"
+            data-cat="Algorithms"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Algorithms
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Algorithms"
+            ></span>
+          </button>
+          <button
+            onclick="setDirCategory('Data Structures')"
+            data-cat="Data Structures"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Data Structures
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Data Structures"
+            ></span>
+          </button>
+          <button
+            onclick="setDirCategory('Off-by-One')"
+            data-cat="Off-by-One"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Off-by-One
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Off-by-One"
+            ></span>
+          </button>
+          <button
+            onclick="setDirCategory('Edge Cases')"
+            data-cat="Edge Cases"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Edge Cases
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Edge Cases"
+            ></span>
+          </button>
+          <button
+            onclick="setDirCategory('Type Coercion')"
+            data-cat="Type Coercion"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Type Coercion
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Type Coercion"
+            ></span>
+          </button>
+          <button
+            onclick="setDirCategory('Memory &amp; State')"
+            data-cat="Memory &amp; State"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Memory &amp; State
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Memory &amp; State"
+            ></span>
+          </button>
+          <button
+            onclick="setDirCategory('Concurrency')"
+            data-cat="Concurrency"
+            class="dir-cat-pill px-3 py-1.5 rounded-lg font-normal bg-transparent border border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] shrink-0 cursor-pointer transition"
+          >
+            Concurrency
+            <span
+              class="ml-1 opacity-65 tabular-nums"
+              id="cat-count-Concurrency"
+            ></span>
+          </button>
+        </div>
+
+        <div
+          class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5"
+        >
+          <div class="relative flex-1 sm:max-w-lg lg:max-w-xl">
+            <input
+              id="dir-search"
+              type="text"
+              placeholder="Search challenges by title, category, or tag..."
+              oninput="handleDirFilterChange()"
+              class="w-full bg-surface border border-white/[0.08] rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-white/25"
+            />
+            <svg
+              class="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/35 rounded-full">🔥 Bug of the Day</span>
-            <span class="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 rounded">2x XP</span>
-            <span id="daily-bug-diff" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded border">Hard</span>
-            <span id="daily-bug-category" class="text-[11px] font-mono text-sky-300">Algorithms</span>
-          </div>
-          <h2 class="text-base sm:text-lg font-bold text-white tracking-tight truncate">
-            <a id="daily-bug-title-link" href="index.html" class="hover:text-emerald-300 transition">Loading daily bug...</a>
-          </h2>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-3 shrink-0">
-          <div class="px-3 py-1.5 rounded-lg bg-surface-container/80 border border-surface-border text-xs font-mono text-gray-300 whitespace-nowrap">
-            <span>⏱️</span>
-            <span id="daily-bug-countdown">Resets in --h --m --s</span>
-          </div>
-          <div id="daily-bug-action" class="shrink-0">
-            <a id="daily-bug-cta" href="index.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-black text-xs font-bold transition shadow-lg shadow-accent/20 whitespace-nowrap">Solve Daily Bug →</a>
+            <select
+              id="dir-difficulty"
+              onchange="handleDirFilterChange()"
+              class="bg-surface border border-white/[0.08] text-zinc-300 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-white/25 cursor-pointer"
+            >
+              <option value="All">Difficulty: All Levels</option>
+              <option id="dir-opt-very-easy" value="Very Easy">Very Easy</option>
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+            </select>
+            <select
+              id="dir-status"
+              onchange="handleDirFilterChange()"
+              class="bg-surface border border-white/[0.08] text-zinc-300 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-white/25 cursor-pointer"
+            >
+              <option value="All">Status: All</option>
+              <option value="Solved">Solved</option>
+              <option value="Todo">Todo</option>
+            </select>
+            <button
+              onclick="resetDirFilters()"
+              class="px-3 py-2 text-xs text-zinc-400 hover:text-white bg-surface border border-white/[0.08] rounded-lg transition cursor-pointer"
+            >
+              Reset
+            </button>
           </div>
         </div>
       </div>
-    </section>
 
-    <!-- TRACK PILLS + SEARCH & FILTERS -->
-    <div class="space-y-3">
-      <div id="dir-category-bar" class="flex items-center gap-2 overflow-x-auto pb-1.5 text-xs">
-        <button onclick="setDirCategory('All')" data-cat="All" class="dir-cat-pill px-3 py-1.5 rounded-full font-semibold bg-accent text-black shrink-0 cursor-pointer transition">
-          All Tracks <span class="ml-1 opacity-75 font-normal" id="cat-count-All">...</span>
-        </button>
-        <button onclick="setDirCategory('Algorithms')" data-cat="Algorithms" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Algorithms <span class="ml-1 opacity-70" id="cat-count-Algorithms"></span>
-        </button>
-        <button onclick="setDirCategory('Data Structures')" data-cat="Data Structures" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Data Structures <span class="ml-1 opacity-70" id="cat-count-Data Structures"></span>
-        </button>
-        <button onclick="setDirCategory('Off-by-One')" data-cat="Off-by-One" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Off-by-One <span class="ml-1 opacity-70" id="cat-count-Off-by-One"></span>
-        </button>
-        <button onclick="setDirCategory('Edge Cases')" data-cat="Edge Cases" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Edge Cases <span class="ml-1 opacity-70" id="cat-count-Edge Cases"></span>
-        </button>
-        <button onclick="setDirCategory('Type Coercion')" data-cat="Type Coercion" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Type Coercion <span class="ml-1 opacity-70" id="cat-count-Type Coercion"></span>
-        </button>
-        <button onclick="setDirCategory('Memory &amp; State')" data-cat="Memory &amp; State" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Memory &amp; State <span class="ml-1 opacity-70" id="cat-count-Memory &amp; State"></span>
-        </button>
-        <button onclick="setDirCategory('Concurrency')" data-cat="Concurrency" class="dir-cat-pill px-3 py-1.5 rounded-full font-medium bg-surface-container border border-surface-border text-gray-300 hover:text-white shrink-0 cursor-pointer transition">
-          Concurrency <span class="ml-1 opacity-70" id="cat-count-Concurrency"></span>
-        </button>
-      </div>
-
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-        <div class="relative flex-1 sm:max-w-lg lg:max-w-xl">
-          <input id="dir-search" type="text" placeholder="Search by title, #id, category, or #tag..." oninput="handleDirFilterChange()" class="w-full bg-surface-container border border-surface-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent" />
-          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-        </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <select id="dir-difficulty" onchange="handleDirFilterChange()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer"><option value="All">Difficulty: All Levels</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>
-          <select id="dir-status" onchange="handleDirFilterChange()" class="bg-surface-container border border-surface-border text-gray-300 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-accent cursor-pointer"><option value="All">Status: All</option><option value="Solved">Solved</option><option value="Todo">Todo</option></select>
-          <button onclick="resetDirFilters()" class="px-2.5 py-1.5 text-xs text-gray-400 hover:text-white bg-surface-container border border-surface-border rounded-lg transition cursor-pointer">Reset</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- PROGRESS & ACTIVE SESSION CARDS -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      <div class="lg:col-span-7 bg-surface border border-surface-border rounded-xl p-5 shadow-lg flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+      <!-- PROGRESS & ACTIVE SESSION CARDS -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div
+          class="dir-cascade-card-left lg:col-span-7 bg-surface border border-white/[0.07] rounded-xl p-6 flex flex-col justify-between"
+        >
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div>
+                <span id="prog-track-label" class="hidden">All Tracks</span>
+                <h2
+                  class="text-lg sm:text-xl font-semibold text-white tracking-[-0.02em]"
+                >
+                  Your Progress
+                </h2>
+              </div>
+              <div class="text-right tabular-nums">
+                <span id="prog-solved" class="text-sm font-semibold text-white"
+                  >0</span
+                >
+                <span class="text-xs text-zinc-500"
+                  >/ <span id="prog-total">0</span> Solved</span
+                >
+                <span
+                  id="prog-pct"
+                  class="text-xs font-medium text-emerald-400 ml-1"
+                  >0.0%</span
+                >
+              </div>
+            </div>
+            <div
+              class="h-2 w-full bg-white/[0.05] rounded-full overflow-hidden flex my-3.5"
+            >
+              <div
+                id="bar-very-easy"
+                class="bg-cyan-400 h-full transition-all duration-300"
+                style="width: 0%"
+              ></div>
+              <div
+                id="bar-easy"
+                class="bg-emerald-400 h-full transition-all duration-300"
+                style="width: 0%"
+              ></div>
+              <div
+                id="bar-med"
+                class="bg-amber-400 h-full transition-all duration-300"
+                style="width: 0%"
+              ></div>
+              <div
+                id="bar-hard"
+                class="bg-rose-400 h-full transition-all duration-300"
+                style="width: 0%"
+              ></div>
+            </div>
+            <div
+              class="flex items-center justify-between gap-2 flex-wrap text-xs text-zinc-400 pt-1"
+            >
+              <div class="flex items-center gap-4 flex-wrap tabular-nums">
+                <span id="prog-very-easy-wrap" class="flex items-center gap-1.5"
+                  ><span class="w-2 h-2 rounded-full bg-cyan-400"></span
+                  ><span id="prog-very-easy">Very Easy: 0/0</span></span
+                >
+                <span class="flex items-center gap-1.5"
+                  ><span class="w-2 h-2 rounded-full bg-emerald-400"></span
+                  ><span id="prog-easy">Easy: 0/0</span></span
+                >
+                <span class="flex items-center gap-1.5"
+                  ><span class="w-2 h-2 rounded-full bg-amber-400"></span
+                  ><span id="prog-med">Medium: 0/0</span></span
+                >
+                <span class="flex items-center gap-1.5"
+                  ><span class="w-2 h-2 rounded-full bg-rose-400"></span
+                  ><span id="prog-hard">Hard: 0/0</span></span
+                >
+              </div>
+              <span
+                id="prog-remaining"
+                class="text-zinc-500 text-xs tabular-nums"
+                >0 Remaining</span
+              >
+            </div>
+          </div>
+          <div
+            class="grid grid-cols-3 gap-4 pt-5 mt-5 border-t border-white/[0.07] text-xs"
+          >
             <div>
-              <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded">Diagnostic Arcade</span>
-              <span id="prog-track-label" class="text-xs text-gray-500 ml-2 font-mono">ALL TRACKS</span>
-              <h2 class="text-lg font-bold text-white tracking-tight mt-1">System Debugging Proficiency</h2>
+              <div class="text-xs font-medium text-zinc-400">
+                Current Streak
+              </div>
+              <div
+                id="stat-streak"
+                class="text-base font-semibold tabular-nums text-amber-400 mt-1"
+              >
+                0
+              </div>
             </div>
-            <div class="text-right font-mono">
-              <span id="prog-solved" class="text-sm font-bold text-white">0</span>
-              <span class="text-xs text-gray-500">/ <span id="prog-total">0</span> Solved</span>
-              <span id="prog-pct" class="text-xs font-semibold text-emerald-400 ml-1">0.0%</span>
+            <div>
+              <div class="text-xs font-medium text-zinc-400">Arcade Score</div>
+              <div
+                id="stat-score"
+                class="text-base font-semibold tabular-nums text-emerald-400 mt-1"
+              >
+                0 pts
+              </div>
+            </div>
+            <div>
+              <div class="text-xs font-medium text-zinc-400">Total Solved</div>
+              <div
+                id="stat-solves"
+                class="text-base font-semibold tabular-nums text-white mt-1"
+              >
+                0 Bugs
+              </div>
             </div>
           </div>
-          <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden flex my-3">
-            <div id="bar-easy" class="bg-emerald-400 h-full transition-all duration-300" style="width: 0%;"></div>
-            <div id="bar-med" class="bg-amber-400 h-full transition-all duration-300" style="width: 0%;"></div>
-            <div id="bar-hard" class="bg-rose-400 h-full transition-all duration-300" style="width: 0%;"></div>
-          </div>
-          <div class="flex items-center justify-between gap-2 flex-wrap text-xs text-gray-400 pt-1">
-            <div class="flex items-center gap-3 flex-wrap font-mono text-[11px]">
-              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span id="prog-easy">Easy: 0/0</span></span>
-              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span id="prog-med">Medium: 0/0</span></span>
-              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-400"></span><span id="prog-hard">Hard: 0/0</span></span>
+        </div>
+
+        <div
+          class="dir-cascade-card-right lg:col-span-5 bg-surface border border-white/[0.07] rounded-xl p-6 flex flex-col justify-between"
+        >
+          <div>
+            <span id="active-badge-text" class="hidden">Active Session</span>
+            <span id="active-updated" class="hidden">Ready</span>
+            <div class="flex items-center gap-2">
+              <span
+                id="active-diff"
+                class="px-2 py-0.5 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded"
+                >Easy</span
+              >
+              <span id="active-meta" class="text-xs text-zinc-400 tabular-nums"
+                >1 • Loading...</span
+              >
             </div>
-            <span id="prog-remaining" class="text-gray-500 text-[11px] font-mono">0 Remaining</span>
+            <h3
+              id="active-title"
+              class="text-lg font-semibold text-white tracking-[-0.02em] mt-2.5 truncate"
+            >
+              Loading challenge catalog...
+            </h3>
+            <p
+              id="active-desc"
+              class="text-sm font-normal text-zinc-400 leading-relaxed line-clamp-2 mt-1.5"
+            >
+              Connecting to LintIQ backend to fetch your debugging catalog...
+            </p>
+          </div>
+          <div class="flex items-center gap-2.5 pt-5">
+            <a
+              id="active-resume-btn"
+              href="index.html"
+              class="flex-1 bg-accent hover:bg-accent-hover text-black font-semibold text-[13px] py-2 px-4 rounded-lg text-center transition whitespace-nowrap"
+              >▶ Open Workspace</a
+            >
+            <button
+              id="btn-pick-random"
+              onclick="pickRandomProblem()"
+              class="bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] text-zinc-200 font-medium text-[13px] py-2 px-3.5 rounded-lg transition cursor-pointer whitespace-nowrap"
+            >
+              Pick Random
+            </button>
           </div>
         </div>
-        <div class="grid grid-cols-3 gap-3 pt-4 mt-4 border-t border-surface-border text-xs">
-          <div><div class="text-[10px] uppercase font-mono text-gray-500">Current Streak</div><div id="stat-streak" class="font-bold text-amber-400 mt-0.5">0</div></div>
-          <div><div class="text-[10px] uppercase font-mono text-gray-500">Arcade Score</div><div id="stat-score" class="font-bold text-emerald-400 mt-0.5">0 pts</div></div>
-          <div><div class="text-[10px] uppercase font-mono text-gray-500">Total Solved</div><div id="stat-solves" class="font-bold text-white mt-0.5">0 Bugs</div></div>
-        </div>
       </div>
 
-      <div class="lg:col-span-5 bg-surface border border-surface-border rounded-xl p-5 shadow-lg flex flex-col justify-between">
-        <div>
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span class="flex items-center gap-1.5 text-amber-400 font-semibold"><span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span><span id="active-badge-text">ACTIVE SESSION</span></span>
-            <span id="active-updated" class="text-gray-500 text-[11px] font-mono">Ready</span>
+      <!-- FULL DYNAMIC PROBLEMS TABLE -->
+      <div
+        class="dir-cascade-table bg-surface border border-white/[0.07] rounded-xl overflow-hidden"
+      >
+        <div
+          class="px-6 py-4 border-b border-white/[0.07] flex items-center justify-between gap-2 flex-wrap text-xs"
+        >
+          <div class="flex items-center gap-2.5">
+            <span class="font-semibold text-white text-base tracking-[-0.02em]"
+              >Challenges</span
+            >
+            <span
+              id="table-match-badge"
+              class="text-xs tabular-nums bg-white/[0.04] border border-white/[0.07] text-zinc-400 px-2 py-0.5 rounded"
+              >Loading...</span
+            >
           </div>
-          <div class="flex items-center gap-2 mt-2">
-            <span id="active-diff" class="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded uppercase">EASY</span>
-            <span id="active-meta" class="text-xs text-gray-400 font-mono">#1 • Loading...</span>
-          </div>
-          <h3 id="active-title" class="text-base font-bold text-white tracking-tight mt-1.5 truncate">Loading challenge catalog...</h3>
-          <p id="active-desc" class="text-xs text-gray-400 line-clamp-2 mt-1">Connecting to LintIQ backend to fetch your full debugging catalog...</p>
-        </div>
-        <div class="flex items-center gap-2 pt-4">
-          <a id="active-resume-btn" href="index.html" class="flex-1 bg-accent hover:bg-accent-hover text-black font-semibold text-xs py-2 px-3 rounded-lg text-center transition whitespace-nowrap">▶ Open Workspace</a>
-          <button id="btn-pick-random" onclick="pickRandomProblem()" class="bg-surface-container hover:bg-surface-border border border-surface-border text-gray-200 font-medium text-xs py-2 px-3 rounded-lg transition cursor-pointer whitespace-nowrap">🎲 Pick Random</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- FULL DYNAMIC PROBLEMS TABLE -->
-    <div class="bg-surface border border-surface-border rounded-xl overflow-hidden shadow-xl">
-      <div class="px-5 py-3.5 border-b border-surface-border flex items-center justify-between gap-2 flex-wrap text-xs">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-white text-sm">Problems & Code Sandbox Tests</span>
-          <span id="table-match-badge" class="text-[11px] font-mono bg-surface-container border border-surface-border text-gray-400 px-2 py-0.5 rounded">Loading...</span>
-        </div>
-        <div class="flex items-center gap-4 text-xs text-gray-400">
-          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>Solved</span></span>
-          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span>Active</span></span>
-          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-gray-500"></span><span>Todo</span></span>
-        </div>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="bg-surface-container/60 text-gray-400 uppercase tracking-wider text-[10px] font-mono border-b border-surface-border">
-            <tr><th class="py-3 px-4 w-14 text-center">Status</th><th class="py-3 px-4">Title & Diagnostic Tags</th><th class="py-3 px-4">Track</th><th class="py-3 px-4">Difficulty</th><th class="py-3 px-4">Assertions</th><th class="py-3 px-4 text-right">Action</th></tr>
-          </thead>
-          <tbody id="directory-rows" class="divide-y divide-surface-border/50 text-gray-300">
-            <tr><td colspan="6" class="py-12 text-center text-gray-400 font-mono">Loading full problem catalog from LintIQ engine...</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- PAGINATION BAR -->
-      <div class="px-4 sm:px-5 py-3 bg-surface-container/50 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
-        <div class="flex items-center gap-3 flex-wrap">
-          <span id="page-range-info" class="font-mono text-[11px]">Showing 0–0 of 0 problems</span>
-          <div class="flex items-center gap-1.5">
-            <label for="rows-per-page" class="text-[11px] font-mono text-gray-500">Rows:</label>
-            <select id="rows-per-page" onchange="changePageSize(this.value)" class="bg-surface border border-surface-border text-gray-200 text-xs rounded px-2 py-1 font-mono focus:outline-none focus:border-accent cursor-pointer"><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select>
+          <div class="flex items-center gap-4 text-xs text-zinc-400">
+            <span class="flex items-center gap-1.5"
+              ><span class="w-2 h-2 rounded-full bg-emerald-400"></span
+              ><span>Solved</span></span
+            >
+            <span class="flex items-center gap-1.5"
+              ><span class="w-2 h-2 rounded-full bg-amber-400"></span
+              ><span>Active</span></span
+            >
+            <span class="flex items-center gap-1.5"
+              ><span class="w-2 h-2 rounded-full bg-zinc-500"></span
+              ><span>Todo</span></span
+            >
           </div>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <form onsubmit="jumpToProblemNumber(event)" class="flex items-center gap-1.5 mr-2">
-            <label for="goto-problem-input" class="text-[11px] font-mono text-gray-500">Go to #</label>
-            <input id="goto-problem-input" type="number" min="1" placeholder="ID" class="w-16 bg-surface border border-surface-border rounded px-2 py-1 text-xs font-mono text-white focus:outline-none focus:border-accent" />
-            <button type="submit" class="px-2 py-1 bg-surface border border-surface-border hover:border-accent text-gray-300 hover:text-white rounded text-xs transition cursor-pointer">→</button>
-          </form>
-          <div id="pagination-controls" class="flex items-center gap-1 font-mono"></div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-[13px]">
+            <thead
+              class="bg-white/[0.02] text-zinc-400 text-xs font-medium border-b border-white/[0.07]"
+            >
+              <tr>
+                <th class="py-3 pl-6 pr-3 w-20 text-center font-medium">
+                  Status
+                </th>
+                <th class="py-3 text-left pl-4 pr-4 font-medium">
+                  <span class="inline-flex items-center gap-4"
+                    ><span
+                      class="text-[13px] tabular-nums shrink-0 h-0 overflow-hidden opacity-0 select-none"
+                      aria-hidden="true"
+                      >1.</span
+                    ><span>Title &amp; Tags</span></span
+                  >
+                </th>
+                <th class="py-3 px-4 text-center font-medium">Track</th>
+                <th class="py-3 px-4 text-center font-medium">Difficulty</th>
+                <th class="py-3 px-4 text-center font-medium">Assertions</th>
+                <th class="py-3 pl-4 pr-6 text-center font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody
+              id="directory-rows"
+              class="divide-y divide-white/[0.06] text-zinc-300"
+            >
+              <tr>
+                <td colspan="6" class="py-12 text-center text-zinc-400 text-xs">
+                  Loading challenge catalog...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- PAGINATION BAR -->
+        <div
+          class="px-5 sm:px-6 py-3.5 bg-white/[0.02] border-t border-white/[0.07] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-400"
+        >
+          <div class="flex items-center gap-3 flex-wrap">
+            <span id="page-range-info" class="text-xs tabular-nums"
+              >Showing 0–0 of 0 problems</span
+            >
+            <div class="flex items-center gap-1.5">
+              <label for="rows-per-page" class="text-xs text-zinc-500"
+                >Rows</label
+              >
+              <select
+                id="rows-per-page"
+                onchange="changePageSize(this.value)"
+                class="bg-surface border border-white/[0.08] text-zinc-200 text-xs rounded px-2 py-1 tabular-nums focus:outline-none focus:border-white/25 cursor-pointer"
+              >
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <form
+              onsubmit="jumpToProblemNumber(event)"
+              class="flex items-center gap-1.5 mr-2"
+            >
+              <label for="goto-problem-input" class="text-xs text-zinc-500"
+                >Go to</label
+              >
+              <input
+                id="goto-problem-input"
+                type="number"
+                min="1"
+                placeholder="ID"
+                class="w-16 bg-surface border border-white/[0.08] rounded px-2 py-1 text-xs text-white tabular-nums focus:outline-none focus:border-white/25"
+              />
+              <button
+                type="submit"
+                class="px-2 py-1 bg-surface border border-white/[0.08] hover:border-white/25 text-zinc-300 hover:text-white rounded text-xs transition cursor-pointer"
+              >
+                →
+              </button>
+            </form>
+            <div
+              id="pagination-controls"
+              class="flex items-center gap-1 tabular-nums"
+            ></div>
+          </div>
         </div>
       </div>
-    </div>
-  </main>
+    </main>
 
-  <footer class="h-8 bg-surface-dim border-t border-surface-border/50 px-6 flex items-center justify-between text-[11px] text-gray-500 shrink-0 mt-auto">
-    <div>LintIQ IDE • ARCADE V1.6</div>
-    <div id="dir-sync-footer" class="font-mono">Connected</div>
-  </footer>
+    <footer
+      class="h-8 bg-surface-dim border-t border-white/[0.06] px-6 flex items-center justify-between text-xs text-zinc-500 shrink-0 mt-auto"
+    >
+      <div>LintIQ</div>
+      <div id="dir-sync-footer">Connected</div>
+    </footer>
 
-  <!-- INJECTED COMPONENTS -->
-  <div id="lintiq-auth-modal"></div>
+    <!-- INJECTED COMPONENTS -->
+    <div id="lintiq-auth-modal"></div>
 
-  <!-- Shared JS -->
-  <script src="js/shared.js"></script>
+    <!-- Shared JS -->
+    <script src="js/shared.js"></script>
 
-  <!-- Components -->
-  <script src="components/navbar.js"></script>
-  <script src="components/auth-modal.js"></script>
+    <!-- Components -->
+    <script src="components/navbar.js"></script>
+    <script src="components/auth-modal.js"></script>
 
-  <!-- Directory Logic -->
-  <script src="js/directory.js"></script>
-</body>
+    <!-- Directory Logic -->
+    <script src="js/directory.js"></script>
+  </body>
 </html>

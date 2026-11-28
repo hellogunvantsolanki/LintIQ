@@ -13,26 +13,25 @@
   slot.outerHTML = `
   <!-- SETTINGS, EDITOR PREFERENCES & ANALYTICS MODAL -->
   <div id="settings-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <div class="bg-surface border border-surface-border w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl relative flex flex-col">
+    <div class="bg-surface border border-white/[0.08] w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-xl shadow-2xl relative flex flex-col">
 
-      <div class="px-5 sm:px-6 pt-4 bg-surface-dim border-b border-surface-border shrink-0">
+      <div class="px-6 pt-4 bg-surface-dim border-b border-white/[0.07] shrink-0">
         <div class="flex items-center justify-between pb-3">
           <div class="flex items-center gap-2">
-            <span class="text-emerald-400 font-mono text-sm">⚙</span>
-            <h2 id="settings-title" class="text-base font-bold text-white tracking-wide">LintIQ Control Center</h2>
+            <h2 id="settings-title" class="text-base font-semibold tracking-[-0.02em] text-white">Settings</h2>
           </div>
-          <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">✕</button>
+          <button onclick="closeSettingsModal()" class="text-zinc-400 hover:text-white text-sm px-2 py-1 rounded cursor-pointer">✕</button>
         </div>
 
-        <div class="flex items-center gap-2 text-xs font-mono overflow-x-auto">
-          <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-emerald-400 font-semibold transition whitespace-nowrap cursor-pointer">
-            👤 Profile & Bio
+        <div class="flex items-center gap-2 text-xs overflow-x-auto">
+          <button onclick="switchSettingsTab('profile')" id="tab-btn-profile" class="settings-tab-btn px-3 py-2 border-b-2 border-emerald-500 text-white font-medium transition whitespace-nowrap cursor-pointer">
+            Profile &amp; Bio
           </button>
           <button onclick="switchSettingsTab('editor')" id="tab-btn-editor" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap cursor-pointer">
-            🖥 Editor & Sandbox
+            Editor &amp; Sandbox
           </button>
           <button onclick="switchSettingsTab('analytics')" id="tab-btn-analytics" class="settings-tab-btn px-3 py-2 border-b-2 border-transparent text-zinc-400 hover:text-zinc-200 transition whitespace-nowrap cursor-pointer">
-            📊 Dashboard & Graph
+            Dashboard &amp; Graph
           </button>
         </div>
       </div>

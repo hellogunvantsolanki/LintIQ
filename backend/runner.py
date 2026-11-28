@@ -2,7 +2,9 @@ import os
 import re
 import sys
 import ast
+import io
 import json
+import math
 import time
 import atexit
 import random
@@ -11,6 +13,7 @@ import difflib
 import logging
 import secrets
 import tempfile
+import tokenize
 import threading
 import traceback
 import subprocess
@@ -82,24 +85,46 @@ atexit.register(_SANDBOX_HTTP.close)
 
 # Supported language configurations
 LANGUAGE_MAP: Dict[str, Dict[str, str]] = {
-    "python": {"language": "python", "version": "*", "ext": "py", "monaco": "python"},
-    "python3": {"language": "python", "version": "*", "ext": "py", "monaco": "python"},
-    "javascript": {"language": "javascript", "version": "*", "ext": "js", "monaco": "javascript"},
-    "js": {"language": "javascript", "version": "*", "ext": "js", "monaco": "javascript"},
-    "go": {"language": "go", "version": "*", "ext": "go", "monaco": "go"},
-    "cpp": {"language": "c++", "version": "*", "ext": "cpp", "monaco": "cpp"},
+    "python": {"language": "python", "canonical": "python", "version": "*", "ext": "py", "filename": "solution.py", "monaco": "python"},
+    "python3": {"language": "python", "canonical": "python", "version": "*", "ext": "py", "filename": "solution.py", "monaco": "python"},
+    "java": {"language": "java", "canonical": "java", "version": "*", "ext": "java", "filename": "Solution.java", "monaco": "java"},
+    "cpp": {"language": "c++", "canonical": "cpp", "version": "*", "ext": "cpp", "filename": "solution.cpp", "monaco": "cpp"},
+    "c++": {"language": "c++", "canonical": "cpp", "version": "*", "ext": "cpp", "filename": "solution.cpp", "monaco": "cpp"},
+    "javascript": {"language": "javascript", "canonical": "javascript", "version": "*", "ext": "js", "filename": "solution.js", "monaco": "javascript"},
+    "js": {"language": "javascript", "canonical": "javascript", "version": "*", "ext": "js", "filename": "solution.js", "monaco": "javascript"},
+    "typescript": {"language": "typescript", "canonical": "typescript", "version": "*", "ext": "ts", "filename": "solution.ts", "monaco": "typescript"},
+    "ts": {"language": "typescript", "canonical": "typescript", "version": "*", "ext": "ts", "filename": "solution.ts", "monaco": "typescript"},
+    "go": {"language": "go", "canonical": "go", "version": "*", "ext": "go", "filename": "solution.go", "monaco": "go"},
+    "golang": {"language": "go", "canonical": "go", "version": "*", "ext": "go", "filename": "solution.go", "monaco": "go"},
 }
+
+_COMPILE_TIMEOUT_SEC = 10
+_EXEC_TIMEOUT_SEC = 3
+_NODE_MAJOR_MINOR_CACHE: Optional[Tuple[int, int]] = None
+
+
+def normalize_language_key(language: Optional[str]) -> str:
+    """Normalizes aliases ('py', 'js', 'ts', 'c++', 'golang') to canonical keys."""
+    raw = (language or "python").lower().strip() or "python"
+    if raw == "py":
+        raw = "python"
+    cfg = LANGUAGE_MAP.get(raw)
+    if cfg is not None:
+        return cfg["canonical"]
+    return raw
 
 
 def _resolve_language_config(language: Optional[str]) -> Tuple[str, Dict[str, str]]:
     """Resolves a requested language to LANGUAGE_MAP or raises ValueError when unsupported."""
     norm_lang = (language or "python").lower().strip() or "python"
+    if norm_lang == "py":
+        norm_lang = "python"
     lang_config = LANGUAGE_MAP.get(norm_lang)
     if lang_config is None:
         raise ValueError(
-            f"Unsupported language '{norm_lang}'. Supported languages: python, javascript, cpp, go."
+            f"Unsupported language '{norm_lang}'. Supported languages: python, java, cpp, javascript, typescript, go."
         )
-    return norm_lang, lang_config
+    return lang_config["canonical"], lang_config
 
 # Defense-in-depth AST deny-list (real OS isolation is enforced by remote container + fail-closed fallback)
 BANNED_MODULES = {
@@ -383,8 +408,11 @@ def _is_production() -> bool:
 def _allow_local_sandbox() -> bool:
     """
     Fail-closed guard (Bug #1A): local host execution is DISABLED by default even if
-    ENVIRONMENT=production is forgotten. Must explicitly set ALLOW_LOCAL_SANDBOX=true locally.
+    ENVIRONMENT=production is forgotten. Must explicitly set ALLOW_LOCAL_SANDBOX=true
+    or run inside the hardened multi-runtime Docker container (DOCKER_MULTI_RUNTIME=true).
     """
+    if os.getenv("DOCKER_MULTI_RUNTIME", "").strip().lower() in ("1", "true", "yes"):
+        return True
     if _is_production():
         return False
     return os.getenv("ALLOW_LOCAL_SANDBOX", "").strip().lower() in ("1", "true", "yes")
@@ -436,11 +464,11 @@ def _check_python_security(code_str: str) -> Tuple[bool, str]:
     return True, ""
 
 
-def _set_linux_limits() -> None:
-    """Applies a 128MB RAM ceiling and 4-second CPU limit on Linux."""
+def _set_linux_limits(mem_limit_mb: int = 128) -> None:
+    """Applies bounded RAM ceiling and 4-second CPU limit on Linux."""
     try:
         import resource
-        mem_limit = 128 * 1024 * 1024
+        mem_limit = mem_limit_mb * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_AS, (mem_limit, mem_limit))
         resource.setrlimit(resource.RLIMIT_CPU, (4, 4))
     except Exception:
@@ -448,16 +476,21 @@ def _set_linux_limits() -> None:
 
 
 def _build_safe_env(tmpdir: str) -> Dict[str, str]:
-    """Builds a stripped environment with ZERO secret keys for explicit local dev fallback."""
+    """Builds a stripped environment with ZERO secret keys for container/local execution."""
     safe_env: Dict[str, str] = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUTF8": "1",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
         "TEMP": tmpdir,
         "TMP": tmpdir,
         "TMPDIR": tmpdir,
         "HOME": tmpdir,
+        "GOCACHE": os.path.join(tmpdir, ".gocache"),
+        "GOPATH": os.path.join(tmpdir, ".gopath"),
+        "GOMEMLIMIT": "192MiB",
     }
     if os.name == "nt":
         for key in ("SYSTEMROOT", "COMSPEC", "PATHEXT", "WINDIR"):
@@ -499,7 +532,7 @@ def _execute_remote_piston(
         "version": lang_config["version"],
         "files": [
             {
-                "name": f"solution.{lang_config['ext']}",
+                "name": lang_config.get("filename", f"solution.{lang_config['ext']}"),
                 "content": code_to_run,
             }
         ],
@@ -566,96 +599,213 @@ def _execute_remote_piston(
     }
 
 
+def _resolve_node_ts_cmd(node_bin: str, sol_file: str) -> List[str]:
+    """Uses native TypeScript execution on Node >= 22.18 / 23+ or --experimental-strip-types on earlier Node 22."""
+    global _NODE_MAJOR_MINOR_CACHE
+    if _NODE_MAJOR_MINOR_CACHE is None:
+        try:
+            ver_proc = subprocess.run(
+                [node_bin, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            match = re.match(r"v?(\d+)\.(\d+)", (ver_proc.stdout or "").strip())
+            _NODE_MAJOR_MINOR_CACHE = (int(match.group(1)), int(match.group(2))) if match else (22, 18)
+        except Exception:
+            _NODE_MAJOR_MINOR_CACHE = (22, 18)
+
+    major, minor = _NODE_MAJOR_MINOR_CACHE
+    if major > 22 or (major == 22 and minor >= 18):
+        return [node_bin, sol_file]
+    return [node_bin, "--experimental-strip-types", sol_file]
+
+
+def _prepare_local_runtime(
+    code_to_run: str,
+    tmpdir: str,
+    lang_key: str,
+    safe_env: Dict[str, str],
+) -> Tuple[Optional[List[str]], Optional[Dict[str, Any]]]:
+    """Writes source file, compiles once if compiled language, and returns exec argv or structured error/compile response."""
+    norm = normalize_language_key(lang_key)
+    exe_suffix = ".exe" if os.name == "nt" else ""
+
+    if norm == "python":
+        sol_file = os.path.join(tmpdir, "solution.py")
+        with open(sol_file, "w", encoding="utf-8") as f:
+            f.write(code_to_run)
+        return [sys.executable, "-I", sol_file], None
+
+    if norm == "javascript":
+        node_bin = shutil.which("node")
+        if not node_bin:
+            return None, {"error": True, "message": "JavaScript runtime (node) is unavailable in this environment."}
+        sol_file = os.path.join(tmpdir, "solution.js")
+        with open(sol_file, "w", encoding="utf-8") as f:
+            f.write(code_to_run)
+        return [node_bin, sol_file], None
+
+    if norm == "typescript":
+        node_bin = shutil.which("node")
+        if not node_bin:
+            return None, {"error": True, "message": "TypeScript runtime (node) is unavailable in this environment."}
+        sol_file = os.path.join(tmpdir, "solution.ts")
+        with open(sol_file, "w", encoding="utf-8") as f:
+            f.write(code_to_run)
+        return _resolve_node_ts_cmd(node_bin, sol_file), None
+
+    if norm == "cpp":
+        gpp_bin = shutil.which("g++")
+        if not gpp_bin:
+            return None, {"error": True, "message": "C++ compiler (g++) is unavailable in this environment."}
+        sol_file = os.path.join(tmpdir, "solution.cpp")
+        out_bin = os.path.join(tmpdir, f"solution{exe_suffix}")
+        with open(sol_file, "w", encoding="utf-8") as f:
+            f.write(code_to_run)
+        compile_cmd = [gpp_bin, "-O2", "-std=c++20", sol_file, "-o", out_bin]
+        exec_cmd = [out_bin]
+    elif norm == "java":
+        javac_bin = shutil.which("javac")
+        java_bin = shutil.which("java")
+        if not javac_bin or not java_bin:
+            return None, {"error": True, "message": "Java compiler/runtime (javac/java) is unavailable in this environment."}
+        sol_file = os.path.join(tmpdir, "Solution.java")
+        with open(sol_file, "w", encoding="utf-8") as f:
+            f.write(code_to_run)
+        compile_cmd = [javac_bin, sol_file]
+        exec_cmd = [java_bin, "-Xmx256m", "-cp", tmpdir, "Solution"]
+    elif norm == "go":
+        go_bin = shutil.which("go")
+        if not go_bin:
+            return None, {"error": True, "message": "Go compiler (go) is unavailable in this environment."}
+        sol_file = os.path.join(tmpdir, "solution.go")
+        out_bin = os.path.join(tmpdir, f"solution{exe_suffix}")
+        with open(sol_file, "w", encoding="utf-8") as f:
+            f.write(code_to_run)
+        os.makedirs(safe_env.get("GOCACHE", os.path.join(tmpdir, ".gocache")), exist_ok=True)
+        os.makedirs(safe_env.get("GOPATH", os.path.join(tmpdir, ".gopath")), exist_ok=True)
+        compile_cmd = [go_bin, "build", "-o", out_bin, sol_file]
+        exec_cmd = [out_bin]
+    else:
+        return None, {"error": True, "message": f"Unsupported local runtime '{norm}'."}
+
+    try:
+        comp_proc = subprocess.run(
+            compile_cmd,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=_COMPILE_TIMEOUT_SEC,
+            cwd=tmpdir,
+            env=safe_env,
+        )
+    except subprocess.TimeoutExpired:
+        return None, {
+            "compile": {
+                "code": 124,
+                "stderr": f"Compilation timed out ({_COMPILE_TIMEOUT_SEC}s limit).",
+                "output": "",
+            }
+        }
+    except FileNotFoundError:
+        return None, {"error": True, "message": f"Compiler binary for '{norm}' could not be executed."}
+
+    if comp_proc.returncode != 0:
+        err_out = comp_proc.stderr or comp_proc.stdout or "Compilation failed."
+        return None, {
+            "compile": {
+                "code": comp_proc.returncode,
+                "stderr": err_out[:8192],
+                "output": err_out[:8192],
+            }
+        }
+
+    return exec_cmd, None
+
+
+def _run_prepared_command(
+    exec_cmd: List[str],
+    stdin_data: str,
+    tmpdir: str,
+    safe_env: Dict[str, str],
+    lang_key: str,
+) -> Dict[str, Any]:
+    """Executes an already-prepared command once with strict timeout and output caps."""
+    norm = normalize_language_key(lang_key)
+    mem_mb = 768 if norm in ("java", "go") else 128
+    preexec = (lambda: _set_linux_limits(mem_mb)) if sys.platform.startswith("linux") else None
+
+    t0 = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            exec_cmd,
+            input=stdin_data,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=_EXEC_TIMEOUT_SEC,
+            cwd=tmpdir,
+            env=safe_env,
+            preexec_fn=preexec,
+        )
+        elapsed_ms = int((time.perf_counter() - t0) * 1000)
+
+        if proc.returncode == -9 or "MemoryError" in (proc.stderr or ""):
+            return {
+                "run": {
+                    "stdout": "",
+                    "stderr": "Memory Limit Exceeded (128MB).",
+                    "code": 137,
+                    "signal": "SIGOM",
+                    "wall_time": elapsed_ms,
+                }
+            }
+        return {
+            "run": {
+                "stdout": (proc.stdout or "")[:16384],
+                "stderr": (proc.stderr or "")[:8192],
+                "code": proc.returncode,
+                "signal": None,
+                "wall_time": elapsed_ms,
+            }
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "run": {
+                "stdout": "",
+                "stderr": "Execution timed out",
+                "code": 124,
+                "signal": "SIGKILL",
+                "status": "TO",
+                "wall_time": _EXEC_TIMEOUT_SEC * 1000,
+            }
+        }
+    except Exception as exc:
+        logger.warning("Local sandbox execution failed: %s", exc)
+        return {"error": True, "message": "Local sandbox execution failed."}
+
+
 def _execute_local_fallback(
     code_to_run: str,
     stdin_data: str,
     lang_key: str,
 ) -> Dict[str, Any]:
-    """Explicit opt-in local development fallback (NEVER runs unless ALLOW_LOCAL_SANDBOX=true)."""
+    """Explicit opt-in / Docker multi-runtime isolated execution for a single run."""
     if not _allow_local_sandbox():
         return {
             "error": True,
             "message": "Sandbox is temporarily unavailable. Please try again shortly.",
         }
 
-    preexec = _set_linux_limits if sys.platform.startswith("linux") else None
-
     with tempfile.TemporaryDirectory(prefix="lintiq_run_") as tmpdir:
         safe_env = _build_safe_env(tmpdir)
-
-        if lang_key in ("python", "python3"):
-            sol_file = os.path.join(tmpdir, "solution.py")
-            with open(sol_file, "w", encoding="utf-8") as f:
-                f.write(code_to_run)
-            cmd = [sys.executable, "-I", sol_file]
-        elif lang_key in ("javascript", "js"):
-            node_bin = shutil.which("node")
-            if not node_bin:
-                return {"error": True, "message": "JavaScript runtime unavailable locally."}
-            sol_file = os.path.join(tmpdir, "solution.js")
-            with open(sol_file, "w", encoding="utf-8") as f:
-                f.write(code_to_run)
-            cmd = [node_bin, sol_file]
-        elif lang_key == "go":
-            go_bin = shutil.which("go")
-            if not go_bin:
-                return {"error": True, "message": "Go runtime unavailable locally."}
-            sol_file = os.path.join(tmpdir, "main.go")
-            with open(sol_file, "w", encoding="utf-8") as f:
-                f.write(code_to_run)
-            cmd = [go_bin, "run", sol_file]
-        else:
-            return {"error": True, "message": "Selected language requires the remote cloud sandbox."}
-
-        t0 = time.perf_counter()
-        try:
-            proc = subprocess.run(
-                cmd,
-                input=stdin_data,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                capture_output=True,
-                timeout=4,
-                cwd=tmpdir,
-                env=safe_env,
-                preexec_fn=preexec,
-            )
-            elapsed_ms = int((time.perf_counter() - t0) * 1000)
-
-            if proc.returncode == -9 or "MemoryError" in proc.stderr:
-                return {
-                    "run": {
-                        "stdout": "",
-                        "stderr": "Memory Limit Exceeded (128MB).",
-                        "code": 137,
-                        "signal": "SIGOM",
-                        "wall_time": elapsed_ms,
-                    }
-                }
-            return {
-                "run": {
-                    "stdout": proc.stdout,
-                    "stderr": proc.stderr,
-                    "code": proc.returncode,
-                    "signal": None,
-                    "wall_time": elapsed_ms,
-                }
-            }
-        except subprocess.TimeoutExpired:
-            return {
-                "run": {
-                    "stdout": "",
-                    "stderr": "Execution timed out",
-                    "code": 124,
-                    "signal": "SIGKILL",
-                    "status": "TO",
-                    "wall_time": 4000,
-                }
-            }
-        except Exception as exc:
-            logger.warning("Local sandbox execution failed: %s", exc)
-            return {"error": True, "message": "Local sandbox execution failed."}
+        exec_cmd, prep_err = _prepare_local_runtime(code_to_run, tmpdir, lang_key, safe_env)
+        if prep_err is not None or not exec_cmd:
+            return prep_err or {"error": True, "message": "Execution preparation failed."}
+        return _run_prepared_command(exec_cmd, stdin_data, tmpdir, safe_env, lang_key)
 
 
 def _dispatch_execution(
@@ -984,8 +1134,212 @@ def run_custom_code(
 
 
 # ---------------------------------------------------------------------------
-# Surgical Patch Scoring (Line Diff + AST Delta)
+# String-Safe Language Comment Stripping & Minimal Patch Validation
 # ---------------------------------------------------------------------------
+
+def _scan_python_comment_cols(lines: List[str]) -> Dict[int, int]:
+    """String- and triple-quote-aware fallback scanner for # comments when tokenize fails mid-file."""
+    comment_cols: Dict[int, int] = {}
+    triple_delim: Optional[str] = None
+
+    for row_idx, line in enumerate(lines, start=1):
+        i = 0
+        n = len(line)
+        single_delim: Optional[str] = None
+        while i < n:
+            ch = line[i]
+            if triple_delim is not None:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if line.startswith(triple_delim, i):
+                    triple_delim = None
+                    i += 3
+                    continue
+                i += 1
+                continue
+            if single_delim is not None:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == single_delim:
+                    single_delim = None
+                i += 1
+                continue
+            if line.startswith("'''", i) or line.startswith('"""', i):
+                triple_delim = line[i : i + 3]
+                i += 3
+                continue
+            if ch in ("'", '"'):
+                single_delim = ch
+                i += 1
+                continue
+            if ch == "#":
+                comment_cols[row_idx] = i
+                break
+            i += 1
+    return comment_cols
+
+
+def strip_python_comments(code: str) -> str:
+    """Safely strip Python # comments via tokenize (with lexer fallback) preserving string literals."""
+    if not isinstance(code, str) or not code.strip():
+        return code or ""
+
+    working = code
+    if "\n" not in working and "\\n" in working:
+        working = working.replace("\\r\\n", "\n").replace("\\n", "\n")
+
+    lines = working.splitlines()
+    comment_cols: Dict[int, int] = {}
+    tokenize_ok = True
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(working).readline):
+            if tok.type == tokenize.COMMENT:
+                row = tok.start[0]
+                if row not in comment_cols or tok.start[1] < comment_cols[row]:
+                    comment_cols[row] = tok.start[1]
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        tokenize_ok = False
+
+    if not tokenize_ok:
+        for row, col in _scan_python_comment_cols(lines).items():
+            if row not in comment_cols:
+                comment_cols[row] = col
+
+    if not comment_cols:
+        return working
+
+    orig_compiles = False
+    try:
+        compile(working, "solution.py", "exec")
+        orig_compiles = True
+    except SyntaxError:
+        orig_compiles = False
+
+    cleaned_lines: List[str] = []
+    last_dropped_comment = False
+    for idx, line in enumerate(lines, start=1):
+        col = comment_cols.get(idx)
+        if col is not None:
+            prefix = line[:col].rstrip()
+            if not prefix:
+                last_dropped_comment = True
+                continue
+            cleaned_lines.append(prefix)
+            last_dropped_comment = False
+        else:
+            stripped = line.rstrip()
+            if not stripped and (not cleaned_lines or cleaned_lines[-1] == "" or last_dropped_comment):
+                last_dropped_comment = False
+                continue
+            cleaned_lines.append(stripped)
+            last_dropped_comment = False
+
+    while cleaned_lines and cleaned_lines[-1] == "":
+        cleaned_lines.pop()
+
+    cleaned = "\n".join(cleaned_lines)
+    if (working.endswith("\n") or code.endswith("\n")) and cleaned:
+        cleaned += "\n"
+
+    if orig_compiles:
+        try:
+            compile(cleaned, "solution.py", "exec")
+        except SyntaxError:
+            return working
+    return cleaned
+
+
+def strip_c_style_comments(code: str) -> str:
+    """Safely strips // and /* */ comments while preserving quotes and template/raw strings."""
+    if not isinstance(code, str) or not code.strip():
+        return code or ""
+
+    working = code.replace("\r\n", "\n")
+    out: List[str] = []
+    i = 0
+    n = len(working)
+    state: Optional[str] = None  # '"', "'", "`", "line", "block"
+
+    while i < n:
+        ch = working[i]
+        nxt = working[i + 1] if i + 1 < n else ""
+
+        if state == "line":
+            if ch == "\n":
+                state = None
+                out.append("\n")
+            i += 1
+            continue
+
+        if state == "block":
+            if ch == "*" and nxt == "/":
+                state = None
+                i += 2
+                continue
+            if ch == "\n":
+                out.append("\n")
+            i += 1
+            continue
+
+        if state in ('"', "'", "`"):
+            out.append(ch)
+            if ch == "\\" and i + 1 < n and state != "`":
+                out.append(nxt)
+                i += 2
+                continue
+            if ch == "\\" and state == "`" and nxt in ("\\", "`", "$"):
+                out.append(nxt)
+                i += 2
+                continue
+            if ch == state:
+                state = None
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "/":
+            state = "line"
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            state = "block"
+            i += 2
+            continue
+        if ch in ('"', "'", "`"):
+            state = ch
+            out.append(ch)
+            i += 1
+            continue
+
+        out.append(ch)
+        i += 1
+
+    cleaned_lines: List[str] = []
+    for raw_line in "".join(out).split("\n"):
+        trimmed = raw_line.rstrip()
+        if not trimmed and (not cleaned_lines or cleaned_lines[-1] == ""):
+            continue
+        cleaned_lines.append(trimmed)
+
+    while cleaned_lines and cleaned_lines[-1] == "":
+        cleaned_lines.pop()
+
+    result = "\n".join(cleaned_lines)
+    if working.endswith("\n") and result:
+        result += "\n"
+    return result
+
+
+def strip_language_comments(code: str, language: str = "python") -> str:
+    """Strips spoiler comments according to language while preserving string literals."""
+    norm = normalize_language_key(language)
+    if norm == "python":
+        return strip_python_comments(code)
+    if norm in ("java", "cpp", "javascript", "typescript", "go"):
+        return strip_c_style_comments(code)
+    return code or ""
+
 
 def _normalize_lines(code: str) -> List[str]:
     lines = [line.rstrip() for line in (code or "").replace("\r\n", "\n").split("\n")]
@@ -994,6 +1348,117 @@ def _normalize_lines(code: str) -> List[str]:
     while lines and not lines[-1].strip():
         lines.pop()
     return lines
+
+
+def _normalize_code_for_patch_check(code: str, language: str = "python") -> List[str]:
+    """Strip comments for the given language and return non-empty lines with trailing whitespace removed."""
+    comment_free = strip_language_comments(code or "", language=language)
+    normalized: List[str] = []
+    for raw_line in comment_free.replace("\r\n", "\n").split("\n"):
+        trimmed = raw_line.rstrip()
+        if not trimmed.strip():
+            continue
+        normalized.append(trimmed)
+    return normalized
+
+
+def validate_minimal_patch(
+    original_code: str,
+    submitted_code: str,
+    language: str = "python",
+) -> Dict[str, Any]:
+    """
+    Enforce LintIQ's 'Debug & Patch, Don't Rewrite' rule across all supported languages.
+    Rejects full rewrites based on comment-stripped line diff budget, character similarity,
+    and (for Python) preservation of top-level starter function definitions.
+    """
+    norm_lang = normalize_language_key(language)
+    orig_lines = _normalize_code_for_patch_check(original_code, language=norm_lang)
+    sub_lines = _normalize_code_for_patch_check(submitted_code, language=norm_lang)
+
+    if not orig_lines:
+        return {
+            "valid": True,
+            "changed_lines": 0,
+            "max_allowed_changes": 3,
+            "similarity": 1.0,
+            "reason": None,
+            "message": "",
+        }
+
+    changed_lines = 0
+    matcher = difflib.SequenceMatcher(None, orig_lines, sub_lines)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "replace":
+            changed_lines += max(i2 - i1, j2 - j1)
+        elif tag == "delete":
+            changed_lines += i2 - i1
+        elif tag == "insert":
+            changed_lines += j2 - j1
+
+    max_allowed_changes = max(3, math.ceil(len(orig_lines) * 0.40))
+    norm_orig = "\n".join(orig_lines)
+    norm_sub = "\n".join(sub_lines)
+    similarity = round(difflib.SequenceMatcher(None, norm_orig, norm_sub).ratio(), 4)
+
+    if not sub_lines or changed_lines > max_allowed_changes or similarity < 0.55:
+        return {
+            "valid": False,
+            "changed_lines": changed_lines,
+            "max_allowed_changes": max_allowed_changes,
+            "similarity": similarity,
+            "reason": "rewrite_detected",
+            "message": (
+                f"Rewrite detected ({changed_lines} lines changed, max {max_allowed_changes} allowed). "
+                "LintIQ requires patching the existing buggy code rather than rewriting from scratch."
+            ),
+        }
+
+    if (language or "python").strip().lower() in ("python", "python3"):
+        try:
+            orig_tree = ast.parse(original_code or "")
+            orig_top_funcs = [
+                node.name
+                for node in orig_tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ]
+        except SyntaxError:
+            orig_top_funcs = []
+
+        if orig_top_funcs:
+            try:
+                sub_tree = ast.parse(submitted_code or "")
+                sub_top_funcs = {
+                    node.name
+                    for node in sub_tree.body
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                missing = [fn for fn in orig_top_funcs if fn not in sub_top_funcs]
+                if missing:
+                    return {
+                        "valid": False,
+                        "changed_lines": changed_lines,
+                        "max_allowed_changes": max_allowed_changes,
+                        "similarity": similarity,
+                        "reason": "rewrite_detected",
+                        "message": (
+                            f"Rewrite detected (missing starter function {', '.join(missing)}; "
+                            f"{changed_lines} lines changed, max {max_allowed_changes} allowed). "
+                            "LintIQ requires patching the existing buggy code rather than rewriting from scratch."
+                        ),
+                    }
+            except SyntaxError:
+                # Skip gracefully so normal SyntaxError feedback from evaluate_patch runs.
+                pass
+
+    return {
+        "valid": True,
+        "changed_lines": changed_lines,
+        "max_allowed_changes": max_allowed_changes,
+        "similarity": similarity,
+        "reason": None,
+        "message": "",
+    }
 
 
 def _ast_node_counter(code: str) -> Optional[Counter]:
@@ -1170,6 +1635,53 @@ def _evaluate_python_batched(
     }
 
 
+def _evaluate_non_python_local_compiled(
+    user_code: str,
+    test_cases: List[Dict[str, Any]],
+    norm_lang: str,
+) -> Dict[str, Any]:
+    """Compiles once (if compiled) in one temp directory and runs all test assertions sequentially."""
+    with tempfile.TemporaryDirectory(prefix="lintiq_eval_") as tmpdir:
+        safe_env = _build_safe_env(tmpdir)
+        exec_cmd, prep_err = _prepare_local_runtime(user_code, tmpdir, norm_lang, safe_env)
+        if prep_err is not None or not exec_cmd:
+            err_msg = _check_container_errors(prep_err or {"error": True, "message": "Execution setup failed."}, "Compile")
+            return {"passed": False, "message": err_msg or "Compilation failed."}
+
+        total_runtime_ms = 0
+        for idx, tc in enumerate(test_cases):
+            raw_res = _run_prepared_command(exec_cmd, str(tc.get("input", "")), tmpdir, safe_env, norm_lang)
+            container_err = _check_container_errors(raw_res, f"Test Case {idx + 1}")
+            if container_err:
+                return {"passed": False, "message": container_err}
+
+            run_info = raw_res.get("run", {})
+            wall_time = run_info.get("wall_time")
+            if isinstance(wall_time, (int, float)):
+                total_runtime_ms += int(wall_time)
+
+            actual_output = str(run_info.get("stdout", "")).strip()[:2000]
+            expected_output = str(tc.get("expected_output", "")).strip()[:2000]
+            if actual_output != expected_output:
+                test_input = str(tc.get("input", ""))[:500]
+                return {
+                    "passed": False,
+                    "message": (
+                        f"Assertion Failed on Test Case {idx + 1} of {len(test_cases)}\n"
+                        f"Input: {repr(test_input)}\n"
+                        f"Expected: '{expected_output}'\n"
+                        f"Received: '{actual_output}'"
+                    ),
+                }
+
+        return {
+            "passed": True,
+            "message": f"All {len(test_cases)} test assertions cleared!",
+            "runtime_ms": max(1, total_runtime_ms),
+            "execution_mode": "local",
+        }
+
+
 def _evaluate_non_python_parallel(
     user_code: str,
     test_cases: List[Dict[str, Any]],
@@ -1177,7 +1689,14 @@ def _evaluate_non_python_parallel(
     norm_lang: str,
     has_remote_config: bool,
 ) -> Dict[str, Any]:
-    """Runs non-Python test cases (JS/Go/C++) concurrently (respects global _REMOTE_SEMAPHORE)."""
+    """Runs non-Python test cases (compiled once locally or concurrently via remote Piston)."""
+    if not has_remote_config and _allow_local_sandbox():
+        return _evaluate_non_python_local_compiled(
+            user_code=user_code,
+            test_cases=test_cases,
+            norm_lang=norm_lang,
+        )
+
     def _run_one(tc: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
         return _dispatch_execution(
             code_to_run=user_code,
@@ -1278,7 +1797,7 @@ def evaluate_patch(
         result["patch_metrics"] = compute_patch_metrics(
             starter_code=starter_code,
             user_code=user_code,
-            language=lang_config["language"],
+            language=norm_lang,
             runtime_ms=int(result.get("runtime_ms", 1)),
         )
 
