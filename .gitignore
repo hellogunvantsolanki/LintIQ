@@ -25,3 +25,7 @@ backend/prewarm_failed.jsonl
 backend/*.bak
 backend/*-wal
 backend/*-shm
+
+!backend/problems.db
+!backend/interview_problems.db
+!backend/language_variants.db
