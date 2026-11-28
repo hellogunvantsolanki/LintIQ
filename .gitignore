@@ -29,3 +29,7 @@ backend/*-shm
 !backend/problems.db
 !backend/interview_problems.db
 !backend/language_variants.db
+
+!backend/problems.db
+!backend/interview_problems.db
+!backend/language_variants.db
